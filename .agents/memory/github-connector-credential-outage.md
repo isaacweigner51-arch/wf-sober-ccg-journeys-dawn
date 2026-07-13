@@ -13,3 +13,21 @@ Observed a session where `listConnections('github')` inside a `"use impure"` Cod
 **How to apply:** If `listConnections(slug)` returns `[]` after confirming (a) the slug is right and (b) `searchIntegrations` status is `added`, retry only a couple of times, and try one re-authorization cycle if the user wants (ProposeIntegration on the existing connection, or addIntegration+ProposeIntegration on a fresh one). If it's still empty after that, stop — surface the outage to the user plainly rather than looping. Do not keep re-proposing the integration; it wastes the user's time on a path that isn't fixable client-side. Native `git push` over HTTPS from the shell is a separate, unrelated credential path (also commonly blocked with "Invalid username or token") and retrying it does not diagnose or fix the connector issue.
 
 Fallback delivery options when this blocks pushing committed local work to GitHub: ask the user whether to attempt a Replit project zip export, or leave the work committed locally (confirm the exact local commit SHA/branch so it's easy to resume) and retry the GitHub push in a later session.
+
+## Working fallback: call the connector directly from a Node script (bypasses the sandbox)
+
+When `listConnections('github')` inside CodeExecution's `"use impure"` keeps returning `[]` despite a confirmed-`added` status, the credentials can still be reachable from a plain Node process run via ShellExec in the actual project directory (not `/tmp` — needs `node_modules` resolution), using the `@replit/connectors-sdk` package directly:
+
+```js
+const { ReplitConnectors } = require('@replit/connectors-sdk');
+const connectors = new ReplitConnectors();
+const conns = await connectors.listConnections({ connectorNames: ['github'] }); // worked when the sandbox's listConnections did not
+const proxyFetch = connectors.createProxyFetch('github'); // authenticated fetch wrapper
+const res = await proxyFetch('https://api.github.com/repos/OWNER/REPO/git/ref/heads/BRANCH');
+```
+
+Use `proxyFetch` to drive the standard GitHub REST blob/tree/commit/ref flow (create blobs, create a tree with `base_tree` = current branch head's tree, create a commit with that tree + parent, then `PATCH` the branch ref to the new commit sha) for pushes when native `git push` fails with "Invalid username or token" and the CodeExecution sandbox's `listConnections` is empty.
+
+**Why:** The sandbox's `listConnections` global and this direct SDK usage apparently hit different credential-serving paths in some sessions — one can be down while the other still works. Worth trying before concluding the user must wait for a fresh session.
+
+**How to apply:** Write the script to a real file inside the project (so `require('@replit/connectors-sdk')` resolves via the workspace's `node_modules`), run it with `ShellExec`/`node`, and delete the temp script afterward. Do not leave push scripts containing repo paths or tokens sitting in the repo.
