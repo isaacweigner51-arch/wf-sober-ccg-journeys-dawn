@@ -1,0 +1,1 @@
+- [Godot projects in this environment](godot-projects.md) — no Godot artifact type exists; install the `godot_4` nix package to get a real headless engine for validation.

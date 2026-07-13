@@ -1,0 +1,26 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "TMRszzx-g9GSVdQu6pEsY"
+uri = "file://attached_assets/generated_audio/sound_effect_impact_follower_clean.mp3"
+type = "audio"
+title = "impact_follower_clean"
+
+[[outputs]]
+id = "Q-3hzwK138W4j-seD3Llp"
+uri = "file://attached_assets/generated_audio/sound_effect_impact_large_follower.mp3"
+type = "audio"
+title = "impact_large_follower"
+
+[[outputs]]
+id = "kyf1ZCWZ9m8zwSpeHqWVG"
+uri = "file://attached_assets/generated_audio/sound_effect_attack_swing_clean.mp3"
+type = "audio"
+title = "attack_swing_clean"
+
+[[outputs]]
+id = "ihMEYtsG6333gi9HoIg1V"
+uri = "file://attached_assets/generated_audio/sound_effect_impact_leader_deep.mp3"
+type = "audio"
+title = "impact_leader_deep"
