@@ -43,6 +43,7 @@ var packs_opened := 0
 var platinum_pity := 0
 var selected_class := ""
 var collection_owned: Dictionary = {}
+var _menu_art_cache: Dictionary = {}
 var saved_deck: Array = []
 var saved_decks: Dictionary = {}
 var selected_deck_class := "Hope"
@@ -1876,16 +1877,43 @@ func show_pack_results(pulled: Array, platinum_hit: bool) -> void:
     button("COLLECTION",Vector2(645,550),Vector2(180,55),show_collection)
     button("DECK BUILDER",Vector2(835,550),Vector2(200,55),show_deck_builder)
 
+func _load_menu_art_path(path: String) -> Texture2D:
+    if _menu_art_cache.has(path):
+        return _menu_art_cache[path] as Texture2D
+    # load() resolves Godot-imported JPG/PNG resources in both editor and export.
+    var imported: Texture2D = load(path) as Texture2D
+    if imported != null:
+        _menu_art_cache[path] = imported
+        return imported
+    # Editor/source fallback for images that have not been imported yet.
+    if FileAccess.file_exists(path):
+        var bytes: PackedByteArray = FileAccess.get_file_as_bytes(path)
+        var image := Image.new()
+        var error: Error = ERR_FILE_UNRECOGNIZED
+        if path.to_lower().ends_with(".jpg") or path.to_lower().ends_with(".jpeg"):
+            error = image.load_jpg_from_buffer(bytes)
+        elif path.to_lower().ends_with(".png"):
+            error = image.load_png_from_buffer(bytes)
+        if error == OK and not image.is_empty():
+            var texture := ImageTexture.create_from_image(image)
+            _menu_art_cache[path] = texture
+            return texture
+    return null
+
 func card_art_texture(cd: Dictionary) -> Texture2D:
-    # Use the same deterministic art pool as battlefield cards so collection,
-    # crafting, redraws, rewards, and packs all show recognizable card art.
+    # Use each card's own unique illustration (same lookup as battlefield/hand
+    # cards) everywhere in the menus: collection, crafting, deck builder,
+    # rewards, and packs. Only fall back to the shared 16-image pool when a
+    # card has no catalog ID or no matching art file exists.
+    var card_id: String = str(cd.get("id", "")).strip_edges().to_lower()
+    if not card_id.is_empty():
+        for extension in ["jpg", "png", "jpeg"]:
+            var direct_texture: Texture2D = _load_menu_art_path("res://assets/cards/full/%s.%s" % [card_id, extension])
+            if direct_texture != null:
+                return direct_texture
     var seed_value: int = absi(str(cd.get("id", cd.get("name", "card"))).hash())
     var art_index: int = seed_value % 16
-    var path := "res://assets/cards/art_%02d.png" % art_index
-    if ResourceLoader.exists(path):
-        return load(path)
-    var fallback := "res://assets/cards/full/%s.jpg" % str(cd.get("id", "JD-001")).to_lower()
-    return load(fallback) if ResourceLoader.exists(fallback) else null
+    return _load_menu_art_path("res://assets/cards/art_%02d.png" % art_index)
 
 func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2) -> Panel:
     var p := Panel.new()
