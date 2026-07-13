@@ -4,12 +4,12 @@ Sponsor Paths and Story Chapter 1 build. See `V0_1_3_SPONSOR_STORY_UPDATE.md`.
 
 # WF Sober CCG: Journey's Dawn
 
-**Journey's Dawn** is the first 76-card expansion for WF Sober CCG.
+**Journey's Dawn** is the first expansion for WF Sober CCG, with a 120-card catalog.
 
 Tagline: **Every legend begins with a single step.**
 
 ## Included
-- 76-card first set
+- 120-card catalog (Journey's Dawn set)
 - 40-card decks
 - Serenity, Courage, Purpose, Hope, and Universal cards
 - Bronze, Silver, Legendary, and Platinum rarities
