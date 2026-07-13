@@ -3,7 +3,7 @@
 This build turns the generated visual concept into an interactive front end:
 
 - Premium concept-driven home screen
-- Playable 76-card evolution battle
+- Playable evolution battle drawing from the 120-card Journey's Dawn catalog
 - Sliding card-scale deck builder preview
 - Animated five-card pack opening preview
 - Collection browser preview
