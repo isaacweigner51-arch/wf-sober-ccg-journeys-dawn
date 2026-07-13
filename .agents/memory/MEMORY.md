@@ -1,1 +1,2 @@
 - [Godot projects in this environment](godot-projects.md) — no Godot artifact type exists; install the `godot_4` nix package to get a real headless engine for validation.
+- [GitHub connector credential outages](github-connector-credential-outage.md) — listConnections('github') can return [] even right after fresh authorization; don't loop retries, use git bundle/local delivery fallback.
