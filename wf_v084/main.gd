@@ -244,10 +244,18 @@ func _process(delta: float) -> void:
         safe_set_text(status_label, "Time expired — your turn ended automatically.")
         end_player_turn()
 
-func card(name: String, cost: int, attack: int, health: int, faction: String, rarity: String = "Bronze", ability: String = "", amount: int = 0, display_text: String = "", icon: String = "star") -> Dictionary:
+func card(name: String, cost: int, attack: int, health: int, faction: String, rarity: String = "Bronze", ability: String = "", amount: int = 0, display_text: String = "", icon: String = "star", id: String = "") -> Dictionary:
     var is_amulet := ability in ["daily_progress", "life_rebuilt"]
     var is_spell := ability in ["second_chance", "strategic_collapse", "calm_after_storm"]
-    return {"name": name, "cost": cost, "attack": attack, "health": health, "max_health": health, "faction": faction, "rarity": rarity, "ability": ability, "amount": amount, "display_text": display_text, "icon": icon, "set_name": "Journey's Dawn", "set_code": "JD", "can_attack": false, "is_amulet": is_amulet, "is_spell": is_spell}
+    var result := {"name": name, "cost": cost, "attack": attack, "health": health, "max_health": health, "faction": faction, "rarity": rarity, "ability": ability, "amount": amount, "display_text": display_text, "icon": icon, "set_name": "Journey's Dawn", "set_code": "JD", "can_attack": false, "is_amulet": is_amulet, "is_spell": is_spell}
+    # A handful of battle-only cards (finishers, tokens, and tutorial cards) are
+    # not part of the collectible catalog in data/cards.json, so the name-based
+    # art hydration in card_view.gd can't find them and they fell back to the
+    # recycled 16-image placeholder pool. Giving them an explicit id here lets
+    # them resolve their own unique artwork in assets/cards/full/ directly.
+    if not id.is_empty():
+        result["id"] = id
+    return result
 
 func build_class_cards(faction_name: String) -> Array:
     # Journey's Dawn Reforged: each class now has a real curve, engines,
@@ -270,7 +278,7 @@ func build_class_cards(faction_name: String) -> Array:
             card("Moment of Clarity",7,4,7,faction_name,"Legendary","board_clear",0,"On Play: Send every other follower to the Relapse Zone.","star"),
             card("Calm After the Storm",8,0,0,faction_name,"Epic","calm_after_storm",0,"Spell: Destroy all followers. Restore 5 defense. If 6 or more followers were destroyed, draw 2 cards.","star"),
             card("Inner Peace",8,5,7,faction_name,"Platinum","serenity_platinum",0,"SIGNATURE PLATINUM — Evolve for free. Restore 5 defense and preserve the first allied follower that would be destroyed each turn.","star"),
-            card("Peace Beyond Fear",9,7,11,faction_name,"Legendary","heal_draw",5,"On Play: Restore 5 defense and draw a card.","star")]
+            card("Peace Beyond Fear",9,7,11,faction_name,"Legendary","heal_draw",5,"On Play: Restore 5 defense and draw a card.","star","jd-124")]
     if faction_name == "Courage":
         return [
             card("Spark Runner",1,2,1,faction_name,"Bronze","charge",0,"Charge.","flame"),
@@ -288,7 +296,7 @@ func build_class_cards(faction_name: String) -> Array:
             card("Controlled Burn",7,6,6,faction_name,"Legendary","damage_all",5,"On Play: Deal 5 to every other follower.","flame"),
             card("Rise Together",7,5,6,faction_name,"Legendary","rise_together",0,"Protector. Arrival: If 3 Courage followers have entered play this match, evolve this for free. When this evolves, give every Courage follower remaining in your deck +1/+1.","star"),
             card("Rally the Free",8,5,7,faction_name,"Platinum","rally_the_free",0,"SIGNATURE PLATINUM — Evolve for free. Give every Courage follower remaining in your deck +2/+2. The first Courage follower you play each turn gains Rush.","star"),
-            card("Phoenix Rising",9,9,8,faction_name,"Legendary","revive_charge",0,"On Play: Recover an allied follower; it gains Charge.","star")]
+            card("Phoenix Rising",9,9,8,faction_name,"Legendary","revive_charge",0,"On Play: Recover an allied follower; it gains Charge.","star","jd-125")]
     if faction_name == "Purpose":
         return [
             card("First Step",1,1,2,faction_name,"Bronze","first_step",0,"Arrival: Draw a card. If you have fewer maximum PP than your opponent, gain 1 temporary PP this turn.","road"),
@@ -298,16 +306,16 @@ func build_class_cards(faction_name: String) -> Array:
             card("Recovery Journal",3,2,4,faction_name,"Bronze","draw",1,"Arrival: Draw a card.","hands"),
             card("Sponsor's Guidance",2,2,3,faction_name,"Silver","sponsors_guidance",1,"Arrival: If you have gained maximum PP this match, give another ally +1/+1.","hands"),
             card("Small Steps",2,2,2,faction_name,"Silver","small_steps",2,"Arrival: Draw a card. If you spent all your PP this turn, restore 2 defense.","road"),
-            card("Steady Architect",4,3,6,faction_name,"Silver","guard",0,"Protector.","shield"),
+            card("Steady Architect",4,3,6,faction_name,"Silver","guard",0,"Protector.","shield","jd-126"),
             card("Daily Progress",2,0,0,faction_name,"Gold","daily_progress",1,"Amulet — stays on the board and has no Attack or Defense. It cannot be attacked or damaged, and can only be removed by effects that specifically target an Amulet. End a turn with 0 PP to gain Progress. At 3 Progress gain +1 maximum PP; at 6 transform into A Life Rebuilt.","road"),
-            card("Visionary Planner",5,4,6,faction_name,"Gold","draw_reduce",2,"Arrival: Draw 2, then reduce the highest-cost card in hand by 1.","star"),
+            card("Visionary Planner",5,4,6,faction_name,"Gold","draw_reduce",2,"Arrival: Draw 2, then reduce the highest-cost card in hand by 1.","star","jd-127"),
             card("Grand Design",6,5,7,faction_name,"Gold","buff_all",2,"Arrival: Give all other allies +2/+2.","road"),
             card("Finding Purpose",4,3,5,faction_name,"Legendary","finding_purpose",1,"Arrival: Gain 1 maximum PP. After 3 Purpose evolutions, gain another maximum PP and draw a card.","star"),
-            card("Legacy Mason",6,6,7,faction_name,"Legendary","cost_reduce_all",1,"Arrival: Reduce every card in your hand by 1.","hands"),
+            card("Legacy Mason",6,6,7,faction_name,"Legendary","cost_reduce_all",1,"Arrival: Reduce every card in your hand by 1.","hands","jd-128"),
             card("Worldshaper",7,8,8,faction_name,"Legendary","progress_power",0,"Arrival: Gain +1/+1 for each bonus maximum PP earned this match.","hands"),
             card("Strategic Collapse",8,0,0,faction_name,"Epic","strategic_collapse",0,"Spell — Choose One: Deal 5 damage to all enemy followers, or return all enemy followers with 5 or less Attack to their owner's hand. Draw a card.","star"),
             card("Walking Free",10,6,8,faction_name,"Platinum","walking_free",0,"SIGNATURE PLATINUM — Evolve for free. Give Purpose followers remaining in your deck +1/+1, recover 2 PP, draw 2, and grant a sequencing leader effect.","star"),
-            card("Purpose Eternal",9,9,10,faction_name,"Legendary","charge",0,"Breakthrough. A focused late-game finisher.","star")]
+            card("Purpose Eternal",9,9,10,faction_name,"Legendary","charge",0,"Breakthrough. A focused late-game finisher.","star","jd-129")]
     return [
         card("Dawnwing Messenger",1,1,2,"Hope","Bronze","draw",1,"On Play: Draw a card.","road"),
         card("Kindled Promise",1,1,3,"Hope","Bronze","heal_leader",1,"On Play: Restore 1 defense.","hands"),
@@ -325,7 +333,7 @@ func build_class_cards(faction_name: String) -> Array:
         card("New Beginning",7,5,8,"Hope","Legendary","board_clear_heal",4,"On Play: Clear every other follower, then restore 4 defense.","star"),
         card("Second Chance",7,0,0,"Hope","Epic","second_chance",0,"Spell: Transform the 3 enemy followers with the highest Attack into Newcomers (1/1). Restore 3 defense.","hands"),
         card("Beacon of Hope",8,5,7,"Hope","Platinum","hope_platinum",0,"SIGNATURE PLATINUM — Evolve for free. Summon two Inspired Volunteers and empower the first ally that enters play each turn.","star"),
-        card("Hope Unending",9,7,11,"Hope","Legendary","heal_draw",6,"On Play: Restore 6 defense and draw a card.","star")]
+        card("Hope Unending",9,7,11,"Hope","Legendary","heal_draw",6,"On Play: Restore 6 defense and draw a card.","star","jd-130")]
 
 func build_universal_cards() -> Array:
     return [
@@ -1100,7 +1108,7 @@ func create_inspired_volunteer(player_side: bool) -> void:
     var board: Array = player_board if player_side else enemy_board
     if follower_count(board) >= MAX_BOARD:
         return
-    var volunteer := card("Inspired Volunteer", 2, 2, 2, "Hope", "Token", "none", 0, "Inspired by Beacon of Hope.", "hands")
+    var volunteer := card("Inspired Volunteer", 2, 2, 2, "Hope", "Token", "none", 0, "Inspired by Beacon of Hope.", "hands", "jd-131")
     volunteer["can_attack"] = false
     volunteer["summoned_turn"] = turn_number
     board.append(volunteer)
@@ -2394,16 +2402,16 @@ func prepare_training_hand() -> void:
         return
     match training_class:
         "Courage":
-            add_training_card_to_hand(card("Training Rookie", 1, 2, 3, "Courage", "Training", "none", 0, "A sturdy follower for learning Resolve.", "flame"))
-            add_training_card_to_hand(card("Stand Your Ground", 2, 2, 4, "Courage", "Training", "guard", 0, "Protector. Survive combat to build Resolve.", "shield"))
+            add_training_card_to_hand(card("Training Rookie", 1, 2, 3, "Courage", "Training", "none", 0, "A sturdy follower for learning Resolve.", "flame", "jd-132"))
+            add_training_card_to_hand(card("Stand Your Ground", 2, 2, 4, "Courage", "Training", "guard", 0, "Protector. Survive combat to build Resolve.", "shield", "jd-133"))
         "Hope":
-            add_training_card_to_hand(card("Guiding Light", 1, 1, 2, "Hope", "Training", "heal_leader", 3, "Arrival: Restore 3 Defense.", "hands"))
-            add_training_card_to_hand(card("Recovery Call", 3, 2, 3, "Hope", "Training", "revive", 0, "Arrival: Recover the most recent follower from your Relapse Zone.", "star"))
+            add_training_card_to_hand(card("Guiding Light", 1, 1, 2, "Hope", "Training", "heal_leader", 3, "Arrival: Restore 3 Defense.", "hands", "jd-134"))
+            add_training_card_to_hand(card("Recovery Call", 3, 2, 3, "Hope", "Training", "revive", 0, "Arrival: Recover the most recent follower from your Relapse Zone.", "star", "jd-135"))
         "Serenity":
-            var sanctuary := card("Sanctuary of Serenity", 2, 0, 0, "Serenity", "Gold", "sanctuary_serenity", 0, "Permanent Recovery Skill. Healing permanently buffs an allied follower.", "shield")
+            var sanctuary := card("Sanctuary of Serenity", 2, 0, 0, "Serenity", "Gold", "sanctuary_serenity", 0, "Permanent Recovery Skill. Healing permanently buffs an allied follower.", "shield", "jd-136")
             sanctuary["is_amulet"] = true
             add_training_card_to_hand(sanctuary)
-            add_training_card_to_hand(card("Quiet Renewal", 2, 2, 3, "Serenity", "Training", "heal_leader", 3, "Arrival: Restore 3 Defense.", "hands"))
+            add_training_card_to_hand(card("Quiet Renewal", 2, 2, 3, "Serenity", "Training", "heal_leader", 3, "Arrival: Restore 3 Defense.", "hands", "jd-137"))
         _:
             var daily := card("Daily Progress", 2, 0, 0, "Purpose", "Gold", "daily_progress", 1, "Permanent Recovery Skill. Spend all PP to gain Progress.", "road")
             daily["is_amulet"] = true
