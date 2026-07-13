@@ -603,16 +603,9 @@ func _load_card_art_path(path: String) -> Texture2D:
     return null
 
 func _art_texture() -> Texture2D:
-    # Keep the mulligan/Second Chance renderer unchanged. In live gameplay, use
-    # the proven illustrated pool so cards never degrade into blank/abstract art
-    # while the original-art replacement pass is still underway.
-    var context: String = str(data.get("_ui_context", ""))
-    if context in ["hand", "player_board", "enemy_board"]:
-        var live_seed: int = absi(str(data.get("name", "card")).hash())
-        var live_art: Texture2D = _load_card_art_path("res://assets/cards/art_%02d.png" % (live_seed % 16))
-        if live_art != null:
-            return live_art
-
+    # Use the same unique-by-id artwork lookup as the Second Chance renderer
+    # for every context (hand, battlefield, and mulligan) so a card always
+    # shows its own illustration instead of one of 16 recycled placeholders.
     var card_id: String = str(data.get("id", "")).strip_edges().to_lower()
     if not card_id.is_empty():
         for extension in ["jpg", "png", "jpeg"]:
@@ -629,6 +622,8 @@ func _art_texture() -> Texture2D:
             if matched_texture != null:
                 return matched_texture
 
+    # A few generated/testing cards carry no catalog ID. Give those a
+    # deterministic fallback image so they are still visible everywhere.
     var seed_value: int = absi(str(data.get("name", "card")).hash())
     var art_index: int = seed_value % 16
     var fallback: Texture2D = _load_card_art_path("res://assets/cards/art_%02d.png" % art_index)

@@ -862,6 +862,23 @@ func play_sfx(sound_name: String) -> void:
     target.stream = load(path)
     target.play()
 
+const LARGE_FOLLOWER_ATTACK_THRESHOLD := 5
+const LARGE_FOLLOWER_HEALTH_THRESHOLD := 6
+
+func attack_impact_sound(attacker_index: int, target_index: int, player_side: bool) -> String:
+    # Leader hits always use the deeper impact layer regardless of attacker size.
+    if target_index < 0:
+        return "impact_leader_deep"
+    var attack_board: Array = player_board if player_side else enemy_board
+    var defend_board: Array = enemy_board if player_side else player_board
+    var attacker: Dictionary = attack_board[attacker_index] if attacker_index >= 0 and attacker_index < attack_board.size() else {}
+    var defender: Dictionary = defend_board[target_index] if target_index >= 0 and target_index < defend_board.size() else {}
+    var is_large := int(attacker.get("attack", 0)) >= LARGE_FOLLOWER_ATTACK_THRESHOLD \
+        or int(attacker.get("max_health", attacker.get("health", 0))) >= LARGE_FOLLOWER_HEALTH_THRESHOLD \
+        or int(defender.get("attack", 0)) >= LARGE_FOLLOWER_ATTACK_THRESHOLD \
+        or int(defender.get("max_health", defender.get("health", 0))) >= LARGE_FOLLOWER_HEALTH_THRESHOLD
+    return "impact_large_follower" if is_large else "impact_follower_clean"
+
 func signature_voice_key(card_name: String, attack_line: bool = false) -> String:
     var base := card_name.to_lower().replace(" ", "_")
     return base + ("_attack" if attack_line else "")
@@ -3435,9 +3452,9 @@ func animate_attack(attacker_index: int, target_index: int, player_side: bool) -
     var attacker_card: Dictionary = (player_board if player_side else enemy_board)[attacker_index]
     if str(attacker_card.get("ability", "")) in ["walking_free", "rally_the_free", "hope_platinum", "serenity_platinum"]:
         await play_signature_voice(str(attacker_card.get("name", "")), player_side, true)
-    play_sfx("attack_swoosh_new")
+    play_sfx("attack_swing_clean")
     var tween := create_tween(); tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN); tween.tween_property(view, "position", target_pos - view.size * 0.5, 0.18); await tween.finished
-    play_sfx("impact_heavy_new" if int((player_board if player_side else enemy_board)[attacker_index].get("attack", 0)) >= 5 else "impact_light_new")
+    play_sfx(attack_impact_sound(attacker_index, target_index, player_side))
     await resolve_combat(attacker_index, target_index, player_side)
     if is_instance_valid(view):
         var back := create_tween(); back.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT); back.tween_property(view, "position", origin, 0.20); await back.finished
