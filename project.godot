@@ -1,0 +1,44 @@
+; Engine configuration file.
+; WF Sober CCG — Journey's Dawn
+config_version=5
+
+[application]
+config/name="WF Sober CCG - Journey's Dawn"
+run/main_scene="res://main.tscn"
+config/icon="res://assets/ui/app_icon.png"
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/size/mode=3
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+window/handheld/orientation=4
+window/handheld/keep_screen_on=true
+window/dpi/allow_hidpi=true
+
+[gui]
+
+theme/default_base_scale=1.1
+
+[input_devices]
+pointing/emulate_mouse_from_touch=true
+pointing/emulate_touch_from_mouse=true
+
+[autoload]
+UpdateManager="*res://update_manager.gd"
+AccessManager="*res://access_manager.gd"
+BillingManager="*res://billing_manager.gd"
+NetworkManager="*res://network_manager.gd"
+AudioManager="*res://audio_manager.gd"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.055, 0.075, 0.11, 1)
+
+[debug]
+
+gdscript/warnings/inference_on_variant_value=0

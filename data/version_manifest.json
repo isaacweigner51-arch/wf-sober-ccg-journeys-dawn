@@ -1,0 +1,13 @@
+{
+  "version": "0.8.6",
+  "build": "Prebuilt Leader Art + Storm Theme",
+  "package_id": "com.wfsober.ccg.journeysdawn",
+  "minimum_supported_version": "0.7.0",
+  "remote_manifest_url": "",
+  "notes": "Prebuilt decks now use four unclipped hero-style leader panels. Home music is faster and includes prominent crashing-wave and thunder accents.",
+  "required": false,
+  "version_code": "0.8.6",
+  "build_name": "Prebuilt Leader Art + Storm Theme",
+  "card_count": 120,
+  "version_name": "0.8.6"
+}
