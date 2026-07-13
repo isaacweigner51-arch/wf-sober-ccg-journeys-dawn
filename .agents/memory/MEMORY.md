@@ -1,3 +1,4 @@
 - [Godot projects in this environment](godot-projects.md) — no Godot artifact type exists; install the `godot_4` nix package to get a real headless engine for validation.
 - [GitHub connector credential outages](github-connector-credential-outage.md) — listConnections('github') can return [] even right after fresh authorization; don't loop retries, use git bundle/local delivery fallback.
 - [wf-sober-ccg-journeys-dawn duplicate project copies](wf-sober-ccg-duplicate-copies.md) — repo has a root-level Godot project AND a `wf_v084/` mirror; the root one is canonical (README says open root `project.godot`). Always sync both or verify which copy a fix landed in.
+- [wf-sober-ccg card art name-hydration gap](wf-sober-ccg-card-art-name-hydration.md) — battle cards render via CardView, which resolves art by id but hydrates id from data/cards.json by name-match; any hardcoded main.gd card whose name isn't in cards.json silently falls back to the old placeholder pool.
