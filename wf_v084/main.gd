@@ -1193,6 +1193,21 @@ func build_ui() -> void:
     field_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(field_shade)
 
+    # A slim header bar grounds the title and HOME/RESTART controls instead of
+    # leaving them floating loose over the battlefield artwork.
+    var header_bar := Panel.new()
+    header_bar.position = Vector2(0, 0)
+    header_bar.size = Vector2(1280, 54)
+    header_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var header_style := StyleBoxFlat.new()
+    header_style.bg_color = Color(0.03, 0.045, 0.075, 0.82)
+    header_style.set_border_width(SIDE_BOTTOM, 2)
+    header_style.border_color = Color(0.96, 0.83, 0.45, 0.45)
+    header_style.shadow_color = Color(0, 0, 0, 0.5)
+    header_style.shadow_size = 12
+    header_bar.add_theme_stylebox_override("panel", header_style)
+    add_child(header_bar)
+
     var title := Label.new()
     title.text = "WALKING FREE CCG"
     title.position = Vector2(430, 8)
@@ -1200,7 +1215,17 @@ func build_ui() -> void:
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     title.add_theme_font_size_override("font_size", ui_font(27))
     title.add_theme_color_override("font_color", Color(0.96, 0.83, 0.45))
+    title.add_theme_color_override("font_shadow_color", Color(0.05, 0.03, 0.02, 0.85))
+    title.add_theme_constant_override("shadow_offset_x", 2)
+    title.add_theme_constant_override("shadow_offset_y", 2)
     add_child(title)
+
+    var title_underline := ColorRect.new()
+    title_underline.position = Vector2(560, 40)
+    title_underline.size = Vector2(160, 2)
+    title_underline.color = Color(0.96, 0.83, 0.45, 0.55)
+    title_underline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(title_underline)
 
     enemy_hand_area = Control.new(); enemy_hand_area.position = Vector2(355, 34); enemy_hand_area.size = Vector2(570, 70); add_child(enemy_hand_area)
     enemy_board_area = Control.new(); enemy_board_area.position = Vector2(245, 82); enemy_board_area.size = Vector2(790, 165); enemy_board_area.z_index = 60; enemy_board_area.clip_contents = false; add_child(enemy_board_area)
@@ -1231,8 +1256,8 @@ func build_ui() -> void:
     build_momentum_control()
     build_evolution_panel()
 
-    var restart := Button.new(); restart.text = "RESTART"; restart.tooltip_text = "Restart this battle"; restart.position = Vector2(1165, 12); restart.size = Vector2(99, 38); restart.pressed.connect(func(): get_tree().reload_current_scene()); add_child(restart)
-    var home := Button.new(); home.text = "HOME"; home.position = Vector2(1060, 12); home.size = Vector2(96, 38); home.pressed.connect(func(): get_tree().change_scene_to_file("res://main.tscn")); add_child(home)
+    var restart := _make_header_pill_button("RESTART", Vector2(1165, 10)); restart.tooltip_text = "Restart this battle"; restart.pressed.connect(func(): get_tree().reload_current_scene()); add_child(restart)
+    var home := _make_header_pill_button("HOME", Vector2(1062, 10)); home.pressed.connect(func(): get_tree().change_scene_to_file("res://main.tscn")); add_child(home)
 
     overlay = ColorRect.new(); overlay.color = Color(0, 0, 0, 0.68); overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); overlay.visible = false; overlay.mouse_filter = Control.MOUSE_FILTER_STOP; add_child(overlay)
     apply_mobile_touch_targets()
@@ -1936,6 +1961,28 @@ func make_leader(label_text: String, pos: Vector2, player_side: bool) -> Button:
     name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     leader.add_child(name_label)
     return leader
+
+func _make_header_pill_button(label_text: String, pos: Vector2) -> Button:
+    var button := Button.new()
+    button.text = label_text
+    button.position = pos
+    button.size = Vector2(92, 34)
+    button.focus_mode = Control.FOCUS_NONE
+    button.add_theme_font_size_override("font_size", ui_font(13))
+    button.add_theme_color_override("font_color", Color(0.88, 0.94, 0.98))
+    button.add_theme_color_override("font_hover_color", Color(1.0, 0.91, 0.62))
+    var normal := StyleBoxFlat.new()
+    normal.bg_color = Color(0.07, 0.10, 0.15, 0.9)
+    normal.border_color = Color(0.55, 0.62, 0.70, 0.7)
+    normal.set_border_width_all(1)
+    normal.set_corner_radius_all(17)
+    button.add_theme_stylebox_override("normal", normal)
+    var hover: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
+    hover.bg_color = Color(0.11, 0.16, 0.22, 0.95)
+    hover.border_color = Color(0.96, 0.83, 0.45, 0.85)
+    button.add_theme_stylebox_override("hover", hover)
+    button.add_theme_stylebox_override("pressed", hover)
+    return button
 
 func make_hp_label(pos: Vector2) -> Label:
     var label := Label.new(); label.position = pos; label.size = Vector2(115, 45); label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; label.add_theme_font_size_override("font_size", ui_font(25))
@@ -3677,6 +3724,32 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
             sparkle_tween.tween_property(sparkle, "rotation", angle + 1.5, 0.72)
             sparkle_tween.finished.connect(sparkle.queue_free)
 
+        # Dim the busy board behind the banner so the announcement reads
+        # cleanly instead of colliding visually with the board underneath.
+        var scrim := ColorRect.new()
+        scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        scrim.color = Color(0.01, 0.015, 0.03, 0.0)
+        scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        finish_layer.add_child(scrim)
+        var scrim_tween := create_tween()
+        scrim_tween.tween_property(scrim, "color:a", 0.58, 0.24)
+
+        var banner_backdrop := Panel.new()
+        banner_backdrop.position = Vector2(360, 220)
+        banner_backdrop.size = Vector2(560, 140)
+        banner_backdrop.pivot_offset = banner_backdrop.size * 0.5
+        banner_backdrop.scale = Vector2(0.25, 0.25)
+        banner_backdrop.modulate = Color(1, 1, 1, 0)
+        var backdrop_style := StyleBoxFlat.new()
+        backdrop_style.bg_color = Color(0.03, 0.05, 0.08, 0.88)
+        backdrop_style.border_color = Color(1.0, 0.86, 0.30, 0.8)
+        backdrop_style.set_border_width_all(2)
+        backdrop_style.set_corner_radius_all(20)
+        backdrop_style.shadow_color = Color(0, 0, 0, 0.6)
+        backdrop_style.shadow_size = 16
+        banner_backdrop.add_theme_stylebox_override("panel", backdrop_style)
+        finish_layer.add_child(banner_backdrop)
+
         var banner := Label.new()
         banner.text = "VICTORY"
         banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -3696,10 +3769,14 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         banner_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
         banner_tween.tween_property(banner, "scale", Vector2.ONE, 0.42)
         banner_tween.tween_property(banner, "modulate:a", 1.0, 0.24)
+        banner_tween.tween_property(banner_backdrop, "scale", Vector2.ONE, 0.42)
+        banner_tween.tween_property(banner_backdrop, "modulate:a", 1.0, 0.24)
         await banner_tween.finished
         await get_tree().create_timer(0.65).timeout
         var banner_out := create_tween()
         banner_out.tween_property(banner, "modulate:a", 0.0, 0.22)
+        banner_out.parallel().tween_property(banner_backdrop, "modulate:a", 0.0, 0.22)
+        banner_out.parallel().tween_property(scrim, "color:a", 0.0, 0.22)
         await banner_out.finished
 
     if is_instance_valid(finish_layer):
@@ -4075,15 +4152,51 @@ func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
         var holder := Panel.new()
         holder.position = Vector2(slot * 182.0, 2)
         holder.size = Vector2(slot_width, 52)
-        var st := StyleBoxFlat.new(); st.bg_color = Color(0.04,0.11,0.16,0.80); st.border_color = Color(0.35,0.85,0.92,0.75); st.set_border_width_all(2); st.set_corner_radius_all(10)
-        holder.add_theme_stylebox_override("panel", st)
         area.add_child(holder)
         if slot < amulets.size():
-            var b := Button.new(); b.text = "%s\nRECOVERY SKILL" % str(amulets[slot].get("name","Amulet")); b.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); b.add_theme_font_size_override("font_size", ui_font(12)); b.focus_mode=Control.FOCUS_NONE
+            var accent := class_accent_color(str(amulets[slot].get("faction", amulets[slot].get("class", ""))))
+            var st := StyleBoxFlat.new()
+            st.bg_color = Color(0.045, 0.065, 0.10, 0.92)
+            st.border_color = accent
+            st.set_border_width_all(2)
+            st.set_corner_radius_all(10)
+            st.shadow_color = Color(0, 0, 0, 0.4)
+            st.shadow_size = 4
+            holder.add_theme_stylebox_override("panel", st)
+
+            var accent_bar := ColorRect.new(); accent_bar.position = Vector2(0, 0); accent_bar.size = Vector2(4, slot_width * 0 + 52); accent_bar.color = accent; accent_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            holder.add_child(accent_bar)
+
+            var name_label := Label.new()
+            name_label.text = str(amulets[slot].get("name", "Amulet"))
+            name_label.position = Vector2(10, 4)
+            name_label.size = Vector2(slot_width - 18, 22)
+            name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+            name_label.add_theme_font_size_override("font_size", ui_font(12))
+            name_label.add_theme_color_override("font_color", Color(0.95, 0.95, 0.97))
+            name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            holder.add_child(name_label)
+
+            var tag := Label.new()
+            tag.text = "RECOVERY SKILL"
+            tag.position = Vector2(10, 26)
+            tag.size = Vector2(slot_width - 18, 18)
+            tag.add_theme_font_size_override("font_size", ui_font(9))
+            tag.add_theme_color_override("font_color", accent.lightened(0.25))
+            tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            holder.add_child(tag)
+
+            var b := Button.new(); b.flat = true; b.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); b.focus_mode = Control.FOCUS_NONE; b.tooltip_text = str(amulets[slot].get("display_text", ""))
             b.disabled = true
             holder.add_child(b)
         else:
-            var l := Label.new(); l.text = "RECOVERY SKILL"; l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); l.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; l.vertical_alignment=VERTICAL_ALIGNMENT_CENTER; l.add_theme_font_size_override("font_size",ui_font(10)); l.modulate=Color(0.55,0.72,0.78,0.65); holder.add_child(l)
+            var st_empty := StyleBoxFlat.new()
+            st_empty.bg_color = Color(0.035, 0.045, 0.06, 0.55)
+            st_empty.border_color = Color(0.4, 0.46, 0.52, 0.35)
+            st_empty.set_border_width_all(1)
+            st_empty.set_corner_radius_all(10)
+            holder.add_theme_stylebox_override("panel", st_empty)
+            var l := Label.new(); l.text = "RECOVERY SKILL"; l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); l.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; l.vertical_alignment=VERTICAL_ALIGNMENT_CENTER; l.add_theme_font_size_override("font_size",ui_font(10)); l.modulate=Color(0.55,0.62,0.68,0.55); holder.add_child(l)
 
 func clear_children(node: Node) -> void:
     for child in node.get_children():
