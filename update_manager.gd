@@ -4,8 +4,17 @@ signal update_available(version: String, notes: String, required: bool)
 signal update_check_finished(has_update: bool)
 
 const LOCAL_MANIFEST := "res://data/version_manifest.json"
-var current_version := "0.7.2"
+var current_version := "0.8.6"
 var remote_manifest_url := ""
+# "What's new" content for the currently installed build — bundled locally
+# (not fetched over the network) so the popup always has something to show
+# the moment a player opens the app after an update, with no server
+# dependency. Edit data/version_manifest.json before each release: bump
+# "version" to match export_presets.cfg's version/name, and update "fixes"
+# and "upcoming_events" to describe that release.
+var current_notes := ""
+var current_fixes: Array = []
+var current_upcoming_events: Array = []
 
 func _ready() -> void:
     var f := FileAccess.open(LOCAL_MANIFEST, FileAccess.READ)
@@ -14,6 +23,20 @@ func _ready() -> void:
         if parsed is Dictionary:
             current_version = str(parsed.get("version", current_version))
             remote_manifest_url = str(parsed.get("remote_manifest_url", ""))
+            current_notes = str(parsed.get("notes", ""))
+            current_fixes = parsed.get("fixes", [])
+            current_upcoming_events = parsed.get("upcoming_events", [])
+
+# Snapshot of what changed in the build currently installed, for a "What's
+# New" popup. Menu code compares `version` against the last version it
+# recorded seeing and only shows the popup when they differ.
+func get_whats_new() -> Dictionary:
+    return {
+        "version": current_version,
+        "notes": current_notes,
+        "fixes": current_fixes,
+        "upcoming_events": current_upcoming_events,
+    }
 
 func check_for_updates() -> void:
     if remote_manifest_url.is_empty():

@@ -707,6 +707,11 @@ var launch_email: LineEdit
 var launch_password: LineEdit
 var launch_screen_active := false
 var home_music: AudioStreamPlayer
+var contact_message_input: TextEdit
+var contact_status: Label
+var last_seen_whats_new_version := ""
+var whats_new_checked_this_session := false
+const SUPPORT_EMAIL := "walkingfreeagain@gmail.com"
 
 func ensure_home_music() -> void:
     # Home music lives in the AudioManager autoload so screen rebuilds cannot
@@ -873,6 +878,7 @@ func load_profile() -> void:
         daily_reward_day = int(cfg.get_value("daily", "reward_day", 0))
         daily_last_claim_day = int(cfg.get_value("daily", "last_claim_day", -1))
         recovery_challenge_progress = cfg.get_value("challenge", "recovery_progress", {})
+        last_seen_whats_new_version = str(cfg.get_value("meta", "last_seen_whats_new_version", ""))
         # Existing players from earlier builds should not lose access.
         if selected_class != "" and not cfg.has_section_key("academy", "complete"):
             academy_complete = true
@@ -928,6 +934,7 @@ func save_profile() -> void:
     cfg.set_value("daily", "reward_day", daily_reward_day)
     cfg.set_value("daily", "last_claim_day", daily_last_claim_day)
     cfg.set_value("challenge", "recovery_progress", recovery_challenge_progress)
+    cfg.set_value("meta", "last_seen_whats_new_version", last_seen_whats_new_version)
     cfg.save(SAVE_PATH)
 
 func clear_screen() -> void:
@@ -1026,7 +1033,10 @@ func show_home() -> void:
     label("Journey's Dawn  •  " + active_class + " Leader", Vector2(70, 35), Vector2(390, 21), 13, top)
     var wallet := label("GOLD %d     VIALS %d     PACKS %d" % [gold_balance, dust_balance, pack_inventory], Vector2(680, 17), Vector2(450, 30), 16, top)
     wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    button("SUPPORT", Vector2(500, 10), Vector2(120, 44), show_contact_support, top)
     button("SETTINGS", Vector2(1140, 10), Vector2(96, 44), show_test_tools if AccessManager.role_at_least(AccessManager.ROLE_TESTER) else show_launch_screen, top)
+
+    maybe_show_whats_new()
 
     var nav := Panel.new()
     nav.position = Vector2(16, 88)
@@ -1195,6 +1205,136 @@ func show_home() -> void:
     enter.add_theme_color_override("font_color", Color(0.04, 0.06, 0.10))
 
     centered_label(BUILD_NAME, Vector2(20, 566), Vector2(976, 28), 12, main).modulate = Color(0.72, 0.78, 0.86)
+
+# ---------------------------------------------------------------------------
+# Contact & Support
+# ---------------------------------------------------------------------------
+func show_contact_support() -> void:
+    clear_screen(); add_background(0.72)
+    header("CONTACT & SUPPORT", "Questions, concerns, or a bug to report? We read every message.")
+
+    var panel := Panel.new()
+    panel.position = Vector2(240, 130)
+    panel.size = Vector2(800, 500)
+    panel.add_theme_stylebox_override("panel", style(GOLD_COLOR, 18))
+    root_layer.add_child(panel)
+
+    centered_label("EMAIL US DIRECTLY", Vector2(30, 20), Vector2(740, 26), 16, panel).add_theme_color_override("font_color", GOLD_COLOR)
+    var email_row := Panel.new()
+    email_row.position = Vector2(30, 50)
+    email_row.size = Vector2(740, 52)
+    email_row.add_theme_stylebox_override("panel", style(Color(0.32, 0.72, 0.95), 10))
+    panel.add_child(email_row)
+    var email_label := centered_label(SUPPORT_EMAIL, Vector2(0, 0), Vector2(560, 52), 20, email_row)
+    email_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+    var copy_btn := button("COPY", Vector2(570, 6), Vector2(160, 40), func():
+        DisplayServer.clipboard_set(SUPPORT_EMAIL)
+        safe_set_text(contact_status, "Email address copied.")
+    , email_row)
+    copy_btn.add_theme_font_size_override("font_size", ui_font_size(14))
+
+    centered_label("OR SEND A MESSAGE FROM HERE", Vector2(30, 118), Vector2(740, 24), 14, panel).add_theme_color_override("font_color", Color(0.78, 0.85, 0.95))
+    label("Question, concern, or known bug:", Vector2(30, 148), Vector2(400, 22), 13, panel).add_theme_color_override("font_color", Color(0.78, 0.85, 0.95))
+
+    contact_message_input = TextEdit.new()
+    contact_message_input.position = Vector2(30, 174)
+    contact_message_input.size = Vector2(740, 220)
+    contact_message_input.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+    contact_message_input.placeholder_text = "Tell us what's going on — the more detail (device, class you were playing, what you expected), the faster we can fix it."
+    contact_message_input.add_theme_font_size_override("font_size", ui_font_size(15))
+    panel.add_child(contact_message_input)
+
+    var send_btn := button("OPEN EMAIL WITH THIS MESSAGE", Vector2(30, 410), Vector2(400, 54), _send_contact_message, panel)
+    send_btn.add_theme_font_size_override("font_size", ui_font_size(15))
+    var clear_btn := button("CLEAR", Vector2(450, 410), Vector2(150, 54), func(): contact_message_input.text = "", panel)
+
+    contact_status = centered_label("", Vector2(30, 470), Vector2(740, 24), 13, panel)
+    contact_status.add_theme_color_override("font_color", Color(0.55, 1.0, 0.70))
+
+func _send_contact_message() -> void:
+    var message := contact_message_input.text.strip_edges()
+    if message.is_empty():
+        safe_set_text(contact_status, "Write your question, concern, or bug report first.")
+        contact_status.add_theme_color_override("font_color", Color(1.0, 0.55, 0.55))
+        return
+    var subject := "WF Sober CCG - Feedback (build %s)" % UpdateManager.current_version
+    var mailto := "mailto:%s?subject=%s&body=%s" % [SUPPORT_EMAIL, subject.uri_encode(), message.uri_encode()]
+    var opened := OS.shell_open(mailto)
+    if opened == OK:
+        safe_set_text(contact_status, "Opening your email app with this message filled in...")
+        contact_status.add_theme_color_override("font_color", Color(0.55, 1.0, 0.70))
+    else:
+        safe_set_text(contact_status, "Couldn't open an email app automatically — please email %s directly." % SUPPORT_EMAIL)
+        contact_status.add_theme_color_override("font_color", Color(1.0, 0.55, 0.55))
+
+# ---------------------------------------------------------------------------
+# "What's New" popup — shown once per installed version, the first time the
+# player reaches Home after an update. Content is authored locally in
+# data/version_manifest.json (see update_manager.gd) so it never depends on
+# a server being reachable.
+# ---------------------------------------------------------------------------
+func maybe_show_whats_new() -> void:
+    if whats_new_checked_this_session:
+        return
+    whats_new_checked_this_session = true
+    var info := UpdateManager.get_whats_new()
+    var version := str(info.get("version", ""))
+    if version.is_empty() or version == last_seen_whats_new_version:
+        return
+    var fixes: Array = info.get("fixes", [])
+    var upcoming: Array = info.get("upcoming_events", [])
+    if fixes.is_empty() and upcoming.is_empty():
+        # Nothing authored for this release yet — don't show an empty popup,
+        # but still remember it so we don't keep re-checking every frame Home
+        # rebuilds this session.
+        last_seen_whats_new_version = version
+        save_profile()
+        return
+    show_whats_new_popup(version, fixes, upcoming)
+
+func show_whats_new_popup(version: String, fixes: Array, upcoming: Array) -> void:
+    var scrim := ColorRect.new()
+    scrim.color = Color(0.02, 0.03, 0.06, 0.85)
+    scrim.position = Vector2.ZERO
+    scrim.size = Vector2(1280, 720)
+    scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+    scrim.z_index = 950
+    root_layer.add_child(scrim)
+
+    var dialog := Panel.new()
+    dialog.position = Vector2(290, 90)
+    dialog.size = Vector2(700, 540)
+    dialog.z_index = 951
+    dialog.add_theme_stylebox_override("panel", style(GOLD_COLOR, 20))
+    scrim.add_child(dialog)
+
+    centered_label("WHAT'S NEW", Vector2(30, 20), Vector2(640, 34), 26, dialog).add_theme_color_override("font_color", GOLD_COLOR)
+    centered_label("Version %s" % version, Vector2(30, 56), Vector2(640, 22), 14, dialog).modulate = Color(0.75, 0.82, 0.92)
+
+    var y := 92.0
+    if not fixes.is_empty():
+        label("BUG FIXES & IMPROVEMENTS", Vector2(30, y), Vector2(640, 22), 15, dialog).add_theme_color_override("font_color", Color(0.55, 1.0, 0.70))
+        y += 28
+        for entry in fixes:
+            var item := label("•  %s" % str(entry), Vector2(40, y), Vector2(620, 44), 14, dialog)
+            item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            y += 44
+
+    y += 10
+    if not upcoming.is_empty():
+        label("UPCOMING", Vector2(30, y), Vector2(640, 22), 15, dialog).add_theme_color_override("font_color", Color(1.0, 0.83, 0.35))
+        y += 28
+        for entry in upcoming:
+            var item2 := label("•  %s" % str(entry), Vector2(40, y), Vector2(620, 44), 14, dialog)
+            item2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            y += 44
+
+    var close_btn := button("GOT IT", Vector2(270, 480), Vector2(160, 48), func():
+        last_seen_whats_new_version = version
+        save_profile()
+        scrim.queue_free()
+    , dialog)
+    close_btn.add_theme_font_size_override("font_size", ui_font_size(16))
 
 func show_online_vs_setup() -> void:
     clear_screen(); add_background(0.68); header("VS FRIEND — ONLINE", "Private room codes for two separate phones")
