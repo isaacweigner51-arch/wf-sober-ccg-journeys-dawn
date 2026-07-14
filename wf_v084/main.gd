@@ -65,6 +65,12 @@ var selected_class := "Serenity"
 var enemy_class := "Courage"
 var story_mode_battle := false
 var story_stage_id := 0
+# The Trials: a repeatable PvE gauntlet (menu.gd's show_trials/launch_trial_battle).
+# trial_tier is 1-3 for a class leader's escalating gauntlet, or 4 for the
+# bonus boss encounter, The Sponsor, whose deck deliberately breaks normal
+# deck-building rules (see build_sponsor_trial_deck).
+var trial_mode_battle := false
+var trial_tier := 0
 var class_overlay: ColorRect
 var evolution_buttons: Array[Button] = []
 var evolution_drag_cost: int = 0
@@ -230,6 +236,7 @@ func load_battle_setup() -> void:
         developer_meta_deck = bool(cfg.get_value("battle", "developer_meta", false))
         if online_mode:
             story_mode_battle = false
+            trial_mode_battle = false
             online_role = str(cfg.get_value("battle","role","join"))
             selected_class = str(cfg.get_value("battle","your_class","Hope"))
             enemy_class = str(cfg.get_value("battle","opponent_class","Courage"))
@@ -238,6 +245,7 @@ func load_battle_setup() -> void:
             enemy_deck_mode = str(cfg.get_value("battle","opponent_deck_mode","custom"))
         elif mode == "training":
             story_mode_battle = false
+            trial_mode_battle = false
             training_class = str(cfg.get_value("training", "class", "Hope"))
             selected_class = training_class
             enemy_class = str(cfg.get_value("battle", "opponent_class", "Courage"))
@@ -245,13 +253,23 @@ func load_battle_setup() -> void:
             enemy_deck_mode = "prebuilt"
         elif mode == "story":
             story_mode_battle = true
+            trial_mode_battle = false
             story_stage_id = int(cfg.get_value("battle","story_stage_id",0))
+            selected_class = str(cfg.get_value("battle","your_class","Hope"))
+            enemy_class = str(cfg.get_value("battle","opponent_class","Courage"))
+            player_deck_mode = str(cfg.get_value("battle","your_deck_mode","custom"))
+            enemy_deck_mode = str(cfg.get_value("battle","opponent_deck_mode","prebuilt"))
+        elif mode == "trial":
+            story_mode_battle = false
+            trial_mode_battle = true
+            trial_tier = int(cfg.get_value("battle","trial_tier",1))
             selected_class = str(cfg.get_value("battle","your_class","Hope"))
             enemy_class = str(cfg.get_value("battle","opponent_class","Courage"))
             player_deck_mode = str(cfg.get_value("battle","your_deck_mode","custom"))
             enemy_deck_mode = str(cfg.get_value("battle","opponent_deck_mode","prebuilt"))
         else:
             story_mode_battle = false
+            trial_mode_battle = false
             selected_class = str(cfg.get_value("battle","your_class",selected_class))
             enemy_class = str(cfg.get_value("battle","opponent_class",enemy_class))
             player_deck_mode = str(cfg.get_value("battle","your_deck_mode","custom"))
@@ -448,9 +466,96 @@ func build_story_opponent_deck(faction_name: String, stage_id: int) -> Array:
         guard += 1
     return deck
 
+func build_trial_deck(faction_name: String, tier: int) -> Array:
+    # The Trials: three escalating, fully legal gauntlet decks per leader.
+    # Trial 3 is that leader's actual curated best deck (build_class_deck) --
+    # deliberately unchanged so it stays "the hardest legal deck you can
+    # face." Trials 1-2 draw from the same real card pool but are banded by
+    # rarity so they read as genuinely weaker, legal decks rather than
+    # reskins of the same 40 cards.
+    if tier >= 3:
+        return build_class_deck(faction_name)
+    var pool: Array = build_class_cards(faction_name)
+    for neutral_card in build_universal_cards():
+        if str(neutral_card.get("ability", "")) != "sponsor":
+            pool.append(neutral_card)
+    var rarity_rank := {"Bronze": 0, "Silver": 1, "Gold": 2, "Epic": 3, "Legendary": 4, "Platinum": 5}
+    var max_rank := 2 if tier <= 1 else 4
+    var banded: Array = []
+    for card_data in pool:
+        if int(rarity_rank.get(str(card_data.get("rarity", "Bronze")), 0)) <= max_rank:
+            banded.append(card_data)
+    if banded.is_empty():
+        banded = pool.duplicate(true)
+    var rng := RandomNumberGenerator.new()
+    rng.seed = hash("trial_deck_%s_%d" % [faction_name, tier])
+    var shuffled: Array = banded.duplicate(true)
+    for i in range(shuffled.size() - 1, 0, -1):
+        var j := rng.randi_range(0, i)
+        var tmp = shuffled[i]
+        shuffled[i] = shuffled[j]
+        shuffled[j] = tmp
+    var deck: Array = []
+    var counts := {}
+    _fill_legal_deck(deck, counts, shuffled)
+    if deck.size() < 40:
+        _fill_legal_deck(deck, counts, pool)
+    return deck
+
+func _fill_legal_deck(deck: Array, counts: Dictionary, source: Array) -> void:
+    if source.is_empty():
+        return
+    var idx := 0
+    var guard := 0
+    while deck.size() < 40 and guard < source.size() * 10:
+        var card_data: Dictionary = source[idx % source.size()]
+        var card_name := str(card_data.get("name", "Card"))
+        var rarity := str(card_data.get("rarity", "Bronze"))
+        var limit := 1 if rarity == "Platinum" else (2 if rarity == "Legendary" else 3)
+        if int(counts.get(card_name, 0)) < limit:
+            deck.append(card_data.duplicate(true))
+            counts[card_name] = int(counts.get(card_name, 0)) + 1
+        idx += 1
+        guard += 1
+
+func build_sponsor_trial_deck() -> Array:
+    # The Sponsor: the bonus boss beyond the three Trials. His deck is the
+    # one deliberately illegal exception in the game -- it mixes the best
+    # cards from every class (no player deck can do this) and runs 3 copies
+    # of The Sponsor himself (normally capped at 1). Every other card still
+    # respects its own normal copy limit, so the deck reads as "the best of
+    # everything," not one card copy-pasted.
+    var sponsor_card := {}
+    for neutral_card in build_universal_cards():
+        if str(neutral_card.get("ability", "")) == "sponsor":
+            sponsor_card = neutral_card
+            break
+    var deck: Array = []
+    var counts := {}
+    if not sponsor_card.is_empty():
+        for i in range(3):
+            deck.append(sponsor_card.duplicate(true))
+        counts[str(sponsor_card.get("name", "The Sponsor"))] = 3
+    var rarity_rank := {"Bronze": 0, "Silver": 1, "Gold": 2, "Epic": 3, "Legendary": 4, "Platinum": 5}
+    var pool: Array = []
+    for faction_name in ["Hope", "Courage", "Serenity", "Purpose"]:
+        pool.append_array(build_class_cards(faction_name))
+    for neutral_card in build_universal_cards():
+        if str(neutral_card.get("ability", "")) != "sponsor":
+            pool.append(neutral_card)
+    pool.sort_custom(func(a, b):
+        return int(rarity_rank.get(str(a.get("rarity", "Bronze")), 0)) > int(rarity_rank.get(str(b.get("rarity", "Bronze")), 0))
+    )
+    _fill_legal_deck(deck, counts, pool)
+    return deck
+
 func build_deck_for_mode(faction_name: String, deck_mode: String) -> Array:
     if story_mode_battle and deck_mode == "prebuilt" and faction_name == enemy_class:
         return build_story_opponent_deck(faction_name, story_stage_id)
+    if trial_mode_battle and faction_name == enemy_class:
+        if trial_tier >= 4:
+            return build_sponsor_trial_deck()
+        return build_trial_deck(faction_name, trial_tier)
     match deck_mode:
         "meta":
             return build_developer_meta_deck(faction_name)
@@ -1624,6 +1729,7 @@ func leader_name_for(faction_name: String) -> String:
         "Courage": return "Kael, Flame Unbound"
         "Purpose": return "Orin, Grand Architect"
         "Hope": return "Lyra, Dawn Returned"
+        "Sponsor": return "The Sponsor"
         _: return "The First Traveler"
 
 func leader_art_for(faction_name: String) -> String:
@@ -1632,12 +1738,18 @@ func leader_art_for(faction_name: String) -> String:
         "Courage": return "res://assets/leaders/courage.png"
         "Purpose": return "res://assets/leaders/purpose.png"
         "Hope": return "res://assets/leaders/hope.png"
+        # The Sponsor has no full-scene leader painting -- he uses his own
+        # card's art directly (see build_sponsor_trial_deck / JD-080).
+        "Sponsor": return "res://assets/cards/full/jd-080.jpg"
         _: return "res://assets/leaders/player.png"
 
 func update_leader_visual(leader: Button, faction_name: String, player_side: bool) -> void:
     var portrait := leader.get_node_or_null("Portrait") as TextureRect
     if portrait != null:
-        var leader_texture := leader_portrait_texture(leader_art_for(faction_name))
+        # The card-art image doesn't have the leader paintings' baked-in top
+        # 60% framing, so it's shown uncropped rather than through the
+        # leader-portrait crop meant for the full-scene illustrations.
+        var leader_texture: Texture2D = load(leader_art_for(faction_name)) as Texture2D if faction_name == "Sponsor" else leader_portrait_texture(leader_art_for(faction_name))
         portrait.texture = leader_texture
         portrait.visible = leader_texture != null
         portrait.modulate = Color.WHITE
@@ -4688,6 +4800,7 @@ func check_winner() -> void:
         busy = true
         award_pending_challenge()
         record_recovery_challenge_win(selected_class)
+        award_pending_trial()
         play_battle_bark(player_leader, selected_class, "victory", true, true)
         play_battle_bark(enemy_leader, enemy_class, "defeat", false, true)
         call_deferred("_finish_match", true)
@@ -4949,6 +5062,41 @@ func award_pending_challenge() -> void:
     cfg.set_value("challenge", "pending_reward", 0)
     cfg.set_value("challenge", "pending_packs", 0)
     cfg.set_value("challenge", "story_stage", 0)
+    cfg.save("user://journeys_dawn_profile.cfg")
+
+const TRIAL_GOLD_REWARDS := {1: 50, 2: 90, 3: 150, 4: 400}
+
+func award_pending_trial() -> void:
+    # Mirrors award_pending_challenge's pattern: menu.gd stamps a pending
+    # trial into the shared profile cfg before launching the battle scene,
+    # and this reads/clears it on victory. Trials are repeatable -- gold is
+    # paid out on every win -- but The Sponsor's cosmetic + collection
+    # reward only unlocks the first time he's beaten.
+    var cfg := ConfigFile.new()
+    if cfg.load("user://journeys_dawn_profile.cfg") != OK:
+        return
+    var opponent := str(cfg.get_value("trials", "pending_opponent", ""))
+    var tier := int(cfg.get_value("trials", "pending_tier", 0))
+    if opponent.is_empty() or tier <= 0:
+        return
+    var gold := int(cfg.get_value("economy", "gold", 0))
+    gold += int(TRIAL_GOLD_REWARDS.get(tier, 0))
+    cfg.set_value("economy", "gold", gold)
+    var cleared = cfg.get_value("trials", "cleared", {})
+    var clear_key := "%s_%d" % [opponent, tier]
+    var first_clear := not bool(cleared.get(clear_key, false))
+    cleared[clear_key] = true
+    cfg.set_value("trials", "cleared", cleared)
+    if tier >= 4:
+        if first_clear:
+            var owned = cfg.get_value("collection", "owned", {})
+            owned["JD-080"] = int(owned.get("JD-080", 0)) + 1
+            cfg.set_value("collection", "owned", owned)
+            cfg.set_value("trials", "sponsor_leader_unlocked", true)
+            cfg.set_value("trials", "sponsor_sleeve_unlocked", true)
+        cfg.set_value("trials", "sponsor_defeated", true)
+    cfg.set_value("trials", "pending_opponent", "")
+    cfg.set_value("trials", "pending_tier", 0)
     cfg.save("user://journeys_dawn_profile.cfg")
 
 func show_game_over(title_text: String, subtitle: String, player_won: bool) -> void:
