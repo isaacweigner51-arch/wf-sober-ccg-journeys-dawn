@@ -54,6 +54,7 @@ var evolution_count_label: Label
 var status_label: Label
 var end_turn_button: Button
 var overlay: ColorRect
+var game_over_layer: ColorRect
 var card_detail_panel: Panel
 var player_leader: Button
 var enemy_leader: Button
@@ -3727,14 +3728,12 @@ func _finish_match(player_won: bool) -> void:
     if is_instance_valid(second_chance_overlay):
         second_chance_overlay.queue_free()
 
-    var training_completed_here := false
     if player_won and training_mode:
         var objectives := training_objectives(training_class)
         if training_objective_index >= objectives.size() - 1:
             training_objective_index = objectives.size()
             update_training_panel()
             complete_class_training()
-            training_completed_here = true
         else:
             safe_set_text(status_label, "Battle won, but complete every class objective to graduate.")
 
@@ -3751,23 +3750,10 @@ func _finish_match(player_won: bool) -> void:
     await get_tree().create_timer(1.55, true, false, true).timeout
     if is_instance_valid(training_panel):
         training_panel.queue_free()
-    # A completion screen shown by complete_class_training() legitimately owns
-    # the overlay at this point — don't fight it. Any other lingering overlay
-    # (e.g. a stray spell-choice popup) must never be allowed to block the
-    # match-result screen, so we force it closed rather than silently
-    # returning and leaving the player stuck on the battlefield.
-    if not is_instance_valid(overlay):
-        busy = false
-        return
-    if overlay.visible and not training_completed_here:
-        for child in overlay.get_children():
-            child.queue_free()
-        overlay.visible = false
-    if not overlay.visible:
-        if player_won:
-            show_game_over("VICTORY", "You are Walking Free!", true)
-        else:
-            show_game_over("YOU LOSE", "Every setback is a chance to begin again.", false)
+    if player_won:
+        show_game_over("VICTORY", "You are Walking Free!", true)
+    else:
+        show_game_over("YOU LOSE", "Every setback is a chance to begin again.", false)
     busy = false
 
 func _play_victory_sequence(winner: Control, loser: Control) -> void:
@@ -3941,25 +3927,30 @@ func award_pending_challenge() -> void:
 
 func show_game_over(title_text: String, subtitle: String, player_won: bool) -> void:
     player_turn_active = false
-    if not is_instance_valid(overlay):
-        return
-    # Belt-and-suspenders: whatever else might still be alive in the scene
-    # (class_overlay z2000, second_chance_overlay z4000, card_detail_panel
-    # z5000), the result screen must always win the input fight. _finish_match
-    # already force-clears the known culprits, but push this above all of
-    # them regardless so a future overlay can't reintroduce the same freeze.
-    overlay.z_index = 6000
-    overlay.visible = true
-    overlay.modulate = Color(1, 1, 1, 0)
-    for child in overlay.get_children():
-        child.queue_free()
+    # The result screen used to be shown on the shared `overlay` node, which
+    # is also reused by mid-match modals (pass-device handoff, the strategic
+    # collapse spell choice, etc). If one of those modals was ever left
+    # active — or later toggled `overlay.visible` — it could hide or fight
+    # over the same node as the victory/defeat screen, which is exactly what
+    # "stuck on the victory screen, buttons don't do anything" looks like.
+    # Give the result screen its own dedicated, disposable layer so nothing
+    # else in the game can ever touch or hide it once it's up.
+    if is_instance_valid(game_over_layer):
+        game_over_layer.queue_free()
+    game_over_layer = ColorRect.new()
+    game_over_layer.color = Color(0, 0, 0, 0.68)
+    game_over_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    game_over_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+    game_over_layer.z_index = 10000
+    game_over_layer.modulate = Color(1, 1, 1, 0)
+    add_child(game_over_layer)
 
     var box := VBoxContainer.new()
     box.position = Vector2(350, 190)
     box.size = Vector2(580, 350)
     box.alignment = BoxContainer.ALIGNMENT_CENTER
     box.add_theme_constant_override("separation", 14)
-    overlay.add_child(box)
+    game_over_layer.add_child(box)
 
     var badge := Label.new()
     badge.text = "★" if player_won else "↻"
@@ -3997,16 +3988,18 @@ func show_game_over(title_text: String, subtitle: String, player_won: bool) -> v
     box.add_child(home)
 
     var fade := create_tween()
-    fade.tween_property(overlay, "modulate:a", 1.0, 0.22)
+    fade.tween_property(game_over_layer, "modulate:a", 1.0, 0.22)
 
 func _restart_after_match() -> void:
-    if is_instance_valid(overlay):
-        overlay.visible = false
+    if is_instance_valid(game_over_layer):
+        game_over_layer.queue_free()
     game_over = false
     busy = false
     start_game()
 
 func _return_to_main_menu() -> void:
+    if is_instance_valid(game_over_layer):
+        game_over_layer.queue_free()
     game_over = false
     busy = false
     var err := get_tree().change_scene_to_file("res://main.tscn")

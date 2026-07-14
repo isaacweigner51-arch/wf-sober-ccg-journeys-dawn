@@ -1914,14 +1914,100 @@ func add_card_to_collection(cd: Dictionary) -> void:
     else:
         collection_owned[id] = owned + 1
 
+func pack_card_back(pos: Vector2, size_value: Vector2) -> Panel:
+    # A face-down placeholder so the reveal reads as an actual pack being
+    # opened one card at a time, instead of five cards just appearing flat
+    # and static on the screen at once.
+    var back := Panel.new()
+    back.position = pos
+    back.size = size_value
+    back.pivot_offset = size_value / 2.0
+    var style := StyleBoxFlat.new()
+    style.bg_color = Color(0.05, 0.09, 0.16, 1.0)
+    style.border_color = Color(0.62, 0.72, 0.92, 0.9)
+    style.set_border_width_all(3)
+    style.set_corner_radius_all(12)
+    style.shadow_color = Color(0, 0, 0, 0.55)
+    style.shadow_size = 6
+    back.add_theme_stylebox_override("panel", style)
+    var glyph := label("✦", Vector2(0, size_value.y / 2.0 - 34), size_value, 40, back)
+    glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    glyph.add_theme_color_override("font_color", Color(0.72, 0.82, 1.0, 0.85))
+    var wordmark := label("JOURNEY'S\nDAWN", Vector2(0, size_value.y / 2.0 + 16), size_value, 12, back)
+    wordmark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    wordmark.add_theme_color_override("font_color", Color(0.72, 0.82, 1.0, 0.6))
+    return back
+
+func pack_rarity_burst(center: Vector2, rarity: String) -> void:
+    # A brief radial flash sized and colored by rarity so a Legendary/Platinum
+    # pull actually feels bigger than a Bronze one, instead of every card
+    # revealing with identical, flat presentation.
+    var scale_by_rarity := {"Bronze": 60.0, "Silver": 75.0, "Gold": 95.0, "Signature Gold": 95.0, "Epic": 115.0, "Legendary": 140.0, "Platinum": 175.0}
+    var radius: float = scale_by_rarity.get(rarity, 70.0)
+    var glow := ColorRect.new()
+    glow.color = card_rarity_color(rarity)
+    glow.color.a = 0.55
+    glow.size = Vector2(radius, radius)
+    glow.position = center - glow.size / 2.0
+    glow.pivot_offset = glow.size / 2.0
+    glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    glow.z_index = 40
+    root_layer.add_child(glow)
+    glow.scale = Vector2(0.2, 0.2)
+    var burst_tween := create_tween().set_parallel(true)
+    burst_tween.tween_property(glow, "scale", Vector2(1.0, 1.0), 0.32).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    burst_tween.tween_property(glow, "color:a", 0.0, 0.42)
+    burst_tween.chain().tween_callback(glow.queue_free)
+
 func show_pack_results(pulled: Array, platinum_hit: bool) -> void:
     clear_screen(); add_background(0.80); header("PACK OPENED", "SIGNATURE PLATINUM!" if platinum_hit else "Cards added to your collection"); currency_bar()
+    var backs: Array[Panel] = []
     for i in range(pulled.size()):
-        var cd: Dictionary = pulled[i]
-        var p := card_panel(cd,Vector2(55+i*244,178),Vector2(220,340)); root_layer.add_child(p)
+        var pos := Vector2(55 + i * 244, 178)
+        var back := pack_card_back(pos, Vector2(220, 340))
+        root_layer.add_child(back)
+        backs.append(back)
     button("OPEN ANOTHER (%d)" % pack_inventory,Vector2(405,550),Vector2(230,55),show_pack_opening)
     button("COLLECTION",Vector2(645,550),Vector2(180,55),show_collection)
     button("DECK BUILDER",Vector2(835,550),Vector2(200,55),show_deck_builder)
+    # Fire-and-forget: the reveal animation must never gate the buttons above
+    # from appearing (a stuck tween here should never be able to strand the
+    # player on this screen with no way forward).
+    _animate_pack_reveal(pulled, backs, platinum_hit)
+
+func _animate_pack_reveal(pulled: Array, backs: Array, platinum_hit: bool) -> void:
+    for i in range(pulled.size()):
+        await get_tree().create_timer(0.30).timeout
+        if i >= backs.size() or not is_instance_valid(backs[i]):
+            continue
+        var back: Panel = backs[i]
+        var pos := back.position
+        var size_value := back.size
+        var flip_out := create_tween()
+        flip_out.tween_property(back, "scale:x", 0.0, 0.13).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+        await flip_out.finished
+        if not is_instance_valid(back):
+            continue
+        var parent := back.get_parent()
+        back.queue_free()
+        if not is_instance_valid(parent):
+            continue
+        var cd: Dictionary = pulled[i]
+        var rarity := str(cd.get("rarity", "Bronze"))
+        pack_rarity_burst(pos + size_value / 2.0, rarity)
+        var real := card_panel(cd, pos, size_value)
+        real.pivot_offset = size_value / 2.0
+        real.scale.x = 0.0
+        parent.add_child(real)
+        var flip_in := create_tween()
+        flip_in.tween_property(real, "scale:x", 1.0, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        if rarity in ["Legendary", "Platinum"]:
+            await flip_in.finished
+            if not is_instance_valid(real):
+                continue
+            var pop := create_tween()
+            pop.tween_property(real, "scale", Vector2(1.1, 1.1), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+            pop.tween_property(real, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 func _load_menu_art_path(path: String) -> Texture2D:
     if _menu_art_cache.has(path):
@@ -1961,6 +2047,17 @@ func card_art_texture(cd: Dictionary) -> Texture2D:
     var art_index: int = seed_value % 16
     return _load_menu_art_path("res://assets/cards/art_%02d.png" % art_index)
 
+func card_rarity_color(rarity: String) -> Color:
+    if rarity in ["Gold", "Signature Gold"]:
+        return Color(1.0, 0.76, 0.20)
+    elif rarity == "Epic":
+        return Color(0.72, 0.38, 1.0)
+    elif rarity == "Legendary":
+        return Color(1.0, 0.42, 0.16)
+    elif rarity == "Platinum":
+        return Color(0.75, 0.95, 1.0)
+    return Color(0.6, 0.66, 0.74)
+
 func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable := true) -> Panel:
     var p := Panel.new()
     p.position = pos
@@ -1970,14 +2067,8 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
 
     var rarity := str(cd.get("rarity", "Bronze"))
     var border := class_color(str(cd.get("class", "Neutral")))
-    if rarity in ["Gold", "Signature Gold"]:
-        border = Color(1.0, 0.76, 0.20)
-    elif rarity == "Epic":
-        border = Color(0.72, 0.38, 1.0)
-    elif rarity == "Legendary":
-        border = Color(1.0, 0.42, 0.16)
-    elif rarity == "Platinum":
-        border = Color(0.75, 0.95, 1.0)
+    if rarity not in ["Bronze", "Silver"]:
+        border = card_rarity_color(rarity)
 
     var frame_style := StyleBoxFlat.new()
     frame_style.bg_color = Color(0.015, 0.025, 0.055, 1.0)
