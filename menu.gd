@@ -2354,10 +2354,10 @@ func start_developer_final_boss_battle() -> void:
         return
     launch_selected_battle(selected_class if selected_class != "" else "Purpose", "final_boss")
 
-func launch_selected_battle(c: String, deck_mode: String, opponent_class_value: String = "Courage", opponent_mode_value: String = "prebuilt") -> void:
+func launch_selected_battle(c: String, deck_mode: String, opponent_class_value: String = "Courage", opponent_mode_value: String = "prebuilt", battle_mode: String = "ai") -> void:
     selected_class = c
     var cfg := ConfigFile.new()
-    cfg.set_value("battle","mode","ai")
+    cfg.set_value("battle","mode",battle_mode)
     cfg.set_value("battle","your_class",c)
     cfg.set_value("battle","your_deck_mode",deck_mode)
     cfg.set_value("battle","opponent_class",opponent_class_value)
@@ -2450,6 +2450,13 @@ func _battle_selection_set_opponent_mode(_mode_value: String) -> void:
 func _battle_selection_start() -> void:
     battle_opponent_mode = "prebuilt"
     launch_selected_battle(battle_select_class, battle_select_mode, battle_opponent_class, "prebuilt")
+
+func _battle_selection_start_practice() -> void:
+    # Practice: your own deck vs. a legal AI deck, with a much longer turn
+    # clock and no gold/challenge/trial payouts -- just a low-pressure place
+    # to try a build and read cards.
+    battle_opponent_mode = "prebuilt"
+    launch_selected_battle(battle_select_class, battle_select_mode, battle_opponent_class, "prebuilt", "practice")
 
 func _battle_preview_deck_ids(class_name_value: String, mode_value: String) -> Array:
     if mode_value == "custom":
@@ -2648,11 +2655,14 @@ func show_match_deck_selection() -> void:
     button("PREVIEW YOUR DECK", Vector2(18, 414), Vector2(198, 38), func(): _show_battle_deck_preview(battle_select_class, battle_select_mode, false), center)
     button("PREVIEW OPPONENT", Vector2(236, 414), Vector2(198, 38), func(): _show_battle_deck_preview(battle_opponent_class, "prebuilt", true), center)
 
-    button("BACK", Vector2(28, 506), Vector2(180, 44), show_home, shell)
-    var begin := button("BEGIN BATTLE", Vector2(306, 498), Vector2(612, 54), _battle_selection_start, shell)
-    begin.add_theme_font_size_override("font_size", ui_font_size(21))
+    button("BACK", Vector2(28, 498), Vector2(180, 54), show_home, shell)
+    var begin := button("BEGIN BATTLE", Vector2(306, 498), Vector2(500, 54), _battle_selection_start, shell)
+    begin.add_theme_font_size_override("font_size", ui_font_size(20))
     begin.add_theme_stylebox_override("normal", style(GOLD_COLOR, 14))
     begin.add_theme_color_override("font_color", Color(0.04,0.06,0.10))
+    var practice_begin := button("PRACTICE\n(long timer, no rewards)", Vector2(820, 498), Vector2(376, 54), _battle_selection_start_practice, shell)
+    practice_begin.add_theme_font_size_override("font_size", ui_font_size(13))
+    practice_begin.add_theme_stylebox_override("normal", style(Color(0.30, 0.55, 0.38), 14))
 
 func _show_battle_deck_preview(class_name_value: String, mode_value: String, opponent_preview: bool) -> void:
     if opponent_preview:
