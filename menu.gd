@@ -1009,11 +1009,22 @@ func button(text_value: String, pos: Vector2, size_value: Vector2, callback: Cal
 func label(text_value: String, pos: Vector2, size_value: Vector2, font_size := 18, parent: Control = root_layer) -> Label:
     var l := Label.new()
     l.text = text_value
-    l.position = pos
-    l.size = size_value
     l.add_theme_font_size_override("font_size", ui_font_size(font_size))
     l.add_theme_color_override("font_color", Color(0.94,0.95,1.0))
     l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    # Godot computes a Control's minimum size from its UNWRAPPED single-line
+    # width the instant .size is first assigned, before autowrap can narrow
+    # it back down -- and Control.set_size() silently clamps up to at least
+    # that minimum. Left alone, any label whose full text is wider than its
+    # box (which is the whole point of using autowrap) gets force-widened
+    # and never shrinks back, so the text visibly sticks out past whatever
+    # card/panel/button it was supposed to fit inside. Locking
+    # custom_minimum_size to the intended width *after* autowrap is set,
+    # but *before* the real .size assignment below, makes Godot compute
+    # wrapping against that width instead, so the box actually holds size.
+    l.custom_minimum_size = Vector2(size_value.x, 0)
+    l.position = pos
+    l.size = size_value
     parent.add_child(l)
     return l
 
@@ -3659,7 +3670,26 @@ func show_pack_opening() -> void:
     tap_catcher.pressed.connect(func(): _begin_pack_open(pack_visual, tap_catcher))
     pack_visual.add_child(tap_catcher)
     label("TAP THE PACK TO OPEN IT", Vector2(390, 545), Vector2(500, 30), 17).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    label("Platinum pity: %d / 40   •   Average pull target: 1 in 11 packs" % platinum_pity,Vector2(310,590),Vector2(660,42),16).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    label("Platinum pity: %d / 40   •   Average pull target: 1 in 11 packs" % platinum_pity,Vector2(310,580),Vector2(660,30),16).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+
+    # Bulk-open row: skips the one-at-a-time tap-and-watch flow for players
+    # sitting on a stack of packs, going straight to a results grid instead.
+    # Options are hidden once they can't offer anything "OPEN ALL" doesn't
+    # already cover, instead of showing disabled/duplicate buttons.
+    if pack_inventory > 1:
+        var bulk_options: Array = []
+        if pack_inventory >= 5: bulk_options.append(5)
+        if pack_inventory >= 10: bulk_options.append(10)
+        if pack_inventory >= 25: bulk_options.append(25)
+        bulk_options.append(-1)
+        var bw := 220.0
+        var gap := 18.0
+        var total_w: float = bw * bulk_options.size() + gap * (bulk_options.size() - 1)
+        var start_x: float = (1280.0 - total_w) / 2.0
+        for i in range(bulk_options.size()):
+            var n: int = bulk_options[i]
+            var caption := "OPEN ALL (%d)" % pack_inventory if n == -1 else "OPEN %d" % n
+            button(caption, Vector2(start_x + i * (bw + gap), 622), Vector2(bw, 48), open_packs_bulk.bind(n))
 
 func _begin_pack_open(pack_visual: Panel, tap_catcher: Button) -> void:
     # A short anticipation beat before the results screen cuts in — the pack
@@ -3699,8 +3729,12 @@ func _begin_pack_open(pack_visual: Panel, tap_catcher: Button) -> void:
 
     open_pack()
 
-func open_pack() -> void:
-    if pack_inventory <= 0: return
+func _roll_one_pack() -> Dictionary:
+    # Single source of truth for one pack's pull (pity counter, rarity rolls,
+    # collection grant) so the animated single-open flow and the bulk opener
+    # below always share identical odds and pity math -- duplicating this
+    # loop for a "fast path" would be exactly how the two silently drift out
+    # of sync with each other over time.
     pack_inventory -= 1; packs_opened += 1; platinum_pity += 1
     var guaranteed_platinum := platinum_pity >= 40
     var platinum_hit := guaranteed_platinum or randi_range(1,11) == 1
@@ -3711,7 +3745,26 @@ func open_pack() -> void:
         pulled.append(cd)
         add_card_to_collection(cd)
     if platinum_hit: platinum_pity = 0
-    save_profile(); show_pack_results(pulled, platinum_hit)
+    return {"pulled": pulled, "platinum_hit": platinum_hit}
+
+func open_pack() -> void:
+    if pack_inventory <= 0: return
+    var result := _roll_one_pack()
+    save_profile(); show_pack_results(result["pulled"], result["platinum_hit"])
+
+func open_packs_bulk(requested: int) -> void:
+    # requested == -1 means "open everything owned". Used by the bulk-open
+    # row so players don't have to tap through packs one at a time.
+    var count: int = pack_inventory if requested == -1 else min(requested, pack_inventory)
+    if count <= 0: return
+    var all_pulled: Array = []
+    var platinum_count := 0
+    for i in range(count):
+        var result := _roll_one_pack()
+        all_pulled.append_array(result["pulled"])
+        if result["platinum_hit"]: platinum_count += 1
+    save_profile()
+    show_bulk_pack_results(all_pulled, count, platinum_count)
 
 func roll_rarity(guaranteed_silver: bool, force_platinum: bool) -> String:
     if force_platinum: return "Platinum"
@@ -3796,6 +3849,57 @@ func show_pack_results(pulled: Array, platinum_hit: bool) -> void:
     # from appearing (a stuck tween here should never be able to strand the
     # player on this screen with no way forward).
     _animate_pack_reveal(pulled, backs, platinum_hit)
+
+const BULK_RARITY_ORDER := ["Platinum", "Legendary", "Epic", "Signature Gold", "Gold", "Silver", "Bronze"]
+
+func show_bulk_pack_results(pulled: Array, pack_count: int, platinum_count: int) -> void:
+    # The one-at-a-time flip/spotlight sequence in show_pack_results doesn't
+    # scale to dozens of cards -- this shows every pull at once, best rarity
+    # first, so a big bulk-open still reads as "here's everything you got"
+    # instead of forcing a long wait through repeated small animations.
+    clear_screen(); add_background(0.80)
+    var subtitle := "%d packs opened" % pack_count
+    if platinum_count > 0:
+        subtitle += "  •  %d SIGNATURE PLATINUM!" % platinum_count
+    header("PACKS OPENED", subtitle); currency_bar()
+
+    var sorted_pulled: Array = pulled.duplicate()
+    sorted_pulled.sort_custom(func(a, b):
+        var ra: int = BULK_RARITY_ORDER.find(str(a.get("rarity", "Bronze")))
+        var rb: int = BULK_RARITY_ORDER.find(str(b.get("rarity", "Bronze")))
+        if ra == rb: return str(a.get("name","")) < str(b.get("name",""))
+        return ra < rb
+    )
+
+    var binder := Panel.new()
+    binder.position = Vector2(28, 176)
+    binder.size = Vector2(1224, 388)
+    var binder_style := StyleBoxFlat.new()
+    binder_style.bg_color = Color(0.01, 0.02, 0.045, 0.78)
+    binder_style.border_color = GOLD_COLOR
+    binder_style.set_border_width_all(2)
+    binder_style.set_corner_radius_all(14)
+    binder.add_theme_stylebox_override("panel", binder_style)
+    root_layer.add_child(binder)
+    var scroll := ScrollContainer.new()
+    scroll.position = Vector2(12, 12)
+    scroll.size = Vector2(1200, 364)
+    binder.add_child(scroll)
+    var grid := GridContainer.new()
+    grid.columns = 7
+    grid.add_theme_constant_override("h_separation", 14)
+    grid.add_theme_constant_override("v_separation", 16)
+    scroll.add_child(grid)
+    for cd in sorted_pulled:
+        var wrap := VBoxContainer.new()
+        wrap.custom_minimum_size = Vector2(160, 246)
+        var cp := card_panel(cd, Vector2.ZERO, Vector2(160, 236))
+        wrap.add_child(cp)
+        grid.add_child(wrap)
+
+    button("OPEN ANOTHER (%d)" % pack_inventory, Vector2(405, 580), Vector2(230, 55), show_pack_opening)
+    button("COLLECTION", Vector2(645, 580), Vector2(180, 55), show_collection)
+    button("DECK BUILDER", Vector2(835, 580), Vector2(200, 55), show_deck_builder)
 
 # sfx grows with rarity so a bronze pull stays quick/quiet and a
 # legendary/platinum pull actually announces itself.
