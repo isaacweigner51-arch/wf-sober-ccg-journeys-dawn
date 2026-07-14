@@ -2107,6 +2107,57 @@ func _on_billing_products_updated(_products: Dictionary) -> void:
     if is_instance_valid(root_layer) and status_label != null:
         show_store()
 
+var _pack_sfx_pool: Array[AudioStreamPlayer] = []
+
+# menu.gd has no shared sfx system of its own (main.gd's play_sfx/sfx_pool
+# belong to the battle scene) — this is a small self-contained pool so pack
+# opening can have real audio feedback instead of being silent.
+func _ensure_pack_sfx_pool() -> void:
+    if not _pack_sfx_pool.is_empty():
+        return
+    for i in range(4):
+        var player := AudioStreamPlayer.new()
+        player.bus = "Master"
+        add_child(player)
+        _pack_sfx_pool.append(player)
+
+func play_pack_sfx(sound_name: String, volume_db: float = 0.0) -> void:
+    var path := "res://assets/audio/%s.wav" % sound_name
+    if not ResourceLoader.exists(path):
+        return
+    _ensure_pack_sfx_pool()
+    var target: AudioStreamPlayer = _pack_sfx_pool[0]
+    for candidate in _pack_sfx_pool:
+        if not candidate.playing:
+            target = candidate
+            break
+    target.stream = load(path)
+    target.volume_db = volume_db
+    target.play()
+
+# Shared by the pack-reveal spotlight moment: a radial burst of small glyphs,
+# generalized the same way main.gd's evolution cinematics use one so pulling
+# a rare card looks like a real payoff instead of a flat color flash.
+func spawn_reward_sparkles(origin: Vector2, count: int, colors: Array, base_distance: float = 90.0) -> void:
+    var glyphs := ["✦", "★", "•"]
+    for i in range(count):
+        var sparkle := Label.new()
+        sparkle.text = glyphs[i % glyphs.size()]
+        sparkle.add_theme_font_size_override("font_size", 16 + (i % 3) * 5)
+        sparkle.add_theme_color_override("font_color", colors[i % colors.size()])
+        sparkle.z_index = 200
+        sparkle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        sparkle.position = origin
+        root_layer.add_child(sparkle)
+        var angle := TAU * float(i) / float(count) + randf_range(-0.12, 0.12)
+        var distance := base_distance + float(i % 4) * 16.0
+        var destination := sparkle.position + Vector2(cos(angle), sin(angle)) * distance
+        var sparkle_tween := create_tween().set_parallel(true)
+        sparkle_tween.tween_property(sparkle, "position", destination, 0.7)
+        sparkle_tween.tween_property(sparkle, "modulate:a", 0.0, 0.7)
+        sparkle_tween.tween_property(sparkle, "rotation", angle, 0.7)
+        sparkle_tween.finished.connect(sparkle.queue_free)
+
 func build_pack_visual(pos: Vector2, size_value: Vector2, parent: Control = root_layer) -> Panel:
     # An actual foil-pack object — gradient body, gold foil edge, wordmark,
     # and a slow diagonal shimmer — instead of a plain rectangular button
@@ -2210,10 +2261,48 @@ func show_pack_opening() -> void:
     tap_catcher.size = pack_size
     tap_catcher.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     tap_catcher.tooltip_text = "Tap to open this pack"
-    tap_catcher.pressed.connect(open_pack)
+    tap_catcher.pressed.connect(func(): _begin_pack_open(pack_visual, tap_catcher))
     pack_visual.add_child(tap_catcher)
     label("TAP THE PACK TO OPEN IT", Vector2(390, 545), Vector2(500, 30), 17).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     label("Platinum pity: %d / 40   •   Average pull target: 1 in 11 packs" % platinum_pity,Vector2(310,590),Vector2(660,42),16).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+
+func _begin_pack_open(pack_visual: Panel, tap_catcher: Button) -> void:
+    # A short anticipation beat before the results screen cuts in — the pack
+    # shakes, glows, and tears rather than the tap instantly jumping straight
+    # to a list of cards, so opening a pack feels like an event.
+    if pack_inventory <= 0 or not is_instance_valid(pack_visual):
+        return
+    tap_catcher.disabled = true
+    play_pack_sfx("play")
+    var origin_rotation := pack_visual.rotation
+    var origin_position := pack_visual.position
+    var shake := create_tween()
+    shake.tween_property(pack_visual, "rotation", origin_rotation - 0.05, 0.06)
+    shake.tween_property(pack_visual, "rotation", origin_rotation + 0.06, 0.07)
+    shake.tween_property(pack_visual, "rotation", origin_rotation - 0.05, 0.07)
+    shake.tween_property(pack_visual, "rotation", origin_rotation + 0.04, 0.06)
+    shake.tween_property(pack_visual, "rotation", origin_rotation, 0.05)
+    shake.parallel().tween_property(pack_visual, "position", origin_position + Vector2(0, -6), 0.31).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    await shake.finished
+
+    var flash := ColorRect.new()
+    flash.color = Color(1, 1, 1, 0.0)
+    flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    flash.z_index = 500
+    root_layer.add_child(flash)
+    play_pack_sfx("draw")
+    var tear := create_tween().set_parallel(true)
+    tear.tween_property(pack_visual, "scale", Vector2(1.15, 1.15), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    tear.tween_property(flash, "color:a", 0.85, 0.14)
+    await tear.finished
+    flash.color.a = 0.85
+    var settle := create_tween()
+    settle.tween_property(flash, "color:a", 0.0, 0.22)
+    await settle.finished
+    flash.queue_free()
+
+    open_pack()
 
 func open_pack() -> void:
     if pack_inventory <= 0: return
@@ -2313,6 +2402,11 @@ func show_pack_results(pulled: Array, platinum_hit: bool) -> void:
     # player on this screen with no way forward).
     _animate_pack_reveal(pulled, backs, platinum_hit)
 
+# sfx grows with rarity so a bronze pull stays quick/quiet and a
+# legendary/platinum pull actually announces itself.
+const PACK_REVEAL_SFX := {"Bronze": "draw", "Silver": "draw", "Gold": "evolve", "Signature Gold": "evolve", "Epic": "evolve_new", "Legendary": "evolve_cinematic", "Platinum": "platinum"}
+const PACK_REVEAL_TITLE := {"Epic": "EPIC PULL!", "Legendary": "LEGENDARY PULL!", "Platinum": "SIGNATURE PLATINUM!"}
+
 func _animate_pack_reveal(pulled: Array, backs: Array, platinum_hit: bool) -> void:
     for i in range(pulled.size()):
         await get_tree().create_timer(0.30).timeout
@@ -2332,6 +2426,7 @@ func _animate_pack_reveal(pulled: Array, backs: Array, platinum_hit: bool) -> vo
             continue
         var cd: Dictionary = pulled[i]
         var rarity := str(cd.get("rarity", "Bronze"))
+        play_pack_sfx(str(PACK_REVEAL_SFX.get(rarity, "draw")))
         pack_rarity_burst(pos + size_value / 2.0, rarity)
         var real := card_panel(cd, pos, size_value)
         real.pivot_offset = size_value / 2.0
@@ -2339,13 +2434,80 @@ func _animate_pack_reveal(pulled: Array, backs: Array, platinum_hit: bool) -> vo
         parent.add_child(real)
         var flip_in := create_tween()
         flip_in.tween_property(real, "scale:x", 1.0, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-        if rarity in ["Legendary", "Platinum"]:
+        if rarity in ["Epic", "Legendary", "Platinum"]:
             await flip_in.finished
             if not is_instance_valid(real):
                 continue
-            var pop := create_tween()
-            pop.tween_property(real, "scale", Vector2(1.1, 1.1), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-            pop.tween_property(real, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+            await _spotlight_reveal(real, rarity)
+
+func _spotlight_reveal(real: Panel, rarity: String) -> void:
+    # The single biggest lever for "feeling rewarded": Epic/Legendary/Platinum
+    # pulls stop being a same-size card flip in a row of five and instead get
+    # a dedicated moment — the screen dims, the card rises and grows center
+    # stage, a rarity-colored title banner announces the pull, and a sparkle
+    # burst fires, before the card settles back into its slot.
+    var origin_position := real.position
+    var origin_scale := real.scale
+    var origin_parent := real.get_parent()
+    var screen_center := Vector2(640.0, 300.0)
+    var target_scale: Vector2 = Vector2(1.55, 1.55) if rarity == "Platinum" else (Vector2(1.4, 1.4) if rarity == "Legendary" else Vector2(1.22, 1.22))
+    var target_position: Vector2 = screen_center - (real.size * target_scale) / 2.0
+
+    var dimmer := ColorRect.new()
+    dimmer.color = Color(0.01, 0.01, 0.03, 0.0)
+    dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    dimmer.z_index = 300
+    root_layer.add_child(dimmer)
+
+    real.z_index = 320
+    var glow_color := card_rarity_color(rarity)
+    var title := Label.new()
+    title.text = str(PACK_REVEAL_TITLE.get(rarity, "RARE PULL!"))
+    title.position = Vector2(190, 90)
+    title.size = Vector2(900, 70)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.add_theme_font_size_override("font_size", 46 if rarity == "Platinum" else 40)
+    title.add_theme_color_override("font_color", glow_color)
+    title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+    title.add_theme_constant_override("shadow_offset_x", 4)
+    title.add_theme_constant_override("shadow_offset_y", 4)
+    title.modulate.a = 0.0
+    title.z_index = 330
+    root_layer.add_child(title)
+
+    var rise := create_tween().set_parallel(true)
+    rise.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    rise.tween_property(dimmer, "color:a", 0.82, 0.22)
+    rise.tween_property(real, "position", target_position, 0.32)
+    rise.tween_property(real, "scale", target_scale, 0.32)
+    rise.tween_property(title, "modulate:a", 1.0, 0.24)
+    await rise.finished
+
+    var sparkle_count := 24 if rarity == "Platinum" else (18 if rarity == "Legendary" else 12)
+    spawn_reward_sparkles(screen_center, sparkle_count, [glow_color, Color(1, 1, 1)], 100.0)
+
+    var pop := create_tween()
+    pop.tween_property(real, "scale", target_scale * 1.07, 0.11).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    pop.tween_property(real, "scale", target_scale, 0.13).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+    await pop.finished
+    await get_tree().create_timer(0.55 if rarity == "Platinum" else 0.4).timeout
+
+    if not is_instance_valid(real) or not is_instance_valid(origin_parent):
+        dimmer.queue_free()
+        title.queue_free()
+        return
+    var settle := create_tween().set_parallel(true)
+    settle.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+    settle.tween_property(real, "position", origin_position, 0.26)
+    settle.tween_property(real, "scale", origin_scale, 0.26)
+    settle.tween_property(dimmer, "color:a", 0.0, 0.22)
+    settle.tween_property(title, "modulate:a", 0.0, 0.18)
+    await settle.finished
+    if is_instance_valid(real):
+        real.z_index = 0
+    dimmer.queue_free()
+    title.queue_free()
 
 func _load_menu_art_path(path: String) -> Texture2D:
     if _menu_art_cache.has(path):
