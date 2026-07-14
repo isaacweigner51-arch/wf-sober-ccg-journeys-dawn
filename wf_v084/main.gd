@@ -3206,9 +3206,16 @@ func show_second_chance() -> void:
         var full_card := CardView.new()
         full_card.setup(rendered_data, index, false, false)
         full_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        full_card.position = Vector2(3, 4)
-        full_card.scale = Vector2(1.40, 1.40)
+        # CardView's native size is 142x186. At the old 1.40x scale it only
+        # reached 198.8x260.4 inside this 205x300 button slot and was
+        # top-anchored (position.y = 4), leaving a ~36px gap of the button's
+        # own near-black background exposed at the bottom — looking like the
+        # card was floating above a black floor. 1.58x (with clip_contents
+        # already enabled on the button) covers the full 205x300 slot exactly,
+        # same "cover, don't letterbox" approach used for card art elsewhere.
+        full_card.scale = Vector2(1.58, 1.58)
         full_card.pivot_offset = Vector2.ZERO
+        full_card.position = Vector2((205.0 - 142.0 * 1.58) * 0.5, (300.0 - 186.0 * 1.58) * 0.5)
         b.add_child(full_card)
 
         b.pressed.connect(func():
