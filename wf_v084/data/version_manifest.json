@@ -1,17 +1,21 @@
 {
-  "version": "0.8.8",
-  "build": "Practice Match Crash Fix",
+  "version": "0.8.9",
+  "build": "Rush Fix & Rewards Screen",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Fixed a crash that could happen right as a practice match ended.",
+  "notes": "Fixed Rush followers being unable to attack the enemy leader after their first turn, hardened the result screen against a lingering crash, and added a rewards summary to the result screen.",
   "required": false,
-  "version_code": "0.8.8",
-  "build_name": "Practice Match Crash Fix",
+  "version_code": "0.8.9",
+  "build_name": "Rush Fix & Rewards Screen",
   "card_count": 120,
-  "version_name": "0.8.8",
+  "version_name": "0.8.9",
   "fixes": [
-    "Fixed a crash at the end of a match (most noticeable in practice matches) caused by the victory/defeat animation trying to keep running after the result screen had already taken over."
+    "Fixed Rush followers being permanently blocked from attacking the enemy leader — the restriction was meant to apply only on the turn they were summoned, not for the rest of the match.",
+    "Hardened the victory/defeat result screen against a lingering crash caused by leftover damage-popup and speech-bubble effects trying to run after the match scene had already changed."
+  ],
+  "features": [
+    "The result screen now shows a REWARDS EARNED summary (gold, packs, and any unlocks) above the PLAY AGAIN / RETURN TO MAIN MENU buttons whenever a win actually earns something."
   ],
   "upcoming_events": [
     "More seasonal content and cards are in development — check back after future updates for details."
