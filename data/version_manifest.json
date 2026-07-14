@@ -1,17 +1,17 @@
 {
-  "version": "0.8.12",
-  "build": "Victory Screen Race Fix",
+  "version": "0.8.13",
+  "build": "Collection Card Type Labels",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Closed a real race condition where the victory cinematic (its own giant 'VICTORY' banner and sparkle flourish) could briefly keep adding to the screen after the result screen had already started building underneath it, which could show up as overlapping/doubled text on the match-end screen.",
+  "notes": "Every card in the Collection and Deck Builder now shows its type (Follower, Spell, or Amulet) alongside its cost and rarity, instead of spells showing a misleading 0/0 attack-health line.",
   "required": false,
-  "version_code": "0.8.12",
-  "build_name": "Victory Screen Race Fix",
+  "version_code": "0.8.13",
+  "build_name": "Collection Card Type Labels",
   "card_count": 120,
-  "version_name": "0.8.12",
+  "version_name": "0.8.13",
   "fixes": [
-    "Fixed a race condition on the match-end screen: the victory cinematic (banner + sparkles) could slip in one more frame of content after the result screen had already started appearing, which could look like overlapping/doubled text. The cutoff is now immediate instead of depending on frame timing."
+    "Collection and Deck Builder card tiles now clearly label every card as FOLLOWER, SPELL, or AMULET next to its rarity. Spells previously showed a leftover 0/0 attack-health line with no indication they were spells."
   ],
   "features": [],
   "upcoming_events": [
