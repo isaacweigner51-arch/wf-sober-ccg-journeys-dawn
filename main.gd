@@ -4587,11 +4587,20 @@ func award_pending_challenge() -> void:
     cfg.set_value("road", first_key, true)
     var story_stage := int(cfg.get_value("challenge", "story_stage", 0))
     if story_stage > 0:
+        # Each leader (Hope/Courage/Serenity/Purpose) now has its own 24-stage
+        # story arc with its own cast, so progress must be keyed per leader --
+        # otherwise clearing stage 3 as one leader would also mark stage 3
+        # cleared for every other leader's unrelated story. story_stage_leader
+        # is stamped by begin_story_stage in menu.gd right before battle.
+        var story_leader := str(cfg.get_value("challenge", "story_stage_leader", selected_class))
         cfg.set_value("story", "cleared_%d" % story_stage, true)
-        # 24 total story stages across 4 chapters (6 stages each) — keep in
-        # sync with STORY_STAGES in menu.gd. Capped so unlocked_stage never
-        # points past the final stage once the whole arc is cleared.
+        cfg.set_value("story", "cleared_%s_%d" % [story_leader, story_stage], true)
+        # 24 total story stages across 4 chapters (6 stages each) per leader —
+        # keep in sync with STORY_STAGES_BY_LEADER in menu.gd. Capped so
+        # unlocked_stage never points past the final stage once the whole arc
+        # is cleared.
         cfg.set_value("story", "unlocked_stage", min(24, story_stage + 1))
+        cfg.set_value("story", "unlocked_stage_%s" % story_leader, min(24, story_stage + 1))
     cfg.set_value("challenge", "pending_reward", 0)
     cfg.set_value("challenge", "pending_packs", 0)
     cfg.set_value("challenge", "story_stage", 0)
