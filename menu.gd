@@ -25,13 +25,15 @@ const CHAPTER_META := [
     {"title":"A Life Worth Living", "subtitle":"From surviving to building something that lasts."}
 ]
 
-# A small recurring cast, so story battles read as fights against people who
-# show up more than once — not just a rotating label of class names. Dez
-# (the pull backward) and Nora (the sponsor pulling the other way) both
-# appear three times across the arc; Reggie and Angela anchor the work and
-# family threads. "class" still drives the actual battle deck; "opponent_name"
-# is who the game says you're facing.
-const STORY_STAGES := [
+# Each leader (Hope, Courage, Serenity, Purpose) plays through its own
+# 24-stage story with its own recurring cast, not one shared narrative with a
+# swapped-in class. Sponsors are gender-matched to their leader: Hope,
+# Courage, and Purpose are men with male sponsors; Serenity is a woman with a
+# female sponsor. "class" still drives the actual battle deck; "opponent_name"
+# is who the game says you're facing. Chapter beats (hitting bottom, building
+# structure, repairing relationships, a life worth living) stay parallel
+# across all four so CHAPTER_META and the id/gold/pack pacing can be shared.
+const STORY_STAGES_HOPE := [
     # --- Chapter 1: Hitting Bottom — admitting the problem and staying upright ---
     {
         "id":1, "chapter":1, "name":"The First Step", "class":"Hope", "gold":0, "packs":1,
@@ -41,9 +43,306 @@ const STORY_STAGES := [
     },
     {
         "id":2, "chapter":1, "name":"Finding Strength", "class":"Courage", "gold":150, "packs":0,
-        "opponent_name":"Dez",
+        "opponent_name":"Cole",
         "subtitle":"Face pressure without backing down.",
-        "story":"Dez finds you when you least expect it — same easy smile, same offer, like nothing's changed. You don't have to be fearless to face him down. You just have to stand your ground long enough to remember you can."
+        "story":"Cole finds you when you least expect it — same easy smile, same offer, like nothing's changed. You don't have to be fearless to face him down. You just have to stand your ground long enough to remember you can."
+    },
+    {
+        "id":3, "chapter":1, "name":"Quieting the Noise", "class":"Serenity", "gold":0, "packs":1,
+        "opponent_name":"The 2 A.M. Panic",
+        "subtitle":"Patience can control the battlefield.",
+        "story":"The cravings are loud tonight, but loud isn't the same as strong. You've learned to sit with the noise instead of running from it — and in that stillness, you find you're steadier than it is."
+    },
+    {
+        "id":4, "chapter":1, "name":"A Reason to Continue", "class":"Purpose", "gold":250, "packs":0,
+        "opponent_name":"The Old Excuse",
+        "subtitle":"Build toward something greater.",
+        "story":"Somewhere along the way, recovery stopped being about what you were running from and became about what you're building toward. Today you fight for that reason, not away from the old one."
+    },
+    {
+        "id":5, "chapter":1, "name":"Meeting Marcus", "class":"Courage", "gold":180, "packs":0,
+        "opponent_name":"Marcus",
+        "subtitle":"A sponsor won't carry you, but he won't let you walk alone either.",
+        "story":"He doesn't look impressed when you introduce yourself — he's heard every version of this story before. \"I'm not here to save you,\" Marcus says. \"I'm here so you don't have to figure this out by yourself.\" It's not a warm welcome. It's better: it's honest."
+    },
+    {
+        "id":6, "chapter":1, "name":"Community Test", "class":"Courage", "gold":300, "packs":2,
+        "opponent_name":"Marcus",
+        "subtitle":"Use everything you have learned.",
+        "story":"You're not walking this road alone anymore — and now it's your turn to prove that everything you've learned holds up when someone else is counting on you. Marcus watches you work through it without stepping in. Everything you've built comes together here."
+    },
+    # --- Chapter 2: Building Structure — routine, work, and the first real test of it ---
+    {
+        "id":7, "chapter":2, "name":"The Job Interview", "class":"Hope", "gold":200, "packs":0,
+        "opponent_name":"Denise",
+        "subtitle":"Prove you're ready for a second chance.",
+        "story":"Denise can't see the road that got you to her waiting room, and you're not asking her to forget it — you're asking her to bet on who you're becoming. Walk in like you already believe it."
+    },
+    {
+        "id":8, "chapter":2, "name":"First Paycheck", "class":"Courage", "gold":0, "packs":1,
+        "opponent_name":"The Old Temptation",
+        "subtitle":"Old habits look different with money in your pocket.",
+        "story":"There's a version of tonight where this money disappears by morning, same as it always did. Instead you're doing the boring, unglamorous thing — rent, groceries, savings — and it feels more like victory than anything ever did."
+    },
+    {
+        "id":9, "chapter":2, "name":"The Apartment", "class":"Serenity", "gold":220, "packs":0,
+        "opponent_name":"The Empty Silence",
+        "subtitle":"A door of your own to lock behind you.",
+        "story":"It's small, and the faucet drips, and none of that matters. For the first time in longer than you can admit, you have a space that's just yours — quiet enough to hear yourself think, and steady enough to build on."
+    },
+    {
+        "id":10, "chapter":2, "name":"Showing Up Sober", "class":"Purpose", "gold":270, "packs":0,
+        "opponent_name":"Denise",
+        "subtitle":"Consistency becomes your new reputation.",
+        "story":"Ninety days of just... showing up. On time, clear-headed, doing the work. Denise stopped watching you like you might disappear. Reliability isn't glamorous, but it's rewriting what she expects from you."
+    },
+    {
+        "id":11, "chapter":2, "name":"Cole Comes Knocking", "class":"Courage", "gold":300, "packs":0,
+        "opponent_name":"Cole",
+        "subtitle":"He always shows up right when things start going well.",
+        "story":"He heard about the apartment, heard about the job, and somehow that's exactly what brought him around. \"Look at you,\" Cole says, like it's a joke he's in on. It isn't. You've got too much now to hand any of it back to him."
+    },
+    {
+        "id":12, "chapter":2, "name":"The Old Crew", "class":"Courage", "gold":350, "packs":2,
+        "opponent_name":"Cole and the Old Crew",
+        "subtitle":"Some doors need to stay closed for good.",
+        "story":"They wave you over like no time has passed at all. Once, that pull would have owned you. Tonight you keep walking — not out of fear, but because you finally know exactly what you'd be trading away."
+    },
+    # --- Chapter 3: Repairing What Broke — the relationships worth rebuilding ---
+    {
+        "id":13, "chapter":3, "name":"The First Call Home", "class":"Hope", "gold":300, "packs":0,
+        "opponent_name":"Vanessa",
+        "subtitle":"Some bridges take more than one phone call to rebuild.",
+        "story":"Your hand hovers over Vanessa's name for a full minute before you finally press call. The conversation is short, careful, and a little awkward — and it's also the first real thread back to a sister you thought you'd burned for good."
+    },
+    {
+        "id":14, "chapter":3, "name":"Sitting With the Guilt", "class":"Serenity", "gold":0, "packs":1,
+        "opponent_name":"The Weight of the Past",
+        "subtitle":"You can't outrun what you have to make right.",
+        "story":"The guilt shows up uninvited, the way it always does at 2 a.m. You don't drown it out this time. You sit with it, let it say its piece, and remind yourself that feeling it is proof you've changed, not evidence you haven't."
+    },
+    {
+        "id":15, "chapter":3, "name":"Making Amends", "class":"Purpose", "gold":320, "packs":0,
+        "opponent_name":"Vanessa",
+        "subtitle":"An apology only means something if it comes with change.",
+        "story":"You don't ask Vanessa to forgive you — that's not yours to demand. You just say the true thing, own every part of it, and show up differently starting today. Whatever she does with it next is hers to decide."
+    },
+    {
+        "id":16, "chapter":3, "name":"Sparring With Marcus", "class":"Courage", "gold":340, "packs":0,
+        "opponent_name":"Marcus",
+        "subtitle":"Growth stings more coming from someone who actually believes in you.",
+        "story":"Marcus doesn't sugarcoat it: you've been avoiding this apology for weeks. \"Comfortable isn't the same as healed,\" he says, and pushes you toward the hardest conversation on your list instead of letting you circle it any longer."
+    },
+    {
+        "id":17, "chapter":3, "name":"Earning Back Trust", "class":"Courage", "gold":380, "packs":0,
+        "opponent_name":"Marcus",
+        "subtitle":"Trust rebuilds slow, one kept promise at a time.",
+        "story":"They still flinch a little when you say 'I promise.' Fair enough — you taught them to. So you keep the small ones: the phone call you said you'd make, the ride you said you'd give. Marcus just watches, the way a sponsor does when he already knows you'll follow through."
+    },
+    {
+        "id":18, "chapter":3, "name":"Family Dinner", "class":"Purpose", "gold":450, "packs":3,
+        "opponent_name":"The Whole Family",
+        "subtitle":"The whole table, together, for the first time in years.",
+        "story":"Nobody says it out loud, but everyone at this table knows what it took to get here. No blowups, no old arguments dragged back out — just plates passed around and easy laughter, like the family you always wanted to give them back."
+    },
+    # --- Chapter 4: A Life Worth Living — from surviving to building something that lasts ---
+    {
+        "id":19, "chapter":4, "name":"One Year Coin", "class":"Hope", "gold":400, "packs":0,
+        "opponent_name":"The Person You Used to Be",
+        "subtitle":"A year ago you couldn't picture this day.",
+        "story":"They put the coin in your hand and the room claps, and for a second you're back at day one, certain you'd never make it this far. You did. Not perfectly, not painlessly — but you did. Today you fight for year two."
+    },
+    {
+        "id":20, "chapter":4, "name":"The Promotion", "class":"Purpose", "gold":0, "packs":1,
+        "opponent_name":"Denise",
+        "subtitle":"They didn't hire the person you used to be.",
+        "story":"Denise slides the offer letter across the desk like it's no big deal, but it is — this is trust you built one shift at a time, not luck. She's not betting on the story you used to tell about yourself. She's betting on this one."
+    },
+    {
+        "id":21, "chapter":4, "name":"A Place to Grow", "class":"Serenity", "gold":420, "packs":0,
+        "opponent_name":"The Fear of Roots",
+        "subtitle":"Roots, finally, instead of just a roof.",
+        "story":"The keys feel heavier than they should for something so small. This isn't just a home — it's the first place you've ever planted something and expected to still be there to see it grow."
+    },
+    {
+        "id":22, "chapter":4, "name":"One Last Offer", "class":"Courage", "gold":460, "packs":0,
+        "opponent_name":"Cole",
+        "subtitle":"This time it isn't even close.",
+        "story":"Cole tries the same line one more time, like nothing about you has changed. Nothing about the offer has either — same dead end, same old cost. This time you don't even have to think before you walk away."
+    },
+    {
+        "id":23, "chapter":4, "name":"Becoming a Sponsor", "class":"Courage", "gold":480, "packs":0,
+        "opponent_name":"Your First Sponsee",
+        "subtitle":"The hand that once pulled you up is now yours to offer.",
+        "story":"They're exactly where you were — scared, sure they're the exception nothing can save. You remember every word Marcus once said to steady you, and now you're the one saying it, one first step at a time."
+    },
+    {
+        "id":24, "chapter":4, "name":"Journey's Dawn", "class":"Purpose", "gold":600, "packs":3,
+        "opponent_name":"Everything You've Overcome",
+        "subtitle":"The story doesn't end here — it just keeps being written.",
+        "story":"Nothing, to a job, to a home, to people who trust you again, to being someone else's reason to keep going. This isn't the end of the road. It's proof the road was always worth walking, one day at a time."
+    }
+]
+
+const STORY_STAGES_COURAGE := [
+    {
+        "id":1, "chapter":1, "name":"The First Step", "class":"Hope", "gold":0, "packs":1,
+        "opponent_name":"Your Own Doubt",
+        "subtitle":"Learn to stay in the fight.",
+        "story":"You've never been afraid of a hard climb, but this one starts inside your own head. Today isn't about winning — it's about showing up and staying in the fight one more round than you thought you could."
+    },
+    {
+        "id":2, "chapter":1, "name":"Finding Strength", "class":"Courage", "gold":150, "packs":0,
+        "opponent_name":"Jonesy",
+        "subtitle":"Face pressure without backing down.",
+        "story":"Jonesy finds you when you least expect it — same easy smile, same offer, like nothing's changed. You don't have to be fearless to face him down. You just have to stand your ground long enough to remember you can."
+    },
+    {
+        "id":3, "chapter":1, "name":"Quieting the Noise", "class":"Serenity", "gold":0, "packs":1,
+        "opponent_name":"The 2 A.M. Panic",
+        "subtitle":"Patience can control the battlefield.",
+        "story":"The cravings are loud tonight, but loud isn't the same as strong. You've learned to sit with the noise instead of running from it — and in that stillness, you find you're steadier than it is."
+    },
+    {
+        "id":4, "chapter":1, "name":"A Reason to Continue", "class":"Purpose", "gold":250, "packs":0,
+        "opponent_name":"The Old Excuse",
+        "subtitle":"Build toward something greater.",
+        "story":"Somewhere along the way, recovery stopped being about what you were running from and became about what you're building toward. Today you fight for that reason, not away from the old one."
+    },
+    {
+        "id":5, "chapter":1, "name":"Meeting Big Mike", "class":"Courage", "gold":180, "packs":0,
+        "opponent_name":"Big Mike",
+        "subtitle":"A sponsor won't carry you, but he won't let you walk alone either.",
+        "story":"He sizes you up without saying much — he's heard every version of this story before. \"I'm not here to save you,\" Big Mike says. \"I'm here so you don't have to figure this out by yourself.\" It's not a warm welcome. It's better: it's honest."
+    },
+    {
+        "id":6, "chapter":1, "name":"Community Test", "class":"Courage", "gold":300, "packs":2,
+        "opponent_name":"Big Mike",
+        "subtitle":"Use everything you have learned.",
+        "story":"You're not walking this road alone anymore — and now it's your turn to prove that everything you've learned holds up when someone else is counting on you. Big Mike watches you work through it without stepping in. Everything you've built comes together here."
+    },
+    {
+        "id":7, "chapter":2, "name":"The Job Interview", "class":"Hope", "gold":200, "packs":0,
+        "opponent_name":"Ms. Patterson",
+        "subtitle":"Prove you're ready for a second chance.",
+        "story":"Ms. Patterson can't see the road that got you to her waiting room, and you're not asking her to forget it — you're asking her to bet on who you're becoming. Walk in like you already believe it."
+    },
+    {
+        "id":8, "chapter":2, "name":"First Paycheck", "class":"Courage", "gold":0, "packs":1,
+        "opponent_name":"The Old Temptation",
+        "subtitle":"Old habits look different with money in your pocket.",
+        "story":"There's a version of tonight where this money disappears by morning, same as it always did. Instead you're doing the boring, unglamorous thing — rent, groceries, savings — and it feels more like victory than anything ever did."
+    },
+    {
+        "id":9, "chapter":2, "name":"The Apartment", "class":"Serenity", "gold":220, "packs":0,
+        "opponent_name":"The Empty Silence",
+        "subtitle":"A door of your own to lock behind you.",
+        "story":"It's small, and the faucet drips, and none of that matters. For the first time in longer than you can admit, you have a space that's just yours — quiet enough to hear yourself think, and steady enough to build on."
+    },
+    {
+        "id":10, "chapter":2, "name":"Showing Up Sober", "class":"Purpose", "gold":270, "packs":0,
+        "opponent_name":"Ms. Patterson",
+        "subtitle":"Consistency becomes your new reputation.",
+        "story":"Ninety days of just... showing up. On time, clear-headed, doing the work. Ms. Patterson stopped watching you like you might disappear. Reliability isn't glamorous, but it's rewriting what she expects from you."
+    },
+    {
+        "id":11, "chapter":2, "name":"Jonesy Comes Knocking", "class":"Courage", "gold":300, "packs":0,
+        "opponent_name":"Jonesy",
+        "subtitle":"He always shows up right when things start going well.",
+        "story":"He heard about the apartment, heard about the job, and somehow that's exactly what brought him around. \"Look at you,\" Jonesy says, like it's a joke he's in on. It isn't. You've got too much now to hand any of it back to him."
+    },
+    {
+        "id":12, "chapter":2, "name":"The Old Crew", "class":"Courage", "gold":350, "packs":2,
+        "opponent_name":"Jonesy and the Old Crew",
+        "subtitle":"Some doors need to stay closed for good.",
+        "story":"They wave you over like no time has passed at all. Once, that pull would have owned you. Tonight you keep walking — not out of fear, but because you finally know exactly what you'd be trading away."
+    },
+    {
+        "id":13, "chapter":3, "name":"The First Call Home", "class":"Hope", "gold":300, "packs":0,
+        "opponent_name":"Andre",
+        "subtitle":"Some bridges take more than one phone call to rebuild.",
+        "story":"Your hand hovers over Andre's name for a full minute before you finally press call. The conversation is short, careful, and a little awkward — and it's also the first real thread back to a brother you thought you'd burned for good."
+    },
+    {
+        "id":14, "chapter":3, "name":"Sitting With the Guilt", "class":"Serenity", "gold":0, "packs":1,
+        "opponent_name":"The Weight of the Past",
+        "subtitle":"You can't outrun what you have to make right.",
+        "story":"The guilt shows up uninvited, the way it always does at 2 a.m. You don't drown it out this time. You sit with it, let it say its piece, and remind yourself that feeling it is proof you've changed, not evidence you haven't."
+    },
+    {
+        "id":15, "chapter":3, "name":"Making Amends", "class":"Purpose", "gold":320, "packs":0,
+        "opponent_name":"Andre",
+        "subtitle":"An apology only means something if it comes with change.",
+        "story":"You don't ask Andre to forgive you — that's not yours to demand. You just say the true thing, own every part of it, and show up differently starting today. Whatever he does with it next is his to decide."
+    },
+    {
+        "id":16, "chapter":3, "name":"Sparring With Big Mike", "class":"Courage", "gold":340, "packs":0,
+        "opponent_name":"Big Mike",
+        "subtitle":"Growth stings more coming from someone who actually believes in you.",
+        "story":"Big Mike doesn't sugarcoat it: you've been avoiding this apology for weeks. \"Comfortable isn't the same as healed,\" he says, and pushes you toward the hardest conversation on your list instead of letting you circle it any longer."
+    },
+    {
+        "id":17, "chapter":3, "name":"Earning Back Trust", "class":"Courage", "gold":380, "packs":0,
+        "opponent_name":"Big Mike",
+        "subtitle":"Trust rebuilds slow, one kept promise at a time.",
+        "story":"They still flinch a little when you say 'I promise.' Fair enough — you taught them to. So you keep the small ones: the phone call you said you'd make, the ride you said you'd give. Big Mike just watches, the way a sponsor does when he already knows you'll follow through."
+    },
+    {
+        "id":18, "chapter":3, "name":"Family Dinner", "class":"Purpose", "gold":450, "packs":3,
+        "opponent_name":"The Whole Family",
+        "subtitle":"The whole table, together, for the first time in years.",
+        "story":"Nobody says it out loud, but everyone at this table knows what it took to get here. No blowups, no old arguments dragged back out — just plates passed around and easy laughter, like the family you always wanted to give them back."
+    },
+    {
+        "id":19, "chapter":4, "name":"One Year Coin", "class":"Hope", "gold":400, "packs":0,
+        "opponent_name":"The Person You Used to Be",
+        "subtitle":"A year ago you couldn't picture this day.",
+        "story":"They put the coin in your hand and the room claps, and for a second you're back at day one, certain you'd never make it this far. You did. Not perfectly, not painlessly — but you did. Today you fight for year two."
+    },
+    {
+        "id":20, "chapter":4, "name":"The Promotion", "class":"Purpose", "gold":0, "packs":1,
+        "opponent_name":"Ms. Patterson",
+        "subtitle":"They didn't hire the person you used to be.",
+        "story":"Ms. Patterson slides the offer letter across the desk like it's no big deal, but it is — this is trust you built one shift at a time, not luck. She's not betting on the story you used to tell about yourself. She's betting on this one."
+    },
+    {
+        "id":21, "chapter":4, "name":"A Place to Grow", "class":"Serenity", "gold":420, "packs":0,
+        "opponent_name":"The Fear of Roots",
+        "subtitle":"Roots, finally, instead of just a roof.",
+        "story":"The keys feel heavier than they should for something so small. This isn't just a home — it's the first place you've ever planted something and expected to still be there to see it grow."
+    },
+    {
+        "id":22, "chapter":4, "name":"One Last Offer", "class":"Courage", "gold":460, "packs":0,
+        "opponent_name":"Jonesy",
+        "subtitle":"This time it isn't even close.",
+        "story":"Jonesy tries the same line one more time, like nothing about you has changed. Nothing about the offer has either — same dead end, same old cost. This time you don't even have to think before you walk away."
+    },
+    {
+        "id":23, "chapter":4, "name":"Becoming a Sponsor", "class":"Courage", "gold":480, "packs":0,
+        "opponent_name":"Your First Sponsee",
+        "subtitle":"The hand that once pulled you up is now yours to offer.",
+        "story":"They're exactly where you were — scared, sure they're the exception nothing can save. You remember every word Big Mike once said to steady you, and now you're the one saying it, one first step at a time."
+    },
+    {
+        "id":24, "chapter":4, "name":"Journey's Dawn", "class":"Purpose", "gold":600, "packs":3,
+        "opponent_name":"Everything You've Overcome",
+        "subtitle":"The story doesn't end here — it just keeps being written.",
+        "story":"Nothing, to a job, to a home, to people who trust you again, to being someone else's reason to keep going. This isn't the end of the road. It's proof the road was always worth walking, one day at a time."
+    }
+]
+
+const STORY_STAGES_SERENITY := [
+    {
+        "id":1, "chapter":1, "name":"The First Step", "class":"Hope", "gold":0, "packs":1,
+        "opponent_name":"Your Own Doubt",
+        "subtitle":"Learn to stay in the fight.",
+        "story":"The hardest battle is the one where you finally admit you need to fight at all. Today isn't about winning — it's about showing up and staying in the fight one more round than you thought you could."
+    },
+    {
+        "id":2, "chapter":1, "name":"Finding Strength", "class":"Courage", "gold":150, "packs":0,
+        "opponent_name":"Cass",
+        "subtitle":"Face pressure without backing down.",
+        "story":"Cass finds you when you least expect it — same easy smile, same offer, like nothing's changed. You don't have to be fearless to face her down. You just have to stand your ground long enough to remember you can."
     },
     {
         "id":3, "chapter":1, "name":"Quieting the Noise", "class":"Serenity", "gold":0, "packs":1,
@@ -69,7 +368,153 @@ const STORY_STAGES := [
         "subtitle":"Use everything you have learned.",
         "story":"You're not walking this road alone anymore — and now it's your turn to prove that everything you've learned holds up when someone else is counting on you. Nora watches you work through it without stepping in. Everything you've built comes together here."
     },
-    # --- Chapter 2: Building Structure — routine, work, and the first real test of it ---
+    {
+        "id":7, "chapter":2, "name":"The Job Interview", "class":"Hope", "gold":200, "packs":0,
+        "opponent_name":"Mr. Osei",
+        "subtitle":"Prove you're ready for a second chance.",
+        "story":"Mr. Osei can't see the road that got you to his waiting room, and you're not asking him to forget it — you're asking him to bet on who you're becoming. Walk in like you already believe it."
+    },
+    {
+        "id":8, "chapter":2, "name":"First Paycheck", "class":"Courage", "gold":0, "packs":1,
+        "opponent_name":"The Old Temptation",
+        "subtitle":"Old habits look different with money in your pocket.",
+        "story":"There's a version of tonight where this money disappears by morning, same as it always did. Instead you're doing the boring, unglamorous thing — rent, groceries, savings — and it feels more like victory than anything ever did."
+    },
+    {
+        "id":9, "chapter":2, "name":"The Apartment", "class":"Serenity", "gold":220, "packs":0,
+        "opponent_name":"The Empty Silence",
+        "subtitle":"A door of your own to lock behind you.",
+        "story":"It's small, and the faucet drips, and none of that matters. For the first time in longer than you can admit, you have a space that's just yours — quiet enough to hear yourself think, and steady enough to build on."
+    },
+    {
+        "id":10, "chapter":2, "name":"Showing Up Sober", "class":"Purpose", "gold":270, "packs":0,
+        "opponent_name":"Mr. Osei",
+        "subtitle":"Consistency becomes your new reputation.",
+        "story":"Ninety days of just... showing up. On time, clear-headed, doing the work. Mr. Osei stopped watching you like you might disappear. Reliability isn't glamorous, but it's rewriting what he expects from you."
+    },
+    {
+        "id":11, "chapter":2, "name":"Cass Comes Knocking", "class":"Courage", "gold":300, "packs":0,
+        "opponent_name":"Cass",
+        "subtitle":"She always shows up right when things start going well.",
+        "story":"She heard about the apartment, heard about the job, and somehow that's exactly what brought her around. \"Look at you,\" Cass says, like it's a joke she's in on. It isn't. You've got too much now to hand any of it back to her."
+    },
+    {
+        "id":12, "chapter":2, "name":"The Old Crew", "class":"Courage", "gold":350, "packs":2,
+        "opponent_name":"Cass and the Old Crew",
+        "subtitle":"Some doors need to stay closed for good.",
+        "story":"They wave you over like no time has passed at all. Once, that pull would have owned you. Tonight you keep walking — not out of fear, but because you finally know exactly what you'd be trading away."
+    },
+    {
+        "id":13, "chapter":3, "name":"The First Call Home", "class":"Hope", "gold":300, "packs":0,
+        "opponent_name":"Diane",
+        "subtitle":"Some bridges take more than one phone call to rebuild.",
+        "story":"Your hand hovers over Diane's name for a full minute before you finally press call. The conversation is short, careful, and a little awkward — and it's also the first real thread back to a mother you thought you'd burned for good."
+    },
+    {
+        "id":14, "chapter":3, "name":"Sitting With the Guilt", "class":"Serenity", "gold":0, "packs":1,
+        "opponent_name":"The Weight of the Past",
+        "subtitle":"You can't outrun what you have to make right.",
+        "story":"The guilt shows up uninvited, the way it always does at 2 a.m. You don't drown it out this time. You sit with it, let it say its piece, and remind yourself that feeling it is proof you've changed, not evidence you haven't."
+    },
+    {
+        "id":15, "chapter":3, "name":"Making Amends", "class":"Purpose", "gold":320, "packs":0,
+        "opponent_name":"Diane",
+        "subtitle":"An apology only means something if it comes with change.",
+        "story":"You don't ask Diane to forgive you — that's not yours to demand. You just say the true thing, own every part of it, and show up differently starting today. Whatever she does with it next is hers to decide."
+    },
+    {
+        "id":16, "chapter":3, "name":"Sparring With Nora", "class":"Courage", "gold":340, "packs":0,
+        "opponent_name":"Nora",
+        "subtitle":"Growth stings more coming from someone who actually believes in you.",
+        "story":"Nora doesn't sugarcoat it: you've been avoiding this apology for weeks. \"Comfortable isn't the same as healed,\" she says, and pushes you toward the hardest conversation on your list instead of letting you circle it any longer."
+    },
+    {
+        "id":17, "chapter":3, "name":"Earning Back Trust", "class":"Courage", "gold":380, "packs":0,
+        "opponent_name":"Nora",
+        "subtitle":"Trust rebuilds slow, one kept promise at a time.",
+        "story":"They still flinch a little when you say 'I promise.' Fair enough — you taught them to. So you keep the small ones: the phone call you said you'd make, the ride you said you'd give. Nora just watches, the way a sponsor does when she already knows you'll follow through."
+    },
+    {
+        "id":18, "chapter":3, "name":"Family Dinner", "class":"Purpose", "gold":450, "packs":3,
+        "opponent_name":"The Whole Family",
+        "subtitle":"The whole table, together, for the first time in years.",
+        "story":"Nobody says it out loud, but everyone at this table knows what it took to get here. No blowups, no old arguments dragged back out — just plates passed around and easy laughter, like the family you always wanted to give them back."
+    },
+    {
+        "id":19, "chapter":4, "name":"One Year Coin", "class":"Hope", "gold":400, "packs":0,
+        "opponent_name":"The Person You Used to Be",
+        "subtitle":"A year ago you couldn't picture this day.",
+        "story":"They put the coin in your hand and the room claps, and for a second you're back at day one, certain you'd never make it this far. You did. Not perfectly, not painlessly — but you did. Today you fight for year two."
+    },
+    {
+        "id":20, "chapter":4, "name":"The Promotion", "class":"Purpose", "gold":0, "packs":1,
+        "opponent_name":"Mr. Osei",
+        "subtitle":"They didn't hire the person you used to be.",
+        "story":"Mr. Osei slides the offer letter across the desk like it's no big deal, but it is — this is trust you built one shift at a time, not luck. He's not betting on the story you used to tell about yourself. He's betting on this one."
+    },
+    {
+        "id":21, "chapter":4, "name":"A Place to Grow", "class":"Serenity", "gold":420, "packs":0,
+        "opponent_name":"The Fear of Roots",
+        "subtitle":"Roots, finally, instead of just a roof.",
+        "story":"The keys feel heavier than they should for something so small. This isn't just a home — it's the first place you've ever planted something and expected to still be there to see it grow."
+    },
+    {
+        "id":22, "chapter":4, "name":"One Last Offer", "class":"Courage", "gold":460, "packs":0,
+        "opponent_name":"Cass",
+        "subtitle":"This time it isn't even close.",
+        "story":"Cass tries the same line one more time, like nothing about you has changed. Nothing about the offer has either — same dead end, same old cost. This time you don't even have to think before you walk away."
+    },
+    {
+        "id":23, "chapter":4, "name":"Becoming a Sponsor", "class":"Courage", "gold":480, "packs":0,
+        "opponent_name":"Your First Sponsee",
+        "subtitle":"The hand that once pulled you up is now yours to offer.",
+        "story":"They're exactly where you were — scared, sure they're the exception nothing can save. You remember every word Nora once said to steady you, and now you're the one saying it, one first step at a time."
+    },
+    {
+        "id":24, "chapter":4, "name":"Journey's Dawn", "class":"Purpose", "gold":600, "packs":3,
+        "opponent_name":"Everything You've Overcome",
+        "subtitle":"The story doesn't end here — it just keeps being written.",
+        "story":"Nothing, to a job, to a home, to people who trust you again, to being someone else's reason to keep going. This isn't the end of the road. It's proof the road was always worth walking, one day at a time."
+    }
+]
+
+const STORY_STAGES_PURPOSE := [
+    {
+        "id":1, "chapter":1, "name":"The First Step", "class":"Hope", "gold":0, "packs":1,
+        "opponent_name":"Your Own Doubt",
+        "subtitle":"Learn to stay in the fight.",
+        "story":"The hardest battle is the one where you finally admit you need to fight at all. Today isn't about winning — it's about showing up and staying in the fight one more round than you thought you could."
+    },
+    {
+        "id":2, "chapter":1, "name":"Finding Strength", "class":"Courage", "gold":150, "packs":0,
+        "opponent_name":"Trey",
+        "subtitle":"Face pressure without backing down.",
+        "story":"Trey finds you when you least expect it — same easy smile, same offer, like nothing's changed. You don't have to be fearless to face him down. You just have to stand your ground long enough to remember you can."
+    },
+    {
+        "id":3, "chapter":1, "name":"Quieting the Noise", "class":"Serenity", "gold":0, "packs":1,
+        "opponent_name":"The 2 A.M. Panic",
+        "subtitle":"Patience can control the battlefield.",
+        "story":"The cravings are loud tonight, but loud isn't the same as strong. You've learned to sit with the noise instead of running from it — and in that stillness, you find you're steadier than it is."
+    },
+    {
+        "id":4, "chapter":1, "name":"A Reason to Continue", "class":"Purpose", "gold":250, "packs":0,
+        "opponent_name":"The Old Excuse",
+        "subtitle":"Build toward something greater.",
+        "story":"Somewhere along the way, recovery stopped being about what you were running from and became about what you're building toward — and lately that reason has a name. Today you fight for that, not away from the old one."
+    },
+    {
+        "id":5, "chapter":1, "name":"Meeting Elias", "class":"Courage", "gold":180, "packs":0,
+        "opponent_name":"Elias",
+        "subtitle":"A sponsor won't carry you, but he won't let you walk alone either.",
+        "story":"He doesn't look impressed when you introduce yourself — he's heard every version of this story before. \"I'm not here to save you,\" Elias says. \"I'm here so you don't have to figure this out by yourself.\" It's not a warm welcome. It's better: it's honest."
+    },
+    {
+        "id":6, "chapter":1, "name":"Community Test", "class":"Courage", "gold":300, "packs":2,
+        "opponent_name":"Elias",
+        "subtitle":"Use everything you have learned.",
+        "story":"You're not walking this road alone anymore — and now it's your turn to prove that everything you've learned holds up when someone else is counting on you. Elias watches you work through it without stepping in. Everything you've built comes together here."
+    },
     {
         "id":7, "chapter":2, "name":"The Job Interview", "class":"Hope", "gold":200, "packs":0,
         "opponent_name":"Reggie",
@@ -95,23 +540,22 @@ const STORY_STAGES := [
         "story":"Ninety days of just... showing up. On time, clear-headed, doing the work. Reggie stopped watching you like you might disappear. Reliability isn't glamorous, but it's rewriting what he expects from you."
     },
     {
-        "id":11, "chapter":2, "name":"Dez Comes Knocking", "class":"Courage", "gold":300, "packs":0,
-        "opponent_name":"Dez",
+        "id":11, "chapter":2, "name":"Trey Comes Knocking", "class":"Courage", "gold":300, "packs":0,
+        "opponent_name":"Trey",
         "subtitle":"He always shows up right when things start going well.",
-        "story":"He heard about the apartment, heard about the job, and somehow that's exactly what brought him around. \"Look at you,\" Dez says, like it's a joke he's in on. It isn't. You've got too much now to hand any of it back to him."
+        "story":"He heard about the apartment, heard about the job, and somehow that's exactly what brought him around. \"Look at you,\" Trey says, like it's a joke he's in on. It isn't. You've got too much now to hand any of it back to him."
     },
     {
         "id":12, "chapter":2, "name":"The Old Crew", "class":"Courage", "gold":350, "packs":2,
-        "opponent_name":"Dez and the Old Crew",
+        "opponent_name":"Trey and the Old Crew",
         "subtitle":"Some doors need to stay closed for good.",
         "story":"They wave you over like no time has passed at all. Once, that pull would have owned you. Tonight you keep walking — not out of fear, but because you finally know exactly what you'd be trading away."
     },
-    # --- Chapter 3: Repairing What Broke — the relationships worth rebuilding ---
     {
         "id":13, "chapter":3, "name":"The First Call Home", "class":"Hope", "gold":300, "packs":0,
-        "opponent_name":"Angela",
+        "opponent_name":"Malik",
         "subtitle":"Some bridges take more than one phone call to rebuild.",
-        "story":"Your hand hovers over Angela's name for a full minute before you finally press call. The conversation is short, careful, and a little awkward — and it's also the first real thread back to a sister you thought you'd burned for good."
+        "story":"Your hand hovers over the number for a full minute before you finally press call. Malik's voice on the other end is careful, a little guarded — and it's also the first real thread back to the son you're determined to show up for."
     },
     {
         "id":14, "chapter":3, "name":"Sitting With the Guilt", "class":"Serenity", "gold":0, "packs":1,
@@ -121,29 +565,28 @@ const STORY_STAGES := [
     },
     {
         "id":15, "chapter":3, "name":"Making Amends", "class":"Purpose", "gold":320, "packs":0,
-        "opponent_name":"Angela",
+        "opponent_name":"Malik",
         "subtitle":"An apology only means something if it comes with change.",
-        "story":"You don't ask Angela to forgive you — that's not yours to demand. You just say the true thing, own every part of it, and show up differently starting today. Whatever she does with it next is hers to decide."
+        "story":"You don't ask Malik to forgive you — that's not his to owe you. You just say the true thing, own every part of it, and show up differently starting today. Whatever he does with it next is his to decide."
     },
     {
-        "id":16, "chapter":3, "name":"Sparring With Nora", "class":"Courage", "gold":340, "packs":0,
-        "opponent_name":"Nora",
+        "id":16, "chapter":3, "name":"Sparring With Elias", "class":"Courage", "gold":340, "packs":0,
+        "opponent_name":"Elias",
         "subtitle":"Growth stings more coming from someone who actually believes in you.",
-        "story":"Nora doesn't sugarcoat it: you've been avoiding this apology for weeks. \"Comfortable isn't the same as healed,\" she says, and pushes you toward the hardest conversation on your list instead of letting you circle it any longer."
+        "story":"Elias doesn't sugarcoat it: you've been avoiding this apology for weeks. \"Comfortable isn't the same as healed,\" he says, and pushes you toward the hardest conversation on your list instead of letting you circle it any longer."
     },
     {
         "id":17, "chapter":3, "name":"Earning Back Trust", "class":"Courage", "gold":380, "packs":0,
-        "opponent_name":"Nora",
+        "opponent_name":"Elias",
         "subtitle":"Trust rebuilds slow, one kept promise at a time.",
-        "story":"They still flinch a little when you say 'I promise.' Fair enough — you taught them to. So you keep the small ones: the phone call you said you'd make, the ride you said you'd give. Nora just watches, the way a sponsor does when she already knows you'll follow through."
+        "story":"They still flinch a little when you say 'I promise.' Fair enough — you taught them to. So you keep the small ones: the phone call you said you'd make, the ride you said you'd give. Elias just watches, the way a sponsor does when he already knows you'll follow through."
     },
     {
         "id":18, "chapter":3, "name":"Family Dinner", "class":"Purpose", "gold":450, "packs":3,
         "opponent_name":"The Whole Family",
         "subtitle":"The whole table, together, for the first time in years.",
-        "story":"Nobody says it out loud, but everyone at this table knows what it took to get here. No blowups, no old arguments dragged back out — just plates passed around and easy laughter, like the family you always wanted to give them back."
+        "story":"Nobody says it out loud, but everyone at this table knows what it took to get here — Malik included. No blowups, no old arguments dragged back out — just plates passed around and easy laughter, like the family you always wanted to give him back."
     },
-    # --- Chapter 4: A Life Worth Living — from surviving to building something that lasts ---
     {
         "id":19, "chapter":4, "name":"One Year Coin", "class":"Hope", "gold":400, "packs":0,
         "opponent_name":"The Person You Used to Be",
@@ -160,27 +603,34 @@ const STORY_STAGES := [
         "id":21, "chapter":4, "name":"A Place to Grow", "class":"Serenity", "gold":420, "packs":0,
         "opponent_name":"The Fear of Roots",
         "subtitle":"Roots, finally, instead of just a roof.",
-        "story":"The keys feel heavier than they should for something so small. This isn't just a home — it's the first place you've ever planted something and expected to still be there to see it grow."
+        "story":"The keys feel heavier than they should for something so small. This isn't just a home — it's the first place you and Malik have ever planted something and expected to still be there to see it grow."
     },
     {
         "id":22, "chapter":4, "name":"One Last Offer", "class":"Courage", "gold":460, "packs":0,
-        "opponent_name":"Dez",
+        "opponent_name":"Trey",
         "subtitle":"This time it isn't even close.",
-        "story":"Dez tries the same line one more time, like nothing about you has changed. Nothing about the offer has either — same dead end, same old cost. This time you don't even have to think before you walk away."
+        "story":"Trey tries the same line one more time, like nothing about you has changed. Nothing about the offer has either — same dead end, same old cost. This time you don't even have to think before you walk away."
     },
     {
         "id":23, "chapter":4, "name":"Becoming a Sponsor", "class":"Courage", "gold":480, "packs":0,
         "opponent_name":"Your First Sponsee",
         "subtitle":"The hand that once pulled you up is now yours to offer.",
-        "story":"They're exactly where you were — scared, sure they're the exception nothing can save. You remember every word Nora once said to steady you, and now you're the one saying it, one first step at a time."
+        "story":"They're exactly where you were — scared, sure they're the exception nothing can save. You remember every word Elias once said to steady you, and now you're the one saying it, one first step at a time."
     },
     {
         "id":24, "chapter":4, "name":"Journey's Dawn", "class":"Purpose", "gold":600, "packs":3,
         "opponent_name":"Everything You've Overcome",
         "subtitle":"The story doesn't end here — it just keeps being written.",
-        "story":"Nothing, to a job, to a home, to people who trust you again, to being someone else's reason to keep going. This isn't the end of the road. It's proof the road was always worth walking, one day at a time."
+        "story":"Nothing, to a job, to a home, to Malik trusting you again, to being someone else's reason to keep going. This isn't the end of the road. It's proof the road was always worth walking, one day at a time."
     }
 ]
+
+const STORY_STAGES_BY_LEADER := {
+    "Hope": STORY_STAGES_HOPE,
+    "Courage": STORY_STAGES_COURAGE,
+    "Serenity": STORY_STAGES_SERENITY,
+    "Purpose": STORY_STAGES_PURPOSE,
+}
 
 const CHALLENGES := [
     {"name":"Hope Mentor", "class":"Hope", "reward":25, "stars":"★"},
@@ -204,6 +654,12 @@ var saved_deck: Array = []
 var saved_decks: Dictionary = {}
 var recovery_challenge_progress: Dictionary = {}
 var selected_deck_class := "Hope"
+# Collection screen filter state -- "All" plus the four leader classes plus
+# "Neutral" for the class tabs, "All" plus each rarity name for the rarity
+# tabs. Kept as instance vars (not locals) so re-opening the screen after a
+# craft/dust action remembers what the player was looking at.
+var collection_filter_class := "All"
+var collection_filter_rarity := "All"
 var battle_select_class := "Hope"
 var battle_select_mode := "custom"
 var battle_opponent_class := "Courage"
@@ -1853,9 +2309,9 @@ func _show_battle_deck_preview(class_name_value: String, mode_value: String, opp
                 found = Dictionary(card_data)
                 break
         if found.is_empty():
-            rows.append({"name": str(card_id), "cost": 0, "rarity": "", "count": int(counts[card_id])})
+            rows.append({"name": str(card_id), "cost": 0, "rarity": "", "count": int(counts[card_id]), "card": {}})
         else:
-            rows.append({"name": str(found.get("name", card_id)), "cost": int(found.get("cost", 0)), "rarity": str(found.get("rarity", "")), "count": int(counts[card_id])})
+            rows.append({"name": str(found.get("name", card_id)), "cost": int(found.get("cost", 0)), "rarity": str(found.get("rarity", "")), "count": int(counts[card_id]), "card": found})
     rows.sort_custom(func(a: Dictionary, b: Dictionary):
         if int(a.get("cost", 0)) == int(b.get("cost", 0)):
             return str(a.get("name", "")) < str(b.get("name", ""))
@@ -1870,9 +2326,24 @@ func _show_battle_deck_preview(class_name_value: String, mode_value: String, opp
         list.add_child(row_panel)
         var cost_label := centered_label(str(row.get("cost", 0)), Vector2(8, 5), Vector2(42, 32), 18, row_panel)
         cost_label.add_theme_color_override("font_color", GOLD_COLOR)
-        label("%dx  %s" % [int(row.get("count", 1)), str(row.get("name", "Card"))], Vector2(62, 7), Vector2(530, 28), 16, row_panel)
-        var rarity_label := centered_label(str(row.get("rarity", "")), Vector2(566, 7), Vector2(180, 28), 13, row_panel)
+        label("%dx  %s" % [int(row.get("count", 1)), str(row.get("name", "Card"))], Vector2(62, 7), Vector2(500, 28), 16, row_panel)
+        var rarity_label := centered_label(str(row.get("rarity", "")), Vector2(566, 7), Vector2(140, 28), 13, row_panel)
         rarity_label.add_theme_color_override("font_color", Color(0.82,0.88,1.0))
+        # Deck-preview rows only ever showed name/cost/rarity as flat text --
+        # there was no way to check a card's actual stats or ability wording
+        # before committing to a matchup. Reuse the same tap-to-inspect popup
+        # the collection/deck-builder grids already have.
+        var row_card: Dictionary = row.get("card", {})
+        if not row_card.is_empty():
+            var row_tap := Button.new()
+            row_tap.flat = true
+            row_tap.focus_mode = Control.FOCUS_NONE
+            row_tap.position = Vector2.ZERO
+            row_tap.size = row_panel.custom_minimum_size
+            row_tap.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+            row_tap.tooltip_text = "Tap to inspect this card"
+            row_tap.pressed.connect(show_card_preview.bind(row_card))
+            row_panel.add_child(row_tap)
 
     centered_label("%d cards total" % ids.size(), Vector2(30, 500), Vector2(260, 34), 15, panel)
     button("BACK TO BATTLE SETUP", Vector2(790, 500), Vector2(290, 38), show_match_deck_selection, panel)
@@ -2121,9 +2592,12 @@ func build_starter_deck(c: String) -> void:
     if saved_deck.size() != 40:
         push_error("Starter deck %s has %d cards instead of 40." % [c, saved_deck.size()])
 
+func story_stages_for_leader(leader: String) -> Array:
+    return STORY_STAGES_BY_LEADER.get(leader, STORY_STAGES_HOPE)
+
 func stages_for_chapter(chapter: int) -> Array:
     var out: Array = []
-    for stage in STORY_STAGES:
+    for stage in story_stages_for_leader(selected_class):
         if int(stage.get("chapter", 1)) == chapter:
             out.append(stage)
     return out
@@ -2148,7 +2622,7 @@ func show_story_chapters() -> void:
     header("STORY MODE", "One day at a time — four chapters of the same journey")
     currency_bar()
     var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
-    var unlocked := int(cfg.get_value("story", "unlocked_stage", 1))
+    var unlocked := int(cfg.get_value("story", "unlocked_stage_%s" % selected_class, 1))
 
     for i in range(CHAPTER_META.size()):
         var meta: Dictionary = CHAPTER_META[i]
@@ -2158,7 +2632,7 @@ func show_story_chapters() -> void:
         var last_id := int(stages[stages.size() - 1]["id"])
         var cleared_count := 0
         for stage in stages:
-            if bool(cfg.get_value("story", "cleared_%d" % int(stage["id"]), false)):
+            if bool(cfg.get_value("story", "cleared_%s_%d" % [selected_class, int(stage["id"])], false)):
                 cleared_count += 1
         var available := first_id <= unlocked
         var complete := cleared_count == stages.size()
@@ -2218,7 +2692,7 @@ func show_story_mode(chapter: int = 1) -> void:
     header("STORY MODE — CHAPTER %d: %s" % [chapter, str(meta["title"]).to_upper()], str(meta["subtitle"]))
     currency_bar()
     var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
-    var unlocked := int(cfg.get_value("story", "unlocked_stage", 1))
+    var unlocked := int(cfg.get_value("story", "unlocked_stage_%s" % selected_class, 1))
     var chapter_stages := stages_for_chapter(chapter)
 
     # A connecting road behind the stage cards so the chapter reads as one
@@ -2237,7 +2711,7 @@ func show_story_mode(chapter: int = 1) -> void:
     root_layer.add_child(road)
     for i in range(stage_count - 1):
         var stage_id := int(chapter_stages[i]["id"])
-        var lit := stage_id < unlocked or bool(cfg.get_value("story", "cleared_%d" % stage_id, false))
+        var lit := stage_id < unlocked or bool(cfg.get_value("story", "cleared_%s_%d" % [selected_class, stage_id], false))
         var seg := ColorRect.new()
         seg.color = GOLD_COLOR if lit else Color(0.35, 0.37, 0.42, 0.4)
         seg.position = Vector2(95 + i * spacing + 5, 216)
@@ -2247,7 +2721,7 @@ func show_story_mode(chapter: int = 1) -> void:
     for i in range(stage_count):
         var stage: Dictionary = chapter_stages[i]
         var stage_id := int(stage["id"])
-        var cleared := bool(cfg.get_value("story", "cleared_%d" % stage_id, false))
+        var cleared := bool(cfg.get_value("story", "cleared_%s_%d" % [selected_class, stage_id], false))
         var available := stage_id <= unlocked
         var pos := Vector2(60 + i * spacing, 168)
         var size_value := Vector2(card_width, 400)
@@ -2397,13 +2871,14 @@ func begin_story_stage(stage: Dictionary) -> void:
     # jumps straight to the battle intro instead of that freeform screen.
     var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
     var stage_id := int(stage["id"])
-    var already_cleared := bool(cfg.get_value("story", "cleared_%d" % stage_id, false))
+    var your_class := selected_class if selected_class != "" else "Hope"
+    var already_cleared := bool(cfg.get_value("story", "cleared_%s_%d" % [your_class, stage_id], false))
     cfg.set_value("challenge","pending_reward",0 if already_cleared else int(stage["gold"]))
     cfg.set_value("challenge","pending_packs",0 if already_cleared else int(stage["packs"]))
     cfg.set_value("challenge","name",str(stage["name"]))
     cfg.set_value("challenge","story_stage",stage_id)
+    cfg.set_value("challenge","story_stage_leader",your_class)
     cfg.save(SAVE_PATH)
-    var your_class := selected_class if selected_class != "" else "Hope"
     var opponent_class := str(stage["class"])
     var battle_cfg := ConfigFile.new()
     battle_cfg.set_value("battle","mode","story")
@@ -3175,14 +3650,66 @@ func show_card_preview(cd: Dictionary) -> void:
     var close_btn := button("CLOSE", Vector2(560, 570), Vector2(160, 48), scrim.queue_free, scrim)
     close_btn.z_index = 901
 
+func _collection_set_class_filter(c: String) -> void:
+    collection_filter_class = c
+    show_collection()
+
+func _collection_set_rarity_filter(r: String) -> void:
+    collection_filter_rarity = r
+    show_collection()
+
 func show_collection() -> void:
+    # Previously a single unsorted, unfilterable grid of all 121 cards in raw
+    # data order -- finding one specific card meant scrolling past every
+    # class and rarity mixed together. Class/rarity tabs plus a stable sort
+    # (class, then rarity, then cost, then name) turn it into something you
+    # can actually navigate, and an owned-count summary up top replaces
+    # having to scroll the whole binder just to gauge collection progress.
     clear_screen(); add_background(0.82); header("COLLECTION & CRAFTING","Craft any card from any class • Deck class only matters when building"); currency_bar()
-    var guide := label("CREATE: Bronze 50  •  Silver 150  •  Gold 500  •  Epic 900  •  Legendary 2,000  •  Platinum 4,500",Vector2(90,142),Vector2(1100,30),16)
+    var guide := label("CREATE: Bronze 50  •  Silver 150  •  Gold 500  •  Epic 900  •  Legendary 2,000  •  Platinum 4,500",Vector2(90,118),Vector2(1100,26),15)
     guide.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     guide.add_theme_color_override("font_color", Color(0.78,0.90,1.0))
+
+    var filtered_preview: Array = _collection_filtered_sorted_cards()
+    var owned_count := 0
+    for cd in filtered_preview:
+        if int(collection_owned.get(str(cd["id"]), 0)) > 0:
+            owned_count += 1
+    var summary := label("Showing %d/%d cards • %d owned in this view" % [filtered_preview.size(), cards.size(), owned_count], Vector2(90,144),Vector2(1100,22),13)
+    summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    summary.add_theme_color_override("font_color", Color(0.6,0.66,0.78))
+
+    var class_tabs := ["All"] + CLASSES + ["Neutral"]
+    var tab_w: float = 1224.0 / float(class_tabs.size())
+    for i in range(class_tabs.size()):
+        var c: String = class_tabs[i]
+        var tab_btn := button(c.to_upper(), Vector2(28 + i * tab_w, 170), Vector2(tab_w - 6, 34), _collection_set_class_filter.bind(c))
+        if c == collection_filter_class:
+            tab_btn.add_theme_color_override("font_color", GOLD_COLOR)
+
+    # RARITIES includes tiers ("Signature Platinum") that don't actually
+    # exist in data/cards.json yet, so build tabs from what's really on cards
+    # (Bronze/Silver/Gold/Epic/Legendary/Platinum) instead of the const --
+    # otherwise a tab would show up that always renders "no cards match".
+    var rarity_order := ["Bronze", "Silver", "Gold", "Epic", "Legendary", "Platinum", "Signature Gold", "Signature Platinum"]
+    var present_rarities: Array = []
+    for cd in cards:
+        var r := str(cd.get("rarity", "Bronze"))
+        if r not in present_rarities:
+            present_rarities.append(r)
+    present_rarities.sort_custom(func(a, b): return rarity_order.find(a) < rarity_order.find(b))
+    var rarity_tabs := ["All"] + present_rarities
+    var rtab_w: float = 1224.0 / float(rarity_tabs.size())
+    for i in range(rarity_tabs.size()):
+        var r: String = rarity_tabs[i]
+        var rtab_btn := button(r.to_upper(), Vector2(28 + i * rtab_w, 208), Vector2(rtab_w - 6, 30), _collection_set_rarity_filter.bind(r))
+        rtab_btn.add_theme_font_size_override("font_size", 11)
+        if r == collection_filter_rarity:
+            rtab_btn.add_theme_color_override("font_color", GOLD_COLOR)
+
     var binder := Panel.new()
-    binder.position = Vector2(28,176)
-    binder.size = Vector2(1224,500)
+    binder.position = Vector2(28,246)
+    binder.size = Vector2(1224,430)
     var binder_style := StyleBoxFlat.new()
     binder_style.bg_color = Color(0.01,0.02,0.045,0.78)
     binder_style.border_color = GOLD_COLOR
@@ -3195,14 +3722,17 @@ func show_collection() -> void:
     root_layer.add_child(binder)
     var scroll := ScrollContainer.new()
     scroll.position=Vector2(12,12)
-    scroll.size=Vector2(1200,476)
+    scroll.size=Vector2(1200,406)
     binder.add_child(scroll)
+    if filtered_preview.is_empty():
+        centered_label("No cards match this filter.", Vector2(0,180), Vector2(1200,30), 16, scroll)
+        return
     var grid := GridContainer.new()
     grid.columns=6
     grid.add_theme_constant_override("h_separation",16)
     grid.add_theme_constant_override("v_separation",18)
     scroll.add_child(grid)
-    for cd in cards:
+    for cd in filtered_preview:
         var id := str(cd["id"])
         var rarity := str(cd["rarity"])
         var owned := int(collection_owned.get(id,0))
@@ -3225,7 +3755,8 @@ func show_collection() -> void:
             lock_badge.add_theme_constant_override("shadow_offset_y",2)
             lock_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
             cp.add_child(lock_badge)
-        var own := Label.new(); own.text="Owned %d/%d" % [owned,limit]; own.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; wrap.add_child(own)
+        var own := label("Owned %d/%d" % [owned,limit], Vector2.ZERO, Vector2(174,22), 13, wrap)
+        own.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         if rarity in ["Bronze", "Silver"]:
             var vial := Button.new()
             vial.text = "VIAL +%d" % int(DUST_VALUES.get(rarity,0))
@@ -3234,9 +3765,13 @@ func show_collection() -> void:
             vial.pressed.connect(dust_card.bind(id))
             wrap.add_child(vial)
         elif rarity in ["Gold", "Epic", "Legendary"]:
-            var auto_note := Label.new(); auto_note.text="Extras auto-vial"; auto_note.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; auto_note.add_theme_font_size_override("font_size",11); wrap.add_child(auto_note)
+            var auto_note := label("Extras auto-vial", Vector2.ZERO, Vector2(174,18), 11, wrap)
+            auto_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            auto_note.add_theme_color_override("font_color", Color(0.6,0.66,0.78))
         else:
-            var protected_note := Label.new(); protected_note.text="Signature — pack only"; protected_note.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; protected_note.add_theme_font_size_override("font_size",11); wrap.add_child(protected_note)
+            var protected_note := label("Signature — pack only", Vector2.ZERO, Vector2(174,18), 11, wrap)
+            protected_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            protected_note.add_theme_color_override("font_color", Color(0.6,0.66,0.78))
         if CRAFT_COSTS.has(rarity):
             var craft := Button.new()
             var cost := int(CRAFT_COSTS[rarity])
@@ -3245,6 +3780,33 @@ func show_collection() -> void:
             craft.pressed.connect(craft_card.bind(id))
             wrap.add_child(craft)
         grid.add_child(wrap)
+
+func _collection_filtered_sorted_cards() -> Array:
+    var out: Array = []
+    for cd in cards:
+        var card_class := str(cd.get("class", "Neutral"))
+        if collection_filter_class != "All" and card_class != collection_filter_class:
+            continue
+        if collection_filter_rarity != "All" and str(cd.get("rarity", "")) != collection_filter_rarity:
+            continue
+        out.append(cd)
+    var rarity_order := ["Bronze", "Silver", "Gold", "Epic", "Legendary", "Platinum", "Signature Gold", "Signature Platinum"]
+    out.sort_custom(func(a: Dictionary, b: Dictionary):
+        var ca := str(a.get("class", "Neutral"))
+        var cb := str(b.get("class", "Neutral"))
+        if ca != cb:
+            return ca < cb
+        var ra := rarity_order.find(str(a.get("rarity", "Bronze")))
+        var rb := rarity_order.find(str(b.get("rarity", "Bronze")))
+        if ra != rb:
+            return ra < rb
+        var costa := int(a.get("cost", 0))
+        var costb := int(b.get("cost", 0))
+        if costa != costb:
+            return costa < costb
+        return str(a.get("name", "")) < str(b.get("name", ""))
+    )
+    return out
 
 func dust_card(id: String) -> void:
     var cd := card_by_id(id)
