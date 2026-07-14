@@ -562,19 +562,27 @@ func show_home() -> void:
     # buttons: players scanning the sidebar can tell at a glance what each
     # group of actions does, and BATTLE is styled as the primary action
     # since it's the thing most players want to do most often.
-    var nav_y := 145.0
+    # nav_y is boxed in a Dictionary (not a bare local) because GDScript
+    # `func():` lambdas capture outer locals by value at creation time, not
+    # by reference — two separate lambdas each mutating a plain `var nav_y`
+    # would each get their own private copy that never persists across
+    # calls, causing every nav item to be drawn at the same position. A
+    # Dictionary's contents are reference-shared even though the variable
+    # binding itself is captured by value, so both closures see the same
+    # running counter.
+    var nav_state := {"y": 145.0}
     var nav_group := func(title_value: String):
-        var t := label(title_value, Vector2(18, nav_y), Vector2(182, 16), 11, nav)
+        var t := label(title_value, Vector2(18, nav_state.y), Vector2(182, 16), 11, nav)
         t.add_theme_color_override("font_color", Color(0.72, 0.66, 0.48))
-        nav_y += 18.0
+        nav_state.y += 18.0
     var nav_button := func(text_value: String, callback: Callable, primary: bool):
-        var b := button(text_value, Vector2(14, nav_y), Vector2(190, 40), callback, nav)
+        var b := button(text_value, Vector2(14, nav_state.y), Vector2(190, 40), callback, nav)
         if primary:
             b.add_theme_stylebox_override("normal", style(GOLD_COLOR, 9))
             b.add_theme_stylebox_override("hover", style(GOLD_COLOR.lightened(0.15), 9))
             b.add_theme_color_override("font_color", Color(0.10, 0.07, 0.02))
             b.add_theme_color_override("font_hover_color", Color(0.10, 0.07, 0.02))
-        nav_y += 42.0
+        nav_state.y += 42.0
     nav_button.call("HOME", show_home, false)
     nav_group.call("PLAY")
     nav_button.call("BATTLE", start_battle, true)
