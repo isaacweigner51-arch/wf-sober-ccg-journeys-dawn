@@ -4272,10 +4272,21 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
 
     var stats_y := art_top + art_height + 6.0
     var is_amulet := bool(cd.get("is_amulet", false))
+    var is_spell := bool(cd.get("is_spell", false))
+    # A card's TYPE (Follower/Spell/Amulet) was previously only implied --
+    # amulets got an "AMULET" stamp, but spells silently fell into the same
+    # branch as followers and showed a meaningless 0/0 attack-health line
+    # instead of anything indicating they were spells. Every card now gets
+    # an explicit, correct type word players can read at a glance.
+    var type_str := "AMULET" if is_amulet else ("SPELL" if is_spell else "FOLLOWER")
     if is_amulet:
         var amulet_label := label("AMULET", Vector2(9, stats_y), Vector2(size_value.x - 18, 22), 13 if compact_panel else 15, p)
         amulet_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         amulet_label.add_theme_color_override("font_color", GOLD_COLOR)
+    elif is_spell:
+        var spell_label := label("SPELL", Vector2(9, stats_y), Vector2(size_value.x - 18, 22), 13 if compact_panel else 15, p)
+        spell_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        spell_label.add_theme_color_override("font_color", Color(0.72, 0.62, 1.0))
     else:
         var sword := label("⚔", Vector2(pad + 6, stats_y), Vector2(24, 22), 14 if compact_panel else 16, p)
         var stats_text := "%d     %d" % [card_int_value(cd, "attack"), card_int_value(cd, "health")]
@@ -4285,8 +4296,11 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
         heart.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
         heart.add_theme_color_override("font_color", Color(1.0, 0.4, 0.42))
 
+    # Cost is already shown in the gem stamped on the art; this line now
+    # reads "TYPE • RARITY" (e.g. "FOLLOWER • BRONZE") instead of rarity
+    # alone, so cost, type, and rarity are all visible on every card tile.
     var rarity_y := stats_y + 22.0
-    var r := label(rarity.to_upper(), Vector2(9, rarity_y), Vector2(size_value.x - 18, 18), 9 if compact_panel else 11, p)
+    var r := label("%s  •  %s" % [type_str, rarity.to_upper()], Vector2(9, rarity_y), Vector2(size_value.x - 18, 18), 9 if compact_panel else 11, p)
     r.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     r.add_theme_color_override("font_color", border)
 
@@ -4352,7 +4366,8 @@ func show_card_preview(cd: Dictionary) -> void:
     # of root_layer — calling add_child() on a node that already has a parent
     # is a no-op error in Godot, which was silently leaving this caption
     # detached from the popup (and, depending on draw order, invisible).
-    var caption := label("%s  •  %s" % [str(cd.get("class", "Neutral")).to_upper(), rarity.to_upper()], Vector2(390, 520), Vector2(500, 30), 16, scrim)
+    var preview_type_str := "AMULET" if bool(cd.get("is_amulet", false)) else ("SPELL" if bool(cd.get("is_spell", false)) else "FOLLOWER")
+    var caption := label("%s  •  %s  •  %s" % [str(cd.get("class", "Neutral")).to_upper(), preview_type_str, rarity.to_upper()], Vector2(390, 520), Vector2(500, 30), 16, scrim)
     caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     caption.add_theme_color_override("font_color", border)
     caption.z_index = 901

@@ -1,19 +1,19 @@
 {
-  "version": "0.8.11",
-  "build": "Academy Tutorial Content Pass",
+  "version": "0.8.13",
+  "build": "Collection Card Type Labels",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Every Academy lesson now opens with an actual in-character line from that lesson's mentor tying the mechanic to what it means, instead of just a dry click-through instruction. The battlefield-zones lesson also explains why each zone matters, not just where it is.",
+  "notes": "Every card in the Collection and Deck Builder now shows its type (Follower, Spell, or Amulet) alongside its cost and rarity, instead of spells showing a misleading 0/0 attack-health line.",
   "required": false,
-  "version_code": "0.8.11",
-  "build_name": "Academy Tutorial Content Pass",
+  "version_code": "0.8.13",
+  "build_name": "Collection Card Type Labels",
   "card_count": 120,
-  "version_name": "0.8.11",
-  "fixes": [],
-  "features": [
-    "Added a mentor voice line to every Academy lesson, and real 'why it matters' explanations to the battlefield-zones lesson, so the tutorial teaches the reasoning behind each mechanic instead of only the click sequence."
+  "version_name": "0.8.13",
+  "fixes": [
+    "Collection and Deck Builder card tiles now clearly label every card as FOLLOWER, SPELL, or AMULET next to its rarity. Spells previously showed a leftover 0/0 attack-health line with no indication they were spells."
   ],
+  "features": [],
   "upcoming_events": [
     "More seasonal content and cards are in development — check back after future updates for details."
   ]

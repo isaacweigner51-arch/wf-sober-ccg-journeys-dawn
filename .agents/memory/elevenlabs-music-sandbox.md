@@ -42,14 +42,3 @@ proxy directly against the provider's documented REST API before concluding
 the capability is unavailable. Fetch the exact endpoint/schema via `webSearch`
 first (e.g. ElevenLabs' Music API is `POST /v1/music`, not a documented
 Replit callback param set).
-
-**Update:** the connector's key may also lack `voices_read` scope (listing
-`/v1/voices` returns 401 `missing_permissions`) even when text-to-speech and
-music composition work fine. Don't block on listing voices — fall back to
-ElevenLabs' documented classic premade voice IDs (Rachel
-`21m00Tcm4TlvDq8ikWAM`, Domi `AZnzlk1XvdvUeBnXmlld`, Bella
-`EXAVITQu4vr4xnSDxMaL`, Antoni `ErXwobaYiN019PkySvjV`, Elli
-`MF3mGyEYCl7XYWbV9V6O`, Josh `TxGEqnHWrfWFTfGW9XjX`, Arnold
-`VR6AewLTigWG4xSOukaG`, Adam `pNInz6obpgDQGcFmaJgB`, Sam
-`yoZ06aMxZJJ28mfd3POQ`) with `POST /v1/text-to-speech/{voice_id}` — these
-worked without any extra permission.

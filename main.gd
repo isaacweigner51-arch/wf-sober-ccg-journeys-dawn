@@ -81,6 +81,18 @@ var practice_mode := false
 # as a field (not a local) so show_game_over() can force-free it early if the
 # result screen fires while the sequence is still mid-animation.
 var finish_layer: Control = null
+# _play_victory_sequence's is_instance_valid(finish_layer) checks looked like a
+# cutoff, but queue_free() only marks a node for deletion at the END of the
+# current frame -- the node stays "valid" for the rest of that frame. If
+# show_game_over ran mid-sequence, the coroutine could pass its very next
+# is_instance_valid check (still true for one more frame) and add one more
+# banner/sparkle/backdrop node to a layer that's about to be destroyed anyway,
+# which is exactly the kind of one-frame-late add that reads as the victory
+# cinematic (its own "VICTORY" banner) briefly bleeding into/behind the
+# result screen's own title and amulet row on a slower device or frame hitch.
+# An explicit token invalidates immediately, with no dependency on Godot's
+# node-deletion timing.
+var victory_sequence_token: int = 0
 # Reward lines (e.g. "+75 Gold", "+1 Pack") earned by the win that's about to
 # be shown on the result screen. Populated by check_winner() -- which is
 # where award_pending_challenge/record_recovery_challenge_win/
@@ -4965,6 +4977,12 @@ func _finish_match(player_won: bool) -> void:
     busy = false
 
 func _play_victory_sequence(winner: Control, loser: Control) -> void:
+    # See the victory_sequence_token comment at its declaration: this token is
+    # the real cutoff, not is_instance_valid(finish_layer) alone. Every await
+    # checkpoint below re-checks it so a show_game_over that fires mid-cinematic
+    # can never let this coroutine add one more node.
+    victory_sequence_token += 1
+    var my_token := victory_sequence_token
     # Freeze the board for a clear finish and lower the meditation track so the
     # result sound and animation have room.
     if is_instance_valid(music_player):
@@ -5008,16 +5026,18 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         loser_tween.tween_property(loser, "scale", loser_start_scale * 0.78, 0.42)
         await get_tree().create_timer(0.42, true, false, true).timeout
         # show_game_over runs on its own fixed timer in _finish_match and can
-        # free finish_layer out from under this still-running sequence (it's
-        # deliberately fire-and-forget, see the comment there). Every await
-        # below is a point where that can happen, so re-check before touching
+        # cut this sequence off out from under it (it's deliberately
+        # fire-and-forget, see the comment there). Every await below is a
+        # point where that can happen, so re-check the token before touching
         # finish_layer again -- otherwise the next finish_layer.add_child call
-        # crashes with "Cannot call method 'add_child' on a previously freed
-        # instance" instead of just quietly skipping the rest of the flourish.
-        if not is_instance_valid(finish_layer):
+        # either crashes on a freed instance, or -- worse -- silently
+        # succeeds for one more frame against a layer that's about to be
+        # torn down, which is what let the cinematic's own banner bleed into
+        # the result screen underneath.
+        if my_token != victory_sequence_token or not is_instance_valid(finish_layer):
             return
         await show_vfx("DEFEATED", loser.global_position + Vector2(28, 35), Color(1.0, 0.34, 0.28))
-        if not is_instance_valid(finish_layer):
+        if my_token != victory_sequence_token or not is_instance_valid(finish_layer):
             return
 
     if is_instance_valid(winner):
@@ -5030,7 +5050,7 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         winner_tween.tween_property(winner, "scale", original_scale * 1.12, 0.22)
         winner_tween.parallel().tween_property(winner, "rotation", original_rotation, 0.22)
         await get_tree().create_timer(0.5, true, false, true).timeout
-        if not is_instance_valid(finish_layer):
+        if my_token != victory_sequence_token or not is_instance_valid(finish_layer):
             return
 
         for i in range(18):
@@ -5098,10 +5118,10 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         banner_tween.tween_property(banner_backdrop, "scale", Vector2.ONE, 0.42)
         banner_tween.tween_property(banner_backdrop, "modulate:a", 1.0, 0.24)
         await get_tree().create_timer(0.42, true, false, true).timeout
-        if not is_instance_valid(finish_layer):
+        if my_token != victory_sequence_token or not is_instance_valid(finish_layer):
             return
         await get_tree().create_timer(0.65, true, false, true).timeout
-        if not is_instance_valid(finish_layer):
+        if my_token != victory_sequence_token or not is_instance_valid(finish_layer):
             return
         var banner_out := create_tween()
         banner_out.tween_property(banner, "modulate:a", 0.0, 0.22)
@@ -5256,6 +5276,13 @@ func show_game_over(title_text: String, subtitle: String, player_won: bool, rewa
     # freshly-faded-in result buttons underneath, which is exactly why the
     # buttons were hard to spot/click ("behind the victory screen"). Cut it off
     # immediately so the result screen is the only thing left on screen.
+    # Invalidate any in-flight _play_victory_sequence FIRST -- this takes
+    # effect immediately, unlike is_instance_valid(finish_layer), which stays
+    # true until the end of the current frame even after queue_free(). That
+    # gap was enough for the coroutine to slip in one more banner/backdrop
+    # node on a slow frame, which is what could make the victory cinematic's
+    # own "VICTORY" banner appear to bleed into this screen underneath.
+    victory_sequence_token += 1
     if is_instance_valid(finish_layer):
         finish_layer.queue_free()
     # The result screen used to be shown on the shared `overlay` node, which
