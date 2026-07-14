@@ -1820,35 +1820,87 @@ func build_momentum_control() -> void:
     momentum_label.add_theme_color_override("font_color", Color(1.0, 0.78, 0.30))
     add_child(momentum_label)
 
+# The Evolution Path — a rising staircase of four evolution "runes" instead
+# of a flat row of identical buttons in a plain box. Each rune grows larger
+# and shifts to a hotter color the higher its tier, so the escalating power
+# curve (Ascend -> Ascend -> Awaken -> Transcend) is visible at a glance
+# instead of only living in a tooltip. Available runes breathe with a slow
+# glow pulse; spent ones go cold and grey.
+const EVOLUTION_TIER_NAMES: Array[String] = ["ASCEND", "ASCEND", "AWAKEN", "TRANSCEND"]
+const EVOLUTION_TIER_COLORS: Array[Color] = [
+    Color(0.22, 0.5, 0.85),   # cool blue spark
+    Color(0.16, 0.66, 0.62),  # teal surge
+    Color(0.88, 0.64, 0.15),  # amber blaze
+    Color(0.66, 0.2, 0.78),   # radiant transcendence
+]
+const EVOLUTION_TIER_GLOWS: Array[Color] = [
+    Color(0.62, 0.85, 1.0),
+    Color(0.55, 1.0, 0.92),
+    Color(1.0, 0.88, 0.45),
+    Color(1.0, 0.62, 1.0),
+]
+const EVOLUTION_TIER_SIZES: Array[int] = [34, 42, 50, 58]
+const EVOLUTION_TIER_POS: Array[Vector2] = [
+    Vector2(10, 96), Vector2(52, 84), Vector2(102, 72), Vector2(160, 60)
+]
+
 func build_evolution_panel() -> void:
     var panel := Panel.new()
-    panel.position = Vector2(18, 590)
-    panel.size = Vector2(252, 86)
+    panel.position = Vector2(16, 546)
+    panel.size = Vector2(236, 130)
     panel.z_index = 120
     var panel_style := StyleBoxFlat.new()
-    panel_style.bg_color = Color(0.025, 0.05, 0.085, 0.94)
-    panel_style.border_color = Color(0.72, 0.88, 1.0, 0.95)
+    panel_style.bg_color = Color(0.03, 0.045, 0.075, 0.92)
+    panel_style.border_color = Color(1.0, 0.83, 0.4, 0.9)
     panel_style.set_border_width_all(2)
-    panel_style.set_corner_radius_all(18)
+    # Asymmetric corners (sharp on one diagonal, rounded on the other) so the
+    # backdrop reads as a banner/shard shape rather than a plain rectangle.
+    panel_style.corner_radius_top_left = 6
+    panel_style.corner_radius_top_right = 30
+    panel_style.corner_radius_bottom_right = 6
+    panel_style.corner_radius_bottom_left = 30
+    panel_style.shadow_color = Color(0, 0, 0, 0.55)
+    panel_style.shadow_size = 10
     panel.add_theme_stylebox_override("panel", panel_style)
     add_child(panel)
 
+    # A slim amber ribbon across the top carries the title, breaking up the
+    # box silhouette instead of just floating text on the same flat panel.
+    var ribbon := Panel.new()
+    ribbon.position = Vector2(6, 4)
+    ribbon.size = Vector2(224, 13)
+    var ribbon_style := StyleBoxFlat.new()
+    ribbon_style.bg_color = Color(1.0, 0.83, 0.4, 0.95)
+    ribbon_style.set_corner_radius_all(8)
+    ribbon.add_theme_stylebox_override("panel", ribbon_style)
+    panel.add_child(ribbon)
+
     var label := Label.new()
-    label.text = "DRAG AN EVOLUTION ORB ONTO A FOLLOWER"
-    label.position = Vector2(8, 2)
-    label.size = Vector2(236, 12)
+    label.text = "EVOLUTION PATH"
+    label.position = Vector2(0, -1)
+    label.size = Vector2(224, 14)
     label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     label.add_theme_font_size_override("font_size", ui_font(9))
-    label.add_theme_color_override("font_color", Color(0.78, 0.92, 1.0))
+    label.add_theme_color_override("font_color", Color(0.1, 0.08, 0.02))
     label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    panel.add_child(label)
+    ribbon.add_child(label)
 
-    # A direct "abilities used" readout — the four orbs below already show a
+    var hint := Label.new()
+    hint.text = "Drag a rune onto a follower"
+    hint.position = Vector2(6, 18)
+    hint.size = Vector2(224, 10)
+    hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hint.add_theme_font_size_override("font_size", ui_font(7))
+    hint.add_theme_color_override("font_color", Color(0.55, 0.65, 0.78))
+    hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    panel.add_child(hint)
+
+    # A direct "abilities used" readout — the four runes below already show a
     # checkmark once spent, but that only reads clearly one at a time. This
     # gives a single at-a-glance count of how many evolutions are left.
     evolution_count_label = Label.new()
-    evolution_count_label.position = Vector2(8, 14)
-    evolution_count_label.size = Vector2(236, 12)
+    evolution_count_label.position = Vector2(6, 28)
+    evolution_count_label.size = Vector2(224, 12)
     evolution_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     evolution_count_label.add_theme_font_size_override("font_size", ui_font(10))
     evolution_count_label.add_theme_color_override("font_color", Color(1.0, 0.83, 0.35))
@@ -1864,34 +1916,76 @@ func build_evolution_panel() -> void:
         "Transcend: +4/+4 and activate its evolved ability"
     ]
     for i in range(4):
+        var tier_size: int = EVOLUTION_TIER_SIZES[i]
         var orb := Button.new()
-        orb.position = Vector2(10 + i * 60, 27)
-        orb.size = Vector2(52, 52)
+        orb.position = EVOLUTION_TIER_POS[i]
+        orb.size = Vector2(tier_size, tier_size)
+        orb.pivot_offset = Vector2(tier_size, tier_size) * 0.5
         orb.focus_mode = Control.FOCUS_NONE
         orb.text = "%s\n%d" % ["★".repeat(star_counts[i]), i + 1]
-        orb.tooltip_text = "%d PP • %s" % [i + 1, tooltips[i]]
-        orb.add_theme_font_size_override("font_size", ui_font(12 if i < 2 else 9))
+        orb.tooltip_text = "%d PP • %s: %s" % [i + 1, EVOLUTION_TIER_NAMES[i], tooltips[i]]
+        orb.add_theme_font_size_override("font_size", ui_font(12 if tier_size >= 50 else 9))
         orb.add_theme_color_override("font_color", Color.WHITE)
         orb.add_theme_color_override("font_hover_color", Color.WHITE)
+        var tier_color: Color = EVOLUTION_TIER_COLORS[i]
+        var glow_color: Color = EVOLUTION_TIER_GLOWS[i]
         var normal := StyleBoxFlat.new()
-        normal.bg_color = Color(0.12, 0.34, 0.58, 0.98)
-        normal.border_color = Color(0.72, 0.92, 1.0)
+        normal.bg_color = tier_color
+        normal.border_color = glow_color
         normal.set_border_width_all(3)
-        normal.set_corner_radius_all(26)
+        normal.set_corner_radius_all(tier_size)
+        # A colored shadow doubles as a soft glow halo around the rune,
+        # instead of every tier sharing one flat blue square.
+        normal.shadow_color = Color(glow_color.r, glow_color.g, glow_color.b, 0.55)
+        normal.shadow_size = 6 + i * 2
         orb.add_theme_stylebox_override("normal", normal)
         var hover: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
-        hover.bg_color = Color(0.22, 0.52, 0.82, 1.0)
-        hover.border_color = Color(1.0, 0.88, 0.35)
+        hover.bg_color = tier_color.lightened(0.22)
+        hover.border_color = Color(1.0, 0.95, 0.6)
+        hover.shadow_size = normal.shadow_size + 4
         orb.add_theme_stylebox_override("hover", hover)
         orb.add_theme_stylebox_override("pressed", hover)
         var evolution_cost: int = i + 1
         orb.gui_input.connect(func(event: InputEvent): _on_evolution_orb_input(event, evolution_cost, orb))
         orb.pressed.connect(func():
             if not orb.disabled:
-                status_label.text = "Drag this %d PP evolution orb onto an unevolved follower." % evolution_cost
+                status_label.text = "Drag this %s rune (%d PP) onto an unevolved follower." % [EVOLUTION_TIER_NAMES[evolution_cost - 1], evolution_cost]
         )
         panel.add_child(orb)
         evolution_buttons.append(orb)
+
+        # Tiny tier caption under each rune's own footprint (offset below the
+        # button) so the staircase reads as named power tiers, not just
+        # unlabeled colored circles.
+        var tier_caption := Label.new()
+        tier_caption.text = EVOLUTION_TIER_NAMES[i]
+        tier_caption.position = orb.position + Vector2(-6, tier_size + 1)
+        tier_caption.size = Vector2(tier_size + 12, 10)
+        tier_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        tier_caption.add_theme_font_size_override("font_size", ui_font(6))
+        tier_caption.add_theme_color_override("font_color", glow_color)
+        tier_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        panel.add_child(tier_caption)
+
+        _start_evolution_orb_pulse(orb)
+
+# Available runes slowly breathe (scale) so the panel feels like a live
+# power source rather than a static row of buttons. Disabled/used runes are
+# also dimmed per-frame in refresh_ui via modulate, so the pulse checks
+# `disabled` on every step and snaps back to rest scale instead of animating.
+func _start_evolution_orb_pulse(orb: Button) -> void:
+    var pulse := create_tween().set_loops()
+    pulse.tween_method(_apply_evolution_pulse.bind(orb), 0.0, 1.0, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    pulse.tween_method(_apply_evolution_pulse.bind(orb), 1.0, 0.0, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+func _apply_evolution_pulse(t: float, orb: Button) -> void:
+    if not is_instance_valid(orb):
+        return
+    if orb.disabled:
+        orb.scale = Vector2.ONE
+        return
+    var s := 1.0 + 0.08 * t
+    orb.scale = Vector2(s, s)
 
 func _on_evolution_orb_input(event: InputEvent, cost: int, orb: Button) -> void:
     if orb.disabled or game_over or busy or not player_turn_active:
@@ -4984,11 +5078,13 @@ func refresh_ui(animate_new: bool = false, new_index: int = -1, new_player_side:
             continue
         evolution_button.disabled = game_over or busy or player_evolutions_used[i] or player_mana < (i + 1) or player_board.is_empty() or not player_turn_active
         if player_evolutions_used[i]:
+            # Spent rune: gone cold — checkmark stays, glow and scale drop out.
             evolution_button.text = "✓\n%d" % (i + 1)
-            evolution_button.modulate = Color(0.48, 0.52, 0.58, 0.82)
+            evolution_button.modulate = Color(0.42, 0.45, 0.5, 0.75)
+            evolution_button.scale = Vector2.ONE
         else:
             evolution_button.text = "%s\n%d" % ["★".repeat(i + 1), i + 1]
-            evolution_button.modulate = Color.WHITE
+            evolution_button.modulate = Color.WHITE if not evolution_button.disabled else Color(0.62, 0.65, 0.7, 0.55)
     rebuild_hand(); rebuild_enemy_hand()
     rebuild_board(player_board_area, player_board, true, animate_new and new_player_side, new_index)
     rebuild_board(enemy_board_area, enemy_board, false, animate_new and not new_player_side, new_index)
