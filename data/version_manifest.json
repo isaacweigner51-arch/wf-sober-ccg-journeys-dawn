@@ -9,5 +9,14 @@
   "version_code": "0.8.6",
   "build_name": "Prebuilt Leader Art + Storm Theme",
   "card_count": 120,
-  "version_name": "0.8.6"
+  "version_name": "0.8.6",
+  "fixes": [
+    "Added new Recovery Skill amulets for Courage (Face It Head-On) and Hope (Second Chances), and fixed Serenity's Sanctuary of Serenity so it works in real matches, not just the tutorial.",
+    "Fixed prebuilt decks that were randomly 40 or 41 cards depending on class.",
+    "Fixed several Dev/showcase decks that were silently missing cards due to name typos.",
+    "Redesigned the Evolution panel so tiers are easier to read at a glance."
+  ],
+  "upcoming_events": [
+    "More seasonal content and cards are in development — check back after future updates for details."
+  ]
 }
