@@ -77,6 +77,10 @@ var trial_tier := 0
 # Practice: your own saved deck vs. a legal AI deck, generous turn clock,
 # no rewards/challenge progress -- purely for trying decks and reading cards.
 var practice_mode := false
+# Victory/defeat banner+sparkles layer built by _play_victory_sequence(); kept
+# as a field (not a local) so show_game_over() can force-free it early if the
+# result screen fires while the sequence is still mid-animation.
+var finish_layer: Control = null
 # Beginner-friendly practice AI: it still plays a legal deck, but it doesn't
 # optimize its mana curve, doesn't attack with everything, and evolves less
 # often, so new players have real room to experiment without getting run over.
@@ -4936,7 +4940,7 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         var music_fade := create_tween()
         music_fade.tween_property(music_player, "volume_db", -16.0, 0.45)
 
-    var finish_layer := Control.new()
+    finish_layer = Control.new()
     finish_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     finish_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
     finish_layer.z_index = 500
