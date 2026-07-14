@@ -1051,7 +1051,47 @@ func show_academy_lesson() -> void:
     academy_action_stage = 0
     var lesson_titles := ["PROVING YOURSELF", "THE BATTLEFIELD", "PLAY A FOLLOWER", "COMBAT", "SPELLS & AMULETS", "RECOVERY & REVIVE", "SPONSOR & SPONSEE", "BUILDING YOUR DECK"]
     var mentors := ["Purpose Champion", "Hope Mentor", "Courage Veteran", "Courage Veteran", "Serenity Guardian", "Hope Mentor", "Purpose Champion", "Recovery Academy Dean"]
+    var lesson_class: String = CLASSES[academy_step % CLASSES.size()]
+    var accent := class_color(lesson_class)
     header(lesson_titles[academy_step], "Lesson %d of 8 • %s" % [academy_step + 1, mentors[academy_step]])
+
+    # Mentor portrait chip layered onto the header, so each lesson has a face
+    # attached to its voice instead of just a name in small text — the header
+    # itself stays untouched since it's shared by every other screen.
+    var mentor_chip := Panel.new()
+    mentor_chip.position = Vector2(890, 24)
+    mentor_chip.size = Vector2(68, 68)
+    mentor_chip.add_theme_stylebox_override("panel", style(accent, 34))
+    root_layer.add_child(mentor_chip)
+    var mentor_class: String = mentors[academy_step].split(" ")[0]
+    var mentor_portrait := TextureRect.new()
+    mentor_portrait.texture = class_leader_texture(mentor_class if mentor_class in CLASSES else lesson_class)
+    mentor_portrait.position = Vector2(6, 6)
+    mentor_portrait.size = Vector2(56, 56)
+    mentor_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    mentor_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    mentor_portrait.clip_contents = true
+    mentor_chip.add_child(mentor_portrait)
+
+    # Eight-segment lesson tracker between the header and the board — a
+    # constant, at-a-glance sense of progress through the Academy instead of
+    # only a "Lesson X of 8" string buried in small subtitle text.
+    var tracker := HBoxContainer.new()
+    tracker.position = Vector2(95, 104)
+    tracker.size = Vector2(1090, 14)
+    tracker.add_theme_constant_override("separation", 8)
+    root_layer.add_child(tracker)
+    for i in range(8):
+        var segment := ColorRect.new()
+        segment.custom_minimum_size = Vector2(125, 8)
+        segment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        if i < academy_step:
+            segment.color = accent
+        elif i == academy_step:
+            segment.color = accent.lightened(0.35)
+        else:
+            segment.color = Color(1, 1, 1, 0.12)
+        tracker.add_child(segment)
 
     var board := Panel.new()
     board.position = Vector2(95, 126)
@@ -1062,12 +1102,28 @@ func show_academy_lesson() -> void:
     # Extending it to the same ~20px bottom margin every other screen's
     # footer leaves closes that gap.
     board.size = Vector2(1090, 574)
-    board.add_theme_stylebox_override("panel", style(class_color(CLASSES[academy_step % CLASSES.size()]), 20))
+    board.add_theme_stylebox_override("panel", style(accent, 20))
     root_layer.add_child(board)
+
+    # A soft interior header strip using the lesson's class color gives the
+    # board depth instead of a single flat fill from edge to edge.
+    var glow := ColorRect.new()
+    glow.position = Vector2(0, 0)
+    glow.size = Vector2(1090, 96)
+    glow.color = Color(accent.r, accent.g, accent.b, 0.14)
+    glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    board.add_child(glow)
+    board.move_child(glow, 0)
 
     var instruction := centered_label("", Vector2(70, 24), Vector2(950, 78), 21, board)
     instruction.add_theme_color_override("font_color", Color(0.96,0.93,0.82))
-    academy_feedback = centered_label("Complete the highlighted actions to continue.", Vector2(170, 456), Vector2(750, 48), 18, board)
+
+    var feedback_chip := Panel.new()
+    feedback_chip.position = Vector2(170, 452)
+    feedback_chip.size = Vector2(750, 56)
+    feedback_chip.add_theme_stylebox_override("panel", style(Color(accent.r, accent.g, accent.b, 0.55), 14))
+    board.add_child(feedback_chip)
+    academy_feedback = centered_label("Complete the highlighted actions to continue.", Vector2(20, 0), Vector2(710, 56), 18, feedback_chip)
 
     match academy_step:
         0:
