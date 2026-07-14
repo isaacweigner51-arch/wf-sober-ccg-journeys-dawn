@@ -18,6 +18,9 @@ const MAX_HAND := 9
 const TURN_TIME_SECONDS := 75.0
 const SLACKING_WARNING_SECONDS := 30.0
 const URGENT_WARNING_SECONDS := 10.0
+# Practice mode: a much longer per-turn clock so nobody feels rushed while
+# reading cards, but still bounded so a match can't sit open forever.
+const PRACTICE_TURN_TIME_SECONDS := 180.0
 
 var player_health := STARTING_HEALTH
 var enemy_health := STARTING_HEALTH
@@ -71,6 +74,9 @@ var story_stage_id := 0
 # deck-building rules (see build_sponsor_trial_deck).
 var trial_mode_battle := false
 var trial_tier := 0
+# Practice: your own saved deck vs. a legal AI deck, generous turn clock,
+# no rewards/challenge progress -- purely for trying decks and reading cards.
+var practice_mode := false
 var class_overlay: ColorRect
 var evolution_buttons: Array[Button] = []
 var evolution_drag_cost: int = 0
@@ -237,6 +243,7 @@ func load_battle_setup() -> void:
         if online_mode:
             story_mode_battle = false
             trial_mode_battle = false
+            practice_mode = false
             online_role = str(cfg.get_value("battle","role","join"))
             selected_class = str(cfg.get_value("battle","your_class","Hope"))
             enemy_class = str(cfg.get_value("battle","opponent_class","Courage"))
@@ -246,6 +253,7 @@ func load_battle_setup() -> void:
         elif mode == "training":
             story_mode_battle = false
             trial_mode_battle = false
+            practice_mode = false
             training_class = str(cfg.get_value("training", "class", "Hope"))
             selected_class = training_class
             enemy_class = str(cfg.get_value("battle", "opponent_class", "Courage"))
@@ -254,6 +262,7 @@ func load_battle_setup() -> void:
         elif mode == "story":
             story_mode_battle = true
             trial_mode_battle = false
+            practice_mode = false
             story_stage_id = int(cfg.get_value("battle","story_stage_id",0))
             selected_class = str(cfg.get_value("battle","your_class","Hope"))
             enemy_class = str(cfg.get_value("battle","opponent_class","Courage"))
@@ -262,7 +271,16 @@ func load_battle_setup() -> void:
         elif mode == "trial":
             story_mode_battle = false
             trial_mode_battle = true
+            practice_mode = false
             trial_tier = int(cfg.get_value("battle","trial_tier",1))
+            selected_class = str(cfg.get_value("battle","your_class","Hope"))
+            enemy_class = str(cfg.get_value("battle","opponent_class","Courage"))
+            player_deck_mode = str(cfg.get_value("battle","your_deck_mode","custom"))
+            enemy_deck_mode = str(cfg.get_value("battle","opponent_deck_mode","prebuilt"))
+        elif mode == "practice":
+            story_mode_battle = false
+            trial_mode_battle = false
+            practice_mode = true
             selected_class = str(cfg.get_value("battle","your_class","Hope"))
             enemy_class = str(cfg.get_value("battle","opponent_class","Courage"))
             player_deck_mode = str(cfg.get_value("battle","your_deck_mode","custom"))
@@ -270,6 +288,7 @@ func load_battle_setup() -> void:
         else:
             story_mode_battle = false
             trial_mode_battle = false
+            practice_mode = false
             selected_class = str(cfg.get_value("battle","your_class",selected_class))
             enemy_class = str(cfg.get_value("battle","opponent_class",enemy_class))
             player_deck_mode = str(cfg.get_value("battle","your_deck_mode","custom"))
@@ -286,10 +305,10 @@ func _process(delta: float) -> void:
         return
     turn_time_left = maxf(0.0, turn_time_left - delta)
     update_turn_timer_ui()
-    if turn_time_left <= SLACKING_WARNING_SECONDS and not slacking_warning_shown:
+    if not practice_mode and turn_time_left <= SLACKING_WARNING_SECONDS and not slacking_warning_shown:
         slacking_warning_shown = true
         show_slacking_animation("SITTING ON YOUR STEPS?", "Time to take the next one.", false)
-    if turn_time_left <= URGENT_WARNING_SECONDS and not urgent_warning_shown:
+    if not practice_mode and turn_time_left <= URGENT_WARNING_SECONDS and not urgent_warning_shown:
         urgent_warning_shown = true
         show_slacking_animation("DON'T STALL YOUR RECOVERY!", "10 seconds left", true)
     if turn_time_left <= 0.0:
@@ -1812,17 +1831,29 @@ func build_turn_timer() -> void:
     turn_timer_label.text = "TURN TIME  75"
     timer_panel.add_child(turn_timer_label)
 
+    if practice_mode:
+        var practice_badge := Label.new()
+        practice_badge.position = Vector2(1042, 187)
+        practice_badge.size = Vector2(218, 24)
+        practice_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        practice_badge.add_theme_font_size_override("font_size", ui_font(13))
+        practice_badge.add_theme_color_override("font_color", Color(0.55, 0.9, 0.6))
+        practice_badge.text = "PRACTICE — NO REWARDS"
+        add_child(practice_badge)
+
     turn_timer_bar = ProgressBar.new()
     turn_timer_bar.position = Vector2(10, 25)
     turn_timer_bar.size = Vector2(198, 18)
     turn_timer_bar.min_value = 0
-    turn_timer_bar.max_value = TURN_TIME_SECONDS
+    turn_timer_bar.max_value = PRACTICE_TURN_TIME_SECONDS if practice_mode else TURN_TIME_SECONDS
     turn_timer_bar.value = TURN_TIME_SECONDS
     turn_timer_bar.show_percentage = false
     timer_panel.add_child(turn_timer_bar)
 
 func reset_turn_timer() -> void:
-    turn_time_left = TURN_TIME_SECONDS
+    turn_time_left = PRACTICE_TURN_TIME_SECONDS if practice_mode else TURN_TIME_SECONDS
+    if is_instance_valid(turn_timer_bar):
+        turn_timer_bar.max_value = turn_time_left
     slacking_warning_shown = false
     urgent_warning_shown = false
     player_turn_active = true
@@ -4798,9 +4829,10 @@ func check_winner() -> void:
         game_over = true
         player_turn_active = false
         busy = true
-        award_pending_challenge()
-        record_recovery_challenge_win(selected_class)
-        award_pending_trial()
+        if not practice_mode:
+            award_pending_challenge()
+            record_recovery_challenge_win(selected_class)
+            award_pending_trial()
         play_battle_bark(player_leader, selected_class, "victory", true, true)
         play_battle_bark(enemy_leader, enemy_class, "defeat", false, true)
         call_deferred("_finish_match", true)
