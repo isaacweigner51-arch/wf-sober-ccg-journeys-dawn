@@ -8,3 +8,4 @@
 - [ElevenLabs music generation from sandbox](elevenlabs-music-sandbox.md) — generateMusic global isn't registered in this env; call the ElevenLabs Music API via @replit/connectors-sdk proxy instead, since listConnections('elevenlabs') returns [].
 - [Godot await tween.finished can hang forever](godot-tween-await-hang.md) — a fighting/killed tween never fires `finished`; await a fixed timer matching its duration instead on any critical-path UI sequence.
 - [searchVoices/textToSpeech globals unavailable](elevenlabs-tts-connector-proxy.md) — same as music: use @replit/connectors-sdk proxy to ElevenLabs `/v1/text-to-speech/:voice_id`; `/v1/voices` list endpoint needs a permission this key lacks, so use known premade voice IDs instead.
+- [gitPush to a second tracked branch](gitpush-dual-branch.md) — gitPush fails if HEAD is on a branch tracking a different remote branch name; checkout the target local branch, merge --no-ff, then gitPush.
