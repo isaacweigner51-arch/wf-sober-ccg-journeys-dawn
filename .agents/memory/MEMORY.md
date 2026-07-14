@@ -5,3 +5,4 @@
 - [GDScript lambda capture](gdscript-closure-capture.md) — `func():` closures snapshot outer locals by value at creation, not by reference; box in a Dictionary/Array for a callback to see later reassignment.
 - [Godot headless syntax check](godot-headless-check.md) — checking a single .gd file gives false autoload/class errors; use `godot4 --headless --quit --path .` and grep for SCRIPT ERROR instead.
 - [Connector stuck not_setup despite active account](connector-stuck-not-setup.md) — ElevenLabs (maybe others) can show active in workspace Integrations but ProposeIntegration keeps failing/dialog disabled; don't loop retries.
+- [ElevenLabs music generation from sandbox](elevenlabs-music-sandbox.md) — generateMusic global isn't registered in this env; call the ElevenLabs Music API via @replit/connectors-sdk proxy instead, since listConnections('elevenlabs') returns [].
