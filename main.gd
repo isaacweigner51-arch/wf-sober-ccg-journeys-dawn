@@ -1242,8 +1242,14 @@ func build_ui() -> void:
     player_leader.pressed.connect(func(): leader_clicked(true))
     add_child(player_leader)
 
-    enemy_health_label = make_hp_label(Vector2(64, 278)); add_child(enemy_health_label)
-    player_health_label = make_hp_label(Vector2(1102, 522)); add_child(player_health_label)
+    # Hang each HP badge off the bottom-right corner of its own leader frame
+    # so health reads as one grouped unit instead of a loose floating number.
+    enemy_health_label = make_hp_label(Vector2(147, 158), class_accent_color(enemy_class))
+    enemy_health_label.z_index = 5
+    enemy_leader.add_child(enemy_health_label)
+    player_health_label = make_hp_label(Vector2(147, 158), class_accent_color(selected_class))
+    player_health_label.z_index = 5
+    player_leader.add_child(player_health_label)
 
     build_play_point_counter()
     turn_label = Label.new(); turn_label.position = Vector2(1048, 650); turn_label.size = Vector2(210, 30); turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; turn_label.add_theme_font_size_override("font_size", ui_font(17)); add_child(turn_label)
@@ -1984,9 +1990,15 @@ func _make_header_pill_button(label_text: String, pos: Vector2) -> Button:
     button.add_theme_stylebox_override("pressed", hover)
     return button
 
-func make_hp_label(pos: Vector2) -> Label:
-    var label := Label.new(); label.position = pos; label.size = Vector2(115, 45); label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; label.add_theme_font_size_override("font_size", ui_font(25))
-    var style := StyleBoxFlat.new(); style.bg_color = Color(0.50, 0.05, 0.08); style.border_color = Color(1.0, 0.66, 0.56); style.set_border_width_all(3); style.set_corner_radius_all(20); label.add_theme_stylebox_override("normal", style)
+func make_hp_label(pos: Vector2, accent: Color = Color(1.0, 0.66, 0.56)) -> Label:
+    # A compact badge meant to hang off the corner of a leader frame, so HP
+    # reads as part of the portrait rather than a loose floating number.
+    var label := Label.new(); label.position = pos; label.size = Vector2(92, 38); label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; label.add_theme_font_size_override("font_size", ui_font(20))
+    label.add_theme_color_override("font_color", Color(1.0, 0.93, 0.90))
+    label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+    label.add_theme_constant_override("shadow_offset_x", 1)
+    label.add_theme_constant_override("shadow_offset_y", 1)
+    var style := StyleBoxFlat.new(); style.bg_color = Color(0.42, 0.05, 0.08, 0.96); style.border_color = accent; style.set_border_width_all(2); style.set_corner_radius_all(18); style.shadow_color = Color(0, 0, 0, 0.6); style.shadow_size = 6; label.add_theme_stylebox_override("normal", style)
     return label
 
 
@@ -2393,8 +2405,17 @@ func complete_class_training() -> void:
         cfg.set_value("economy", "gold", gold + 500)
     cfg.save("user://journeys_dawn_profile.cfg")
 
+func refresh_leader_hp_badge_colors() -> void:
+    if is_instance_valid(enemy_health_label):
+        var enemy_style: StyleBoxFlat = enemy_health_label.get_theme_stylebox("normal") as StyleBoxFlat
+        if enemy_style: enemy_style.border_color = class_accent_color(enemy_class)
+    if is_instance_valid(player_health_label):
+        var player_style: StyleBoxFlat = player_health_label.get_theme_stylebox("normal") as StyleBoxFlat
+        if player_style: player_style.border_color = class_accent_color(selected_class)
+
 func start_game() -> void:
     refresh_battlefield_theme()
+    refresh_leader_hp_badge_colors()
     signature_voice_played.clear()
     player_walking_free_active = false
     enemy_walking_free_active = false
@@ -3633,13 +3654,20 @@ func _finish_match(player_won: bool) -> void:
         slacking_popup.queue_free()
     safe_set_text(status_label, "Match complete.")
     refresh_ui()
+    # A card-inspect panel left open (long-press on a card or leader) sits at
+    # z_index 5000 and blocks END TURN/the timer underneath it. If it's still
+    # open when the match ends it can make the result screen look broken or
+    # unreachable, so always clear it before the result sequence starts.
+    close_card_details()
 
+    var training_completed_here := false
     if player_won and training_mode:
         var objectives := training_objectives(training_class)
         if training_objective_index >= objectives.size() - 1:
             training_objective_index = objectives.size()
             update_training_panel()
             complete_class_training()
+            training_completed_here = true
         else:
             safe_set_text(status_label, "Battle won, but complete every class objective to graduate.")
 
@@ -3654,13 +3682,25 @@ func _finish_match(player_won: bool) -> void:
         _play_victory_sequence(enemy_leader, player_leader)
 
     await get_tree().create_timer(1.55, true, false, true).timeout
-    if not is_instance_valid(overlay) or overlay.visible:
+    if is_instance_valid(training_panel):
+        training_panel.queue_free()
+    # A completion screen shown by complete_class_training() legitimately owns
+    # the overlay at this point — don't fight it. Any other lingering overlay
+    # (e.g. a stray spell-choice popup) must never be allowed to block the
+    # match-result screen, so we force it closed rather than silently
+    # returning and leaving the player stuck on the battlefield.
+    if not is_instance_valid(overlay):
         busy = false
         return
-    if player_won:
-        show_game_over("VICTORY", "You are Walking Free!", true)
-    else:
-        show_game_over("YOU LOSE", "Every setback is a chance to begin again.", false)
+    if overlay.visible and not training_completed_here:
+        for child in overlay.get_children():
+            child.queue_free()
+        overlay.visible = false
+    if not overlay.visible:
+        if player_won:
+            show_game_over("VICTORY", "You are Walking Free!", true)
+        else:
+            show_game_over("YOU LOSE", "Every setback is a chance to begin again.", false)
     busy = false
 
 func _play_victory_sequence(winner: Control, loser: Control) -> void:
@@ -4251,5 +4291,7 @@ func battlefield_svg() -> String:
     <path d='M225 315 H1055 M225 490 H1055' stroke='%s' stroke-opacity='.48' stroke-width='4'/>
     <circle cx='640' cy='403' r='82' fill='none' stroke='%s' stroke-opacity='.34' stroke-width='12'/>
     <circle cx='640' cy='403' r='48' fill='none' stroke='%s' stroke-opacity='.32' stroke-width='4'/>
-    <text x='640' y='690' text-anchor='middle' fill='%s' opacity='.30' font-size='28' font-family='sans-serif' font-weight='bold'>%s ARENA</text>
-    </svg>""" % [sky_top, sky_mid, glow, glow, floor_a, floor_a, floor_b, scenery, accent, accent, glow, accent, glow, accent, class_title]
+    <path d='M640 366 L672 422 L608 422 Z' fill='none' stroke='%s' stroke-opacity='.30' stroke-width='3' stroke-linejoin='round'/>
+    <text x='640' y='690' text-anchor='middle' fill='%s' opacity='.34' font-size='16' font-family='sans-serif' font-weight='bold' letter-spacing='4'>ONE DAY AT A TIME</text>
+    <text x='640' y='710' text-anchor='middle' fill='%s' opacity='.22' font-size='16' font-family='sans-serif' font-weight='bold'>%s ARENA</text>
+    </svg>""" % [sky_top, sky_mid, glow, glow, floor_a, floor_a, floor_b, scenery, accent, accent, glow, accent, glow, accent, glow, accent, accent, class_title]

@@ -668,23 +668,60 @@ func normalized_daily_reward_index() -> int:
 func show_daily_rewards() -> void:
     clear_screen(); add_background(0.68); header("DAILY RECOVERY REWARDS", "Return each day to keep building your collection"); currency_bar()
     var today_index := normalized_daily_reward_index()
+    var accent := class_color(selected_class) if selected_class != "" else GOLD_COLOR
+
+    # A connecting streak rail behind the day cards makes the five-day track
+    # read as one continuous journey instead of five disconnected boxes.
+    var rail := ColorRect.new()
+    rail.position = Vector2(96, 296); rail.size = Vector2(1088, 6)
+    rail.color = Color(0.20, 0.24, 0.30); root_layer.add_child(rail)
+    var rail_progress := ColorRect.new()
+    rail_progress.position = Vector2(96, 296); rail_progress.size = Vector2(1088 * (float(today_index) / max(1.0, DAILY_REWARDS.size() - 1.0)), 6)
+    rail_progress.color = accent; root_layer.add_child(rail_progress)
+
     for i in range(DAILY_REWARDS.size()):
         var reward: Dictionary = DAILY_REWARDS[i]
+        var is_today := i == today_index
+        var is_claimed := (daily_last_claim_day >= 0 and i < today_index) or (is_today and not can_claim_daily_reward())
         var panel := Panel.new(); panel.position = Vector2(78 + i * 235, 205); panel.size = Vector2(205, 275)
-        var border := GOLD_COLOR if i == today_index else Color(0.32,0.52,0.72)
-        panel.add_theme_stylebox_override("panel", style(border, 16)); root_layer.add_child(panel)
-        var title_label := label("DAY %d" % (i + 1), Vector2(18,18), Vector2(169,42), 25, panel); title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        var border := accent if is_today else (Color(0.42,0.56,0.42) if is_claimed else Color(0.32,0.40,0.50))
+        var pstyle := style(border, 16)
+        if is_today:
+            pstyle.set_border_width_all(4)
+            pstyle.shadow_color = Color(accent, 0.45); pstyle.shadow_size = 14
+        elif is_claimed:
+            pstyle.bg_color = pstyle.bg_color.lightened(0.03)
+        panel.add_theme_stylebox_override("panel", pstyle); root_layer.add_child(panel)
+        if is_claimed:
+            panel.modulate = Color(0.82, 0.86, 0.82) if not is_today else Color.WHITE
+
+        var badge_text := "DAY %d" % (i + 1)
+        var title_label := label(badge_text, Vector2(18,16), Vector2(169,36), 22, panel); title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        if is_claimed:
+            title_label.add_theme_color_override("font_color", Color(0.6, 0.92, 0.62))
+
+        var pack_icon := centered_label("\U0001F4E6", Vector2(18, 55), Vector2(169, 46), 30, panel)
         var reward_text := "%d CARD PACK%s" % [int(reward["packs"]), "" if int(reward["packs"]) == 1 else "S"]
         if int(reward["vials"]) > 0:
             reward_text += "\n+ %d VIALS" % int(reward["vials"])
-        var reward_label := label(reward_text, Vector2(18,82), Vector2(169,105), 22, panel); reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; reward_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        var reward_label := label(reward_text, Vector2(18,104), Vector2(169,80), 19, panel); reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; reward_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
         var state := "UP NEXT"
-        if daily_last_claim_day >= 0 and i < today_index:
-            state = "CLAIMED"
-        elif i == today_index:
-            state = "TODAY" if can_claim_daily_reward() else "CLAIMED"
-        var state_label := label(state, Vector2(18,205), Vector2(169,36), 17, panel); state_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        if is_claimed:
+            state = "\u2713 CLAIMED"
+        elif is_today:
+            state = "TODAY — READY"
+        var state_style := StyleBoxFlat.new()
+        state_style.bg_color = Color(0.20, 0.42, 0.24, 0.9) if is_claimed else (Color(accent, 0.30) if is_today else Color(0.12, 0.14, 0.18, 0.7))
+        state_style.set_corner_radius_all(10)
+        var state_wrap := Panel.new(); state_wrap.position = Vector2(14, 205); state_wrap.size = Vector2(177, 40)
+        state_wrap.add_theme_stylebox_override("panel", state_style); panel.add_child(state_wrap)
+        var state_label := label(state, Vector2(0,0), Vector2(177,40), 15, state_wrap); state_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; state_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        if is_today:
+            state_label.add_theme_color_override("font_color", accent.lightened(0.4))
+
     var claim_button := button("CLAIM TODAY'S REWARD", Vector2(460,535), Vector2(360,68), claim_daily_reward)
+    claim_button.add_theme_stylebox_override("normal", style(accent, 14))
     claim_button.disabled = not can_claim_daily_reward()
     if not can_claim_daily_reward():
         safe_set_text(claim_button, "COME BACK TOMORROW")
@@ -1915,7 +1952,7 @@ func card_art_texture(cd: Dictionary) -> Texture2D:
     var art_index: int = seed_value % 16
     return _load_menu_art_path("res://assets/cards/art_%02d.png" % art_index)
 
-func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2) -> Panel:
+func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable := true) -> Panel:
     var p := Panel.new()
     p.position = pos
     p.size = size_value
@@ -2012,7 +2049,58 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2) -> Panel:
         effect.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
         effect.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
+    if previewable:
+        var tap_catcher := Button.new()
+        tap_catcher.flat = true
+        tap_catcher.focus_mode = Control.FOCUS_NONE
+        tap_catcher.position = Vector2.ZERO
+        tap_catcher.size = size_value
+        tap_catcher.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        tap_catcher.tooltip_text = "Tap to inspect this card"
+        tap_catcher.pressed.connect(show_card_preview.bind(cd))
+        p.add_child(tap_catcher)
+
     return p
+
+func show_card_preview(cd: Dictionary) -> void:
+    # Full-size read-only inspection popup so players can check a card's
+    # exact wording and stats from the deck builder or collection grid
+    # without it being confused for a playable/drag target.
+    var scrim := ColorRect.new()
+    scrim.color = Color(0.02, 0.03, 0.06, 0.82)
+    scrim.position = Vector2.ZERO
+    scrim.size = Vector2(1280, 720)
+    scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+    scrim.z_index = 900
+    scrim.gui_input.connect(func(event):
+        if event is InputEventMouseButton and event.pressed:
+            scrim.queue_free()
+    )
+    root_layer.add_child(scrim)
+
+    var rarity := str(cd.get("rarity", "Bronze"))
+    var border := class_color(str(cd.get("class", "Neutral")))
+    if rarity in ["Gold", "Signature Gold"]:
+        border = Color(1.0, 0.76, 0.20)
+    elif rarity == "Epic":
+        border = Color(0.72, 0.38, 1.0)
+    elif rarity == "Legendary":
+        border = Color(1.0, 0.42, 0.16)
+    elif rarity == "Platinum":
+        border = Color(0.75, 0.95, 1.0)
+
+    var big_card := card_panel(cd, Vector2(490, 40), Vector2(300, 460), false)
+    big_card.z_index = 901
+    scrim.add_child(big_card)
+
+    var caption := label("%s  •  %s" % [str(cd.get("class", "Neutral")).to_upper(), rarity.to_upper()], Vector2(390, 520), Vector2(500, 30), 16)
+    caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    caption.add_theme_color_override("font_color", border)
+    caption.z_index = 901
+    scrim.add_child(caption)
+
+    var close_btn := button("CLOSE", Vector2(560, 570), Vector2(160, 48), scrim.queue_free, scrim)
+    close_btn.z_index = 901
 
 func show_collection() -> void:
     clear_screen(); add_background(0.82); header("COLLECTION & CRAFTING","Craft any card from any class • Deck class only matters when building"); currency_bar()
