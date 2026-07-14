@@ -401,11 +401,12 @@ func show_home() -> void:
     root_layer.add_child(top)
 
     var avatar := TextureRect.new()
-    avatar.texture = load("res://assets/leaders/%s.png" % active_class.to_lower())
+    avatar.texture = class_leader_texture(active_class)
     avatar.position = Vector2(10, 8)
     avatar.size = Vector2(48, 48)
     avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    avatar.clip_contents = true
     top.add_child(avatar)
     label("WALKING FREE CCG", Vector2(70, 8), Vector2(330, 28), 21, top).add_theme_color_override("font_color", GOLD_COLOR)
     label("Journey's Dawn  •  " + active_class + " Leader", Vector2(70, 35), Vector2(390, 21), 13, top)
@@ -421,13 +422,34 @@ func show_home() -> void:
     var brand := centered_label("JOURNEY'S\nDAWN", Vector2(14, 20), Vector2(190, 72), 27, nav)
     brand.add_theme_color_override("font_color", GOLD_COLOR)
     centered_label("One day at a time.", Vector2(14, 99), Vector2(190, 28), 14, nav)
-    var nav_items = [
-        ["HOME", show_home], ["BATTLE", start_battle], ["DECK BUILDER", show_deck_builder],
-        ["COLLECTION", show_collection], ["STORE", show_store], ["STORY MODE", show_story_mode],
-        ["ONLINE VS", show_online_vs_setup], ["HOW TO PLAY", replay_how_to_play]
-    ]
-    for i in range(nav_items.size()):
-        button(str(nav_items[i][0]), Vector2(14, 145 + i * 50), Vector2(190, 44), nav_items[i][1], nav)
+    # Grouped, labeled navigation instead of one flat stack of 8 look-alike
+    # buttons: players scanning the sidebar can tell at a glance what each
+    # group of actions does, and BATTLE is styled as the primary action
+    # since it's the thing most players want to do most often.
+    var nav_y := 145.0
+    var nav_group := func(title_value: String):
+        var t := label(title_value, Vector2(18, nav_y), Vector2(182, 16), 11, nav)
+        t.add_theme_color_override("font_color", Color(0.72, 0.66, 0.48))
+        nav_y += 18.0
+    var nav_button := func(text_value: String, callback: Callable, primary: bool):
+        var b := button(text_value, Vector2(14, nav_y), Vector2(190, 40), callback, nav)
+        if primary:
+            b.add_theme_stylebox_override("normal", style(GOLD_COLOR, 9))
+            b.add_theme_stylebox_override("hover", style(GOLD_COLOR.lightened(0.15), 9))
+            b.add_theme_color_override("font_color", Color(0.10, 0.07, 0.02))
+            b.add_theme_color_override("font_hover_color", Color(0.10, 0.07, 0.02))
+        nav_y += 42.0
+    nav_button.call("HOME", show_home, false)
+    nav_group.call("PLAY")
+    nav_button.call("BATTLE", start_battle, true)
+    nav_button.call("DECK BUILDER", show_deck_builder, false)
+    nav_button.call("STORY MODE", show_story_mode, false)
+    nav_button.call("ONLINE VS", show_online_vs_setup, false)
+    nav_group.call("PROGRESS")
+    nav_button.call("COLLECTION", show_collection, false)
+    nav_button.call("STORE", show_store, false)
+    nav_group.call("LEARN")
+    nav_button.call("HOW TO PLAY", replay_how_to_play, false)
     var reward := Panel.new()
     reward.position = Vector2(14, 558)
     reward.size = Vector2(190, 44)
@@ -497,7 +519,7 @@ func show_home() -> void:
     showcase.add_child(art_frame)
 
     var art := TextureRect.new()
-    art.texture = load("res://assets/leaders/%s.png" % active_class.to_lower())
+    art.texture = class_leader_texture(active_class)
     art.position = Vector2.ZERO
     art.size = art_frame.size
     art.custom_minimum_size = Vector2.ZERO
@@ -809,11 +831,12 @@ func show_first_day_intro() -> void:
         root_layer.add_child(panel)
 
         var art := TextureRect.new()
-        art.texture = load("res://assets/leaders/%s.png" % c.to_lower())
+        art.texture = class_leader_texture(c)
         art.position = Vector2(45, 18)
         art.size = Vector2(196, 176)
         art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        art.clip_contents = true
         panel.add_child(art)
 
         var class_title := centered_label(c.to_upper(), Vector2(18, 198), Vector2(250, 38), 25, panel)
@@ -1237,7 +1260,7 @@ func show_graduation_class_choice() -> void:
     for i in range(CLASSES.size()):
         var c: String = CLASSES[i]
         var panel := Panel.new(); panel.position=Vector2(42+i*310,154); panel.size=Vector2(286,430); panel.add_theme_stylebox_override("panel",style(class_color(c),16)); root_layer.add_child(panel)
-        var art := TextureRect.new(); art.texture=load("res://assets/leaders/%s.png" % c.to_lower()); art.position=Vector2(31,22); art.size=Vector2(224,224); art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED; panel.add_child(art)
+        var art := TextureRect.new(); art.texture=class_leader_texture(c); art.position=Vector2(31,22); art.size=Vector2(224,224); art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; art.clip_contents=true; panel.add_child(art)
         var n := label(c.to_upper(),Vector2(23,260),Vector2(240,38),25,panel); n.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; n.add_theme_color_override("font_color",class_color(c).lightened(0.25))
         label(class_description(c),Vector2(24,307),Vector2(238,58),15,panel).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
         button("CLAIM DECK",Vector2(48,374),Vector2(190,42),func(): graduate_with_class(c),panel)
@@ -1299,20 +1322,22 @@ func _show_battle_intro(player_class_name: String, opponent_class_name: String) 
     intro.add_child(title)
 
     var left_art := TextureRect.new()
-    left_art.texture = load("res://assets/leaders/%s.png" % player_class_name.to_lower())
+    left_art.texture = class_leader_texture(player_class_name)
     left_art.position = Vector2(105, 165)
     left_art.size = Vector2(390, 390)
     left_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    left_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    left_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    left_art.clip_contents = true
     left_art.modulate = Color(1,1,1,0)
     intro.add_child(left_art)
 
     var right_art := TextureRect.new()
-    right_art.texture = load("res://assets/leaders/%s.png" % opponent_class_name.to_lower())
+    right_art.texture = class_leader_texture(opponent_class_name)
     right_art.position = Vector2(785, 165)
     right_art.size = Vector2(390, 390)
     right_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    right_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    right_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    right_art.clip_contents = true
     right_art.modulate = Color(1,1,1,0)
     intro.add_child(right_art)
 
@@ -1590,11 +1615,11 @@ func _show_battle_deck_preview(class_name_value: String, mode_value: String, opp
     leader_frame.add_theme_stylebox_override("panel", style(class_color(class_name_value).lightened(0.12), 14))
     panel.add_child(leader_frame)
     var leader_art := TextureRect.new()
-    leader_art.texture = load("res://assets/leaders/%s.png" % class_name_value.to_lower())
+    leader_art.texture = class_leader_texture(class_name_value)
     leader_art.position = Vector2(10, 10)
     leader_art.size = Vector2(226, 226)
     leader_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    leader_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    leader_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     leader_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     leader_frame.add_child(leader_art)
     centered_label(class_name_value.to_upper(), Vector2(10, 246), Vector2(226, 34), 22, leader_frame).add_theme_color_override("font_color", GOLD_COLOR)
@@ -1663,11 +1688,12 @@ func _build_battle_leader_panel(class_name_value: String, heading: String, panel
     panel.add_child(frame)
 
     var art := TextureRect.new()
-    art.texture = load("res://assets/leaders/%s.png" % class_name_value.to_lower())
+    art.texture = class_leader_texture(class_name_value)
     art.position = Vector2(6, 6)
     art.size = Vector2(288, 238)
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    art.clip_contents = true
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     if dim_art:
         art.modulate = Color(0.92, 0.94, 0.98)
@@ -1736,11 +1762,12 @@ func show_class_choice() -> void:
         card.add_child(art_shell)
 
         var art := TextureRect.new()
-        art.texture = load("res://assets/leaders/%s.png" % c.to_lower())
+        art.texture = class_leader_texture(c)
         art.position = Vector2(7, 7)
         art.size = Vector2(256, 264)
         art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        art.clip_contents = true
         art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
         art.mouse_filter = Control.MOUSE_FILTER_IGNORE
         art_shell.add_child(art)
@@ -1772,6 +1799,21 @@ Avg Cost %.1f" % [int(stats.get("followers", 0)), int(stats.get("skills", 0)), f
         select_btn.add_theme_font_size_override("font_size", ui_font_size(12))
 
     button("BACK HOME", Vector2(500, 630), Vector2(280, 42), show_home, root_layer)
+
+func class_leader_texture(class_name_value: String) -> Texture2D:
+    # The source leader illustrations are square, full-scene paintings (podium,
+    # backpack trail, lakeside, job site) with the character occupying the top
+    # portion. Framed at full size with a "contain" stretch they read as tiny
+    # figures lost in a big scene; cropped to the top ~60% and displayed with
+    # a "cover" stretch, they read as a proper bust-style leader portrait in
+    # every frame in the app, the same way regardless of that frame's shape.
+    var base := load("res://assets/leaders/%s.png" % class_name_value.to_lower())
+    if base == null:
+        return null
+    var atlas := AtlasTexture.new()
+    atlas.atlas = base
+    atlas.region = Rect2(0, 0, base.get_width(), base.get_height() * 0.6)
+    return atlas
 
 func class_description(c: String) -> String:
     match c:
@@ -2793,11 +2835,12 @@ func show_deck_builder() -> void:
     deck_leader_frame.add_theme_stylebox_override("panel", style(class_color(selected_deck_class).lightened(0.12), 12))
     side.add_child(deck_leader_frame)
     var deck_leader_art := TextureRect.new()
-    deck_leader_art.texture = load("res://assets/leaders/%s.png" % selected_deck_class.to_lower())
+    deck_leader_art.texture = class_leader_texture(selected_deck_class)
     deck_leader_art.position = Vector2(6, 6)
     deck_leader_art.size = Vector2(164, 154)
     deck_leader_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    deck_leader_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    deck_leader_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    deck_leader_art.clip_contents = true
     deck_leader_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     deck_leader_frame.add_child(deck_leader_art)
     label("%s DECK" % selected_deck_class.to_upper(),Vector2(20,184),Vector2(320,36),24,side).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
