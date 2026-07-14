@@ -3471,9 +3471,12 @@ var _pack_sfx_pool: Array[AudioStreamPlayer] = []
 # belong to the battle scene) — this is a small self-contained pool so pack
 # opening can have real audio feedback instead of being silent.
 func _ensure_pack_sfx_pool() -> void:
-    if not _pack_sfx_pool.is_empty():
-        return
-    for i in range(4):
+    # clear_screen() frees every child of menu.gd (including these players)
+    # whenever the screen changes, but this pool array is a script-level var
+    # that survives that -- so stale/freed references must be dropped here,
+    # not just skipped on an empty check, or callers can hand back a freed node.
+    _pack_sfx_pool = _pack_sfx_pool.filter(func(p): return is_instance_valid(p))
+    while _pack_sfx_pool.size() < 4:
         var player := AudioStreamPlayer.new()
         player.bus = "Master"
         add_child(player)
@@ -3486,9 +3489,11 @@ func play_pack_sfx(sound_name: String, volume_db: float = 0.0) -> void:
     _ensure_pack_sfx_pool()
     var target: AudioStreamPlayer = _pack_sfx_pool[0]
     for candidate in _pack_sfx_pool:
-        if not candidate.playing:
+        if is_instance_valid(candidate) and not candidate.playing:
             target = candidate
             break
+    if not is_instance_valid(target):
+        return
     target.stream = load(path)
     target.volume_db = volume_db
     target.play()
@@ -3511,9 +3516,11 @@ func play_story_voice(stage: Dictionary) -> void:
     _ensure_pack_sfx_pool()
     var target: AudioStreamPlayer = _pack_sfx_pool[0]
     for candidate in _pack_sfx_pool:
-        if not candidate.playing:
+        if is_instance_valid(candidate) and not candidate.playing:
             target = candidate
             break
+    if not is_instance_valid(target):
+        return
     target.stream = load(path)
     target.volume_db = 0.0
     target.play()
