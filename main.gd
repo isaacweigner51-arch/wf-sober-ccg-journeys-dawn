@@ -117,6 +117,16 @@ var player_pending_temp_pp := 0
 var enemy_pending_temp_pp := 0
 var player_walking_free_active := false
 var enemy_walking_free_active := false
+var player_courage_recovery_milestone := false
+var enemy_courage_recovery_milestone := false
+var player_courage_recovery_evolved := false
+var enemy_courage_recovery_evolved := false
+var player_hope_recovery_milestone := false
+var enemy_hope_recovery_milestone := false
+var player_hope_recovery_evolved := false
+var enemy_hope_recovery_evolved := false
+var player_attacked_this_turn := false
+var enemy_attacked_this_turn := false
 var player_signature_attack_spoken: Dictionary = {}
 var enemy_signature_attack_spoken: Dictionary = {}
 var player_goes_first := true
@@ -270,7 +280,7 @@ func _process(delta: float) -> void:
         end_player_turn()
 
 func card(name: String, cost: int, attack: int, health: int, faction: String, rarity: String = "Bronze", ability: String = "", amount: int = 0, display_text: String = "", icon: String = "star", id: String = "") -> Dictionary:
-    var is_amulet := ability in ["daily_progress", "life_rebuilt"]
+    var is_amulet := ability in ["daily_progress", "life_rebuilt", "sanctuary_serenity", "standing_ground", "second_chances"]
     var is_spell := ability in ["second_chance", "strategic_collapse", "calm_after_storm"]
     var result := {"name": name, "cost": cost, "attack": attack, "health": health, "max_health": health, "faction": faction, "rarity": rarity, "ability": ability, "amount": amount, "display_text": display_text, "icon": icon, "set_name": "Journey's Dawn", "set_code": "JD", "can_attack": false, "is_amulet": is_amulet, "is_spell": is_spell}
     # A handful of battle-only cards (finishers, tokens, and tutorial cards) are
@@ -295,6 +305,7 @@ func build_class_cards(faction_name: String) -> Array:
             card("Moment of Peace",3,3,3,faction_name,"Silver","freeze",1,"On Play: Exhaust the strongest enemy next turn.","road"),
             card("Reflective Pool",4,3,5,faction_name,"Silver","bounce",0,"On Play: Return the strongest enemy follower to its owner's hand.","star"),
             card("Tranquil Shieldbearer",4,3,6,faction_name,"Silver","guard",0,"Guard.","shield"),
+            card("Sanctuary of Serenity",2,0,0,faction_name,"Gold","sanctuary_serenity",1,"Amulet — stays on the board and has no Attack or Defense. It cannot be attacked or damaged, and can only be removed by effects that specifically target an Amulet. Whenever your leader's Defense is restored, permanently give an allied follower +1/+1.","shield","jd-136"),
             card("Measured Response",5,4,6,faction_name,"Gold","damage_unit",4,"On Play: Deal 4 to the strongest enemy follower.","star"),
             card("Keeper of Balance",5,4,7,faction_name,"Gold","heal_draw",2,"On Play: Restore 2 defense and draw a card.","hands"),
             card("Tide of Acceptance",6,5,7,faction_name,"Gold","damage_all",3,"On Play: Deal 3 to every other follower.","road"),
@@ -314,6 +325,7 @@ func build_class_cards(faction_name: String) -> Array:
             card("Fight Through It",3,3,3,faction_name,"Silver","buff_all_attack",1,"On Play: Give your other followers +1 Attack this turn.","flame"),
             card("Chainbreaker",4,5,3,faction_name,"Silver","rush",0,"Rush.","flame"),
             card("Never Quit",4,4,4,faction_name,"Silver","survive_buff",1,"After surviving combat, gain +1/+1.","shield"),
+            card("Face It Head-On",2,0,0,faction_name,"Gold","standing_ground",1,"Amulet — stays on the board and has no Attack or Defense. It cannot be attacked or damaged, and can only be removed by effects that specifically target an Amulet. Whenever you attack the enemy leader directly, gain Progress. At 3 Progress, allies gain permanent +1 Attack; at 6 transform into Unbreakable Resolve.","flame"),
             card("Face Your Fear",5,5,4,faction_name,"Gold","damage_unit",5,"On Play: Deal 5 to the strongest enemy follower.","flame"),
             card("Rallying Flame",5,4,5,faction_name,"Gold","buff_all",1,"On Play: Give all other allies +1/+1.","flame"),
             card("Heart of the Charge",6,6,5,faction_name,"Gold","charge",0,"Charge.","flame"),
@@ -351,6 +363,7 @@ func build_class_cards(faction_name: String) -> Array:
         card("Dreamward Keeper",4,3,6,"Hope","Silver","guard",0,"Guard.","shield"),
         card("Returned Wanderer",4,4,4,"Hope","Silver","final_draw",2,"Final Breath: Draw 2 cards.","road"),
         card("Promise of Tomorrow",5,4,6,"Hope","Gold","revive",0,"On Play: Recover the most recent allied follower from the Relapse Zone.","star"),
+        card("Second Chances",2,0,0,"Hope","Gold","second_chances",1,"Amulet — stays on the board and has no Attack or Defense. It cannot be attacked or damaged, and can only be removed by effects that specifically target an Amulet. Whenever you recover a card from the Relapse Zone, gain Progress. At 3 Progress, restore 3 Defense and permanently buff an ally; at 6 transform into Renewed Hope.","star"),
         card("Light Beyond Night",5,5,5,"Hope","Gold","heal_all",2,"On Play: Restore 2 defense to your leader and all allies.","star"),
         card("Guardian Angel",6,4,8,"Hope","Gold","guard_protect",0,"Guard. The first allied follower destroyed is saved at 1 defense.","shield"),
         card("Second Chance",4,3,5,"Hope","Legendary","revive_buff",2,"On Play: Recover a follower; it gains +2/+2.","star"),
@@ -386,12 +399,15 @@ func build_class_deck(faction_name: String) -> Array:
     var deck: Array = []
     deck.append_array(class_cards.duplicate(true))
     deck.append_array(universal_cards.duplicate(true))
-    # Add second copies of the first 12 class cards for a smooth starter curve.
-    for i in range(12):
-        deck.append(class_cards[i].duplicate(true))
-    # Replacing Sponsor leaves one open slot. A third copy of the class's
-    # 1-cost Bronze keeps the deck legal, cohesive, and exactly 40 cards.
-    deck.append(class_cards[0].duplicate(true))
+    # Pad with extra copies of the class's own cards (starting with a smooth
+    # low-cost curve) until the deck reaches exactly 40 cards. Computed from
+    # the actual pool size rather than hardcoded so adding or removing class
+    # cards can never leave the deck over- or under-sized.
+    const TARGET_DECK_SIZE := 40
+    var pad_index := 0
+    while deck.size() < TARGET_DECK_SIZE and not class_cards.is_empty():
+        deck.append(class_cards[pad_index % class_cards.size()].duplicate(true))
+        pad_index += 1
     return deck
 
 func build_story_opponent_deck(faction_name: String, stage_id: int) -> Array:
@@ -510,7 +526,6 @@ func build_developer_final_boss_deck() -> Array:
     var deck: Array = []
     _append_named_cards(deck, pool, [
         "The Sponsor", "Walking Free",
-        "Sponsee", "Sponsee", "Sponsee",
         "Newcomer", "Newcomer", "Newcomer",
         "Sponsor's Guidance", "Sponsor's Guidance", "Sponsor's Guidance",
         "Daily Progress", "Daily Progress", "Daily Progress",
@@ -555,9 +570,9 @@ func build_developer_meta_deck(faction_name: String) -> Array:
                 "Rallying Flame", "Rallying Flame", "Rallying Flame",
                 "Heart of the Charge", "Heart of the Charge",
                 "Rise Together", "Rise Together",
-                "First Brave Step", "First Brave Step", "First Brave Step",
+                "Stand Tall", "Stand Tall", "Stand Tall",
                 "Face It Head-On", "Face It Head-On", "Face It Head-On",
-                "No More Running", "No More Running", "No More Running"
+                "Never Quit", "Never Quit", "Never Quit"
             ])
         "Hope":
             _append_named_cards(deck, pool, [
@@ -571,9 +586,9 @@ func build_developer_meta_deck(faction_name: String) -> Array:
                 "Promise of Tomorrow", "Promise of Tomorrow", "Promise of Tomorrow",
                 "Guardian Angel", "Guardian Angel",
                 "Never Forgotten", "Never Forgotten",
-                "Morning Check-In", "Morning Check-In", "Morning Check-In",
-                "Shared Strength", "Shared Strength", "Shared Strength",
-                "Circle of Support", "Circle of Support", "Circle of Support"
+                "Open Horizon", "Open Horizon", "Open Horizon",
+                "Returned Wanderer", "Returned Wanderer", "Returned Wanderer",
+                "Second Chances", "Second Chances", "Second Chances"
             ])
         "Serenity":
             _append_named_cards(deck, pool, [
@@ -589,12 +604,11 @@ func build_developer_meta_deck(faction_name: String) -> Array:
                 "Keeper of Balance", "Keeper of Balance", "Keeper of Balance",
                 "Voice of Reassurance", "Voice of Reassurance",
                 "Sanctuary Elder", "Sanctuary Elder",
-                "Quiet Boundary", "Quiet Boundary", "Quiet Boundary"
+                "Sanctuary of Serenity", "Sanctuary of Serenity", "Sanctuary of Serenity"
             ])
         "Purpose":
             _append_named_cards(deck, pool, [
                 "Walking Free", "The Sponsor", "Strategic Collapse",
-                "Sponsee", "Sponsee", "Sponsee",
                 "Newcomer", "Newcomer", "Newcomer",
                 "First Step", "First Step", "First Step",
                 "Daily Reflection", "Daily Reflection", "Daily Reflection",
@@ -3245,20 +3259,18 @@ func prepare_training_hand() -> void:
         return
     match training_class:
         "Courage":
+            add_training_card_to_hand(_find_card_by_name(build_class_cards("Courage"), "Face It Head-On"))
             add_training_card_to_hand(card("Training Rookie", 1, 2, 3, "Courage", "Training", "none", 0, "A sturdy follower for learning Resolve.", "flame", "jd-132"))
             add_training_card_to_hand(card("Stand Your Ground", 2, 2, 4, "Courage", "Training", "guard", 0, "Protector. Survive combat to build Resolve.", "shield", "jd-133"))
         "Hope":
+            add_training_card_to_hand(_find_card_by_name(build_class_cards("Hope"), "Second Chances"))
             add_training_card_to_hand(card("Guiding Light", 1, 1, 2, "Hope", "Training", "heal_leader", 3, "Arrival: Restore 3 Defense.", "hands", "jd-134"))
             add_training_card_to_hand(card("Recovery Call", 3, 2, 3, "Hope", "Training", "revive", 0, "Arrival: Recover the most recent follower from your Relapse Zone.", "star", "jd-135"))
         "Serenity":
-            var sanctuary := card("Sanctuary of Serenity", 2, 0, 0, "Serenity", "Gold", "sanctuary_serenity", 0, "Permanent Recovery Skill. Healing permanently buffs an allied follower.", "shield", "jd-136")
-            sanctuary["is_amulet"] = true
-            add_training_card_to_hand(sanctuary)
+            add_training_card_to_hand(_find_card_by_name(build_class_cards("Serenity"), "Sanctuary of Serenity"))
             add_training_card_to_hand(card("Quiet Renewal", 2, 2, 3, "Serenity", "Training", "heal_leader", 3, "Arrival: Restore 3 Defense.", "hands", "jd-137"))
         _:
-            var daily := card("Daily Progress", 2, 0, 0, "Purpose", "Gold", "daily_progress", 1, "Permanent Recovery Skill. Spend all PP to gain Progress.", "road")
-            daily["is_amulet"] = true
-            add_training_card_to_hand(daily)
+            add_training_card_to_hand(_find_card_by_name(build_class_cards("Purpose"), "Daily Progress"))
             add_training_card_to_hand(card("Walking Free", 10, 6, 8, "Purpose", "Platinum", "walking_free", 0, "Purpose Platinum. Reward for a completed Progress journey.", "star"))
 
 func second_chance_momentum(card_count: int) -> int:
@@ -3674,6 +3686,100 @@ func trigger_daily_progress_end_turn(player_side: bool) -> void:
         active["display_text"] = "End a turn with 0 PP: Draw a card and give allied followers +1 Attack until your next turn."
         await show_vfx("A LIFE REBUILT", area_center(player_side), Color(1.0, 0.84, 0.34))
 
+func apply_sanctuary_serenity_buff(player_side: bool) -> void:
+    var board: Array = player_board if player_side else enemy_board
+    var has_sanctuary := false
+    for unit in board:
+        if str(unit.get("ability", "")) == "sanctuary_serenity":
+            has_sanctuary = true
+            break
+    if not has_sanctuary:
+        return
+    for ally in board:
+        if bool(ally.get("is_amulet", false)):
+            continue
+        ally["attack"] = int(ally.get("attack", 0)) + 1
+        ally["health"] = int(ally.get("health", 0)) + 1
+        ally["max_health"] = int(ally.get("max_health", ally.get("health", 0))) + 1
+        await show_vfx("SANCTUARY — ALLY +1/+1", area_center(player_side), Color(0.55, 0.9, 1.0))
+        return
+
+func trigger_leader_recovery_progress(player_side: bool, ability: String) -> void:
+    var board: Array = player_board if player_side else enemy_board
+    var active: Dictionary = {}
+    for unit in board:
+        if str(unit.get("ability", "")) == ability:
+            active = unit
+            break
+    if active.is_empty():
+        return
+    var evolved: bool = (player_courage_recovery_evolved if player_side else enemy_courage_recovery_evolved) if ability == "standing_ground" else (player_hope_recovery_evolved if player_side else enemy_hope_recovery_evolved)
+    var milestone_done: bool = (player_courage_recovery_milestone if player_side else enemy_courage_recovery_milestone) if ability == "standing_ground" else (player_hope_recovery_milestone if player_side else enemy_hope_recovery_milestone)
+    if evolved:
+        if ability == "standing_ground":
+            for ally in board:
+                if bool(ally.get("is_amulet", false)): continue
+                ally["attack"] = int(ally.get("attack", 0)) + 1
+                ally["daily_progress_temp_attack"] = int(ally.get("daily_progress_temp_attack", 0)) + 1
+            await show_vfx("UNBREAKABLE RESOLVE — ALLIES +1 ATTACK", area_center(player_side), Color(1.0, 0.42, 0.2))
+        else:
+            if player_side: player_health = mini(STARTING_HEALTH, player_health + 2)
+            else: enemy_health = mini(STARTING_HEALTH, enemy_health + 2)
+            await show_vfx("RENEWED HOPE — RESTORE 2", area_center(player_side), Color(1.0, 0.85, 0.5))
+        return
+    add_progress(player_side, 1)
+    var counters := player_progress_counters if player_side else enemy_progress_counters
+    if counters >= 3 and not milestone_done:
+        if ability == "standing_ground":
+            if player_side: player_courage_recovery_milestone = true
+            else: enemy_courage_recovery_milestone = true
+            for ally in board:
+                if bool(ally.get("is_amulet", false)): continue
+                ally["attack"] = int(ally.get("attack", 0)) + 1
+            await show_vfx("3 PROGRESS — ALLIES +1 ATTACK", area_center(player_side), Color(1.0, 0.55, 0.25))
+        else:
+            if player_side: player_hope_recovery_milestone = true
+            else: enemy_hope_recovery_milestone = true
+            if player_side: player_health = mini(STARTING_HEALTH, player_health + 3)
+            else: enemy_health = mini(STARTING_HEALTH, enemy_health + 3)
+            for ally in board:
+                if bool(ally.get("is_amulet", false)): continue
+                ally["health"] = int(ally.get("health", 0)) + 1
+                ally["max_health"] = int(ally.get("max_health", ally.get("health", 0))) + 1
+                break
+            await show_vfx("3 PROGRESS — RESTORE 3 + ALLY +1/+1", area_center(player_side), Color(1.0, 0.85, 0.62))
+    if counters >= 6:
+        if ability == "standing_ground":
+            if player_side: player_courage_recovery_evolved = true
+            else: enemy_courage_recovery_evolved = true
+            active["name"] = "Unbreakable Resolve"
+            active["display_text"] = "Amulet — Whenever you attack the enemy leader directly, give all allies +1 Attack until your next turn."
+            await show_vfx("UNBREAKABLE RESOLVE", area_center(player_side), Color(1.0, 0.42, 0.2))
+        else:
+            if player_side: player_hope_recovery_evolved = true
+            else: enemy_hope_recovery_evolved = true
+            active["name"] = "Renewed Hope"
+            active["display_text"] = "Amulet — Whenever you recover a card from the Relapse Zone, restore 2 Defense."
+            await show_vfx("RENEWED HOPE", area_center(player_side), Color(1.0, 0.85, 0.5))
+
+func trigger_calm_heal(player_side: bool) -> void:
+    var attacked := player_attacked_this_turn if player_side else enemy_attacked_this_turn
+    if attacked:
+        return
+    var board: Array = player_board if player_side else enemy_board
+    var active: Dictionary = {}
+    for unit in board:
+        if str(unit.get("ability", "")) == "calm_heal":
+            active = unit
+            break
+    if active.is_empty():
+        return
+    var amount := maxi(1, int(active.get("amount", 1)))
+    if player_side: player_health = mini(STARTING_HEALTH, player_health + amount)
+    else: enemy_health = mini(STARTING_HEALTH, enemy_health + amount)
+    await apply_sanctuary_serenity_buff(player_side)
+    await show_vfx("CALM — RESTORE %d" % amount, area_center(player_side), Color(0.4, 1.0, 0.7))
+
 func sponsor_end_turn(player_side: bool) -> void:
     var board: Array = player_board if player_side else enemy_board
     if sponsor_in_play(board) and follower_count(board) < MAX_BOARD:
@@ -3682,6 +3788,8 @@ func sponsor_end_turn(player_side: bool) -> void:
 func end_player_turn() -> void:
     if game_over or busy: return
     training_on_end_turn()
+    await trigger_calm_heal(true)
+    player_attacked_this_turn = false
     await trigger_daily_progress_end_turn(true)
     await sponsor_end_turn(true)
     player_turn_active = false
@@ -3793,6 +3901,8 @@ func enemy_turn() -> void:
         await animate_enemy_attack(enemy_board.find(attacker), target_index)
         if game_over: return
         await get_tree().create_timer(0.22).timeout
+    await trigger_calm_heal(false)
+    enemy_attacked_this_turn = false
     await trigger_daily_progress_end_turn(false)
     await sponsor_end_turn(false)
     start_player_turn()
@@ -4187,6 +4297,8 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
             enemy_health = min(STARTING_HEALTH, enemy_health + 5)
         unit["serenity_save_active"] = true
         await show_vfx("INNER PEACE — RESTORE 5", area_center(player_side), Color(0.55, 0.9, 1.0))
+    if ability in ["heal_leader", "heal_draw", "guard_heal", "heal_buff", "heal_all", "hope_platinum", "serenity_platinum", "board_clear_heal"]:
+        await apply_sanctuary_serenity_buff(player_side)
     if player_side and ability in ["heal_leader", "heal_draw", "guard_heal", "heal_buff", "heal_all", "hope_platinum", "serenity_platinum", "board_clear_heal"]:
         training_on_heal(maxi(1, amount))
     refresh_ui()
@@ -4284,6 +4396,7 @@ func recover_from_relapse(player_side: bool, mode: String, amount: int) -> void:
         if mode == "revive_buff":
             recovered["attack"] = int(recovered["attack"]) + amount; recovered["health"] = int(recovered["health"]) + amount; recovered["max_health"] = int(recovered["max_health"]) + amount
         board.append(recovered)
+    await trigger_leader_recovery_progress(player_side, "second_chances")
     await show_vfx("RECOVERY", area_center(player_side), Color(1.0, 0.78, 0.35))
 
 func clear_battlefield_except(source: Dictionary, source_player_side: bool) -> void:
@@ -4390,11 +4503,14 @@ func resolve_combat(attacker_index: int, target_index: int, player_side: bool) -
     var defend_board := enemy_board if player_side else player_board
     if attacker_index < 0 or attacker_index >= attack_board.size(): return
     var attacker: Dictionary = attack_board[attacker_index]; attacker["can_attack"] = false
+    if player_side: player_attacked_this_turn = true
+    else: enemy_attacked_this_turn = true
     if target_index < 0:
         if player_side: enemy_health -= int(attacker["attack"])
         else: player_health -= int(attacker["attack"])
         leader_feedback(enemy_leader if player_side else player_leader, int(attacker["attack"]), false)
         play_battle_bark(player_leader if player_side else enemy_leader, selected_class if player_side else enemy_class, "attack", player_side)
+        await trigger_leader_recovery_progress(player_side, "standing_ground")
         await show_vfx("-%d" % attacker["attack"], enemy_leader.global_position if player_side else player_leader.global_position, Color(1.0, 0.25, 0.2))
         if player_side and training_mode:
             training_attacked_this_turn = true
