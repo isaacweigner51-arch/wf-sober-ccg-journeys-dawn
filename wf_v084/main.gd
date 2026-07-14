@@ -4482,7 +4482,10 @@ func award_pending_challenge() -> void:
     var story_stage := int(cfg.get_value("challenge", "story_stage", 0))
     if story_stage > 0:
         cfg.set_value("story", "cleared_%d" % story_stage, true)
-        cfg.set_value("story", "unlocked_stage", min(5, story_stage + 1))
+        # 20 total story stages across 4 chapters (5 stages each) — keep in
+        # sync with STORY_STAGES in menu.gd. Capped so unlocked_stage never
+        # points past the final stage once the whole arc is cleared.
+        cfg.set_value("story", "unlocked_stage", min(20, story_stage + 1))
     cfg.set_value("challenge", "pending_reward", 0)
     cfg.set_value("challenge", "pending_packs", 0)
     cfg.set_value("challenge", "story_stage", 0)

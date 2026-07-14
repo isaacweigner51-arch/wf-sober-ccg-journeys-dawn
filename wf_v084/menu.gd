@@ -18,31 +18,117 @@ const DAILY_REWARDS := [
     {"packs":4, "vials":300}
 ]
 
+const CHAPTER_META := [
+    {"title":"Hitting Bottom", "subtitle":"Every victory moves the journey forward."},
+    {"title":"Building Structure", "subtitle":"Routine and responsibility, one day at a time."},
+    {"title":"Repairing What Broke", "subtitle":"The relationships worth fighting for."},
+    {"title":"A Life Worth Living", "subtitle":"From surviving to building something that lasts."}
+]
+
 const STORY_STAGES := [
+    # --- Chapter 1: Hitting Bottom — admitting the problem and staying upright ---
     {
-        "id":1, "name":"The First Step", "class":"Hope", "gold":0, "packs":1,
+        "id":1, "chapter":1, "name":"The First Step", "class":"Hope", "gold":0, "packs":1,
         "subtitle":"Learn to stay in the fight.",
         "story":"The hardest battle is the one where you finally admit you need to fight at all. Today isn't about winning — it's about showing up and staying in the fight one more round than you thought you could."
     },
     {
-        "id":2, "name":"Finding Strength", "class":"Courage", "gold":150, "packs":0,
+        "id":2, "chapter":1, "name":"Finding Strength", "class":"Courage", "gold":150, "packs":0,
         "subtitle":"Face pressure without backing down.",
         "story":"An old trigger finds you when you least expect it. You don't have to be fearless to face it — you just have to be willing to stand your ground long enough to remember you can."
     },
     {
-        "id":3, "name":"Quieting the Noise", "class":"Serenity", "gold":0, "packs":1,
+        "id":3, "chapter":1, "name":"Quieting the Noise", "class":"Serenity", "gold":0, "packs":1,
         "subtitle":"Patience can control the battlefield.",
         "story":"The cravings are loud tonight, but loud isn't the same as strong. You've learned to sit with the noise instead of running from it — and in that stillness, you find you're steadier than it is."
     },
     {
-        "id":4, "name":"A Reason to Continue", "class":"Purpose", "gold":250, "packs":0,
+        "id":4, "chapter":1, "name":"A Reason to Continue", "class":"Purpose", "gold":250, "packs":0,
         "subtitle":"Build toward something greater.",
         "story":"Somewhere along the way, recovery stopped being about what you were running from and became about what you're building toward. Today you fight for that reason, not away from the old one."
     },
     {
-        "id":5, "name":"Community Test", "class":"Courage", "gold":300, "packs":2,
+        "id":5, "chapter":1, "name":"Community Test", "class":"Courage", "gold":300, "packs":2,
         "subtitle":"Use everything you have learned.",
         "story":"You're not walking this road alone anymore — and now it's your turn to prove that everything you've learned holds up when someone else is counting on you. Everything you've built comes together here."
+    },
+    # --- Chapter 2: Building Structure — routine, work, and the first real test of it ---
+    {
+        "id":6, "chapter":2, "name":"The Job Interview", "class":"Hope", "gold":200, "packs":0,
+        "subtitle":"Prove you're ready for a second chance.",
+        "story":"Nobody in that waiting room can see the road that got you here. You're not asking them to forget it — you're asking them to bet on who you're becoming. Walk in like you already believe it."
+    },
+    {
+        "id":7, "chapter":2, "name":"First Paycheck", "class":"Courage", "gold":0, "packs":1,
+        "subtitle":"Old habits look different with money in your pocket.",
+        "story":"There's a version of tonight where this money disappears by morning, same as it always did. Instead you're doing the boring, unglamorous thing — rent, groceries, savings — and it feels more like victory than anything ever did."
+    },
+    {
+        "id":8, "chapter":2, "name":"The Apartment", "class":"Serenity", "gold":220, "packs":0,
+        "subtitle":"A door of your own to lock behind you.",
+        "story":"It's small, and the faucet drips, and none of that matters. For the first time in longer than you can admit, you have a space that's just yours — quiet enough to hear yourself think, and steady enough to build on."
+    },
+    {
+        "id":9, "chapter":2, "name":"Showing Up Sober", "class":"Purpose", "gold":270, "packs":0,
+        "subtitle":"Consistency becomes your new reputation.",
+        "story":"Ninety days of just... showing up. On time, clear-headed, doing the work. Your boss stopped watching you like you might disappear. Reliability isn't glamorous, but it's rewriting what people expect from you."
+    },
+    {
+        "id":10, "chapter":2, "name":"The Old Crew", "class":"Courage", "gold":350, "packs":2,
+        "subtitle":"Some doors need to stay closed for good.",
+        "story":"They wave you over like no time has passed at all. Once, that pull would have owned you. Tonight you keep walking — not out of fear, but because you finally know exactly what you'd be trading away."
+    },
+    # --- Chapter 3: Repairing What Broke — the relationships worth rebuilding ---
+    {
+        "id":11, "chapter":3, "name":"The First Call Home", "class":"Hope", "gold":300, "packs":0,
+        "subtitle":"Some bridges take more than one phone call to rebuild.",
+        "story":"Your hand hovers over their name for a full minute before you finally press call. The conversation is short, careful, and a little awkward — and it's also the first real thread back to a family you thought you'd burned for good."
+    },
+    {
+        "id":12, "chapter":3, "name":"Sitting With the Guilt", "class":"Serenity", "gold":0, "packs":1,
+        "subtitle":"You can't outrun what you have to make right.",
+        "story":"The guilt shows up uninvited, the way it always does at 2 a.m. You don't drown it out this time. You sit with it, let it say its piece, and remind yourself that feeling it is proof you've changed, not evidence you haven't."
+    },
+    {
+        "id":13, "chapter":3, "name":"Making Amends", "class":"Purpose", "gold":320, "packs":0,
+        "subtitle":"An apology only means something if it comes with change.",
+        "story":"You don't ask them to forgive you — that's not yours to demand. You just say the true thing, own every part of it, and show up differently starting today. Whatever they do with it next is theirs to decide."
+    },
+    {
+        "id":14, "chapter":3, "name":"Earning Back Trust", "class":"Courage", "gold":380, "packs":0,
+        "subtitle":"Trust rebuilds slow, one kept promise at a time.",
+        "story":"They still flinch a little when you say 'I promise.' Fair enough — you taught them to. So you keep the small ones: the phone call you said you'd make, the ride you said you'd give. Trust doesn't return in one gesture. It returns in a hundred kept ones."
+    },
+    {
+        "id":15, "chapter":3, "name":"Family Dinner", "class":"Purpose", "gold":450, "packs":3,
+        "subtitle":"The whole table, together, for the first time in years.",
+        "story":"Nobody says it out loud, but everyone at this table knows what it took to get here. No blowups, no old arguments dragged back out — just plates passed around and easy laughter, like the family you always wanted to give them back."
+    },
+    # --- Chapter 4: A Life Worth Living — from surviving to building something that lasts ---
+    {
+        "id":16, "chapter":4, "name":"One Year Coin", "class":"Hope", "gold":400, "packs":0,
+        "subtitle":"A year ago you couldn't picture this day.",
+        "story":"They put the coin in your hand and the room claps, and for a second you're back at day one, certain you'd never make it this far. You did. Not perfectly, not painlessly — but you did. Today you fight for year two."
+    },
+    {
+        "id":17, "chapter":4, "name":"The Promotion", "class":"Purpose", "gold":0, "packs":1,
+        "subtitle":"They didn't hire the person you used to be.",
+        "story":"Your boss slides the offer letter across the desk like it's no big deal, but it is — this is trust you built one shift at a time, not luck. They're not betting on the story you used to tell about yourself. They're betting on this one."
+    },
+    {
+        "id":18, "chapter":4, "name":"A Place to Grow", "class":"Serenity", "gold":420, "packs":0,
+        "subtitle":"Roots, finally, instead of just a roof.",
+        "story":"The keys feel heavier than they should for something so small. This isn't just a home — it's the first place you've ever planted something and expected to still be there to see it grow."
+    },
+    {
+        "id":19, "chapter":4, "name":"Becoming a Sponsor", "class":"Courage", "gold":480, "packs":0,
+        "subtitle":"The hand that once pulled you up is now yours to offer.",
+        "story":"They're exactly where you were — scared, sure they're the exception nothing can save. You remember every word someone once said to steady you, and now you're the one saying it, one first step at a time."
+    },
+    {
+        "id":20, "chapter":4, "name":"Journey's Dawn", "class":"Purpose", "gold":600, "packs":3,
+        "subtitle":"The story doesn't end here — it just keeps being written.",
+        "story":"Nothing, to a job, to a home, to people who trust you again, to being someone else's reason to keep going. This isn't the end of the road. It's proof the road was always worth walking, one day at a time."
     }
 ]
 
@@ -443,7 +529,7 @@ func show_home() -> void:
     nav_group.call("PLAY")
     nav_button.call("BATTLE", start_battle, true)
     nav_button.call("DECK BUILDER", show_deck_builder, false)
-    nav_button.call("STORY MODE", show_story_mode, false)
+    nav_button.call("STORY MODE", show_story_chapters, false)
     nav_button.call("ONLINE VS", show_online_vs_setup, false)
     nav_group.call("PROGRESS")
     nav_button.call("COLLECTION", show_collection, false)
@@ -1807,12 +1893,23 @@ func class_leader_texture(class_name_value: String) -> Texture2D:
     # figures lost in a big scene; cropped to the top ~60% and displayed with
     # a "cover" stretch, they read as a proper bust-style leader portrait in
     # every frame in the app, the same way regardless of that frame's shape.
+    #
+    # The source art also has its own thin painted picture-frame border baked
+    # into every edge. Cropping straight to the top 60% keeps the side/top
+    # borders but drops the bottom one, leaving a border that doesn't close —
+    # a stray straight-edged line sitting inside the app's own rounded card
+    # frame. Insetting past that painted border on all sides first removes it
+    # entirely, so every leader card shows clean art with a single frame
+    # (the app's own), not a broken one layered inside another.
     var base := load("res://assets/leaders/%s.png" % class_name_value.to_lower())
     if base == null:
         return null
+    var margin: float = base.get_width() * 0.045
+    var inset_w: float = base.get_width() - margin * 2.0
+    var inset_h: float = base.get_height() - margin * 2.0
     var atlas := AtlasTexture.new()
     atlas.atlas = base
-    atlas.region = Rect2(0, 0, base.get_width(), base.get_height() * 0.6)
+    atlas.region = Rect2(margin, margin, inset_w, inset_h * 0.6)
     return atlas
 
 func class_description(c: String) -> String:
@@ -1897,12 +1994,96 @@ func build_starter_deck(c: String) -> void:
     if saved_deck.size() != 40:
         push_error("Starter deck %s has %d cards instead of 40." % [c, saved_deck.size()])
 
-func show_story_mode() -> void:
-    clear_screen(); add_background(0.66)
-    header("STORY MODE — CHAPTER 1", "Every victory moves the journey forward")
+func stages_for_chapter(chapter: int) -> Array:
+    var out: Array = []
+    for stage in STORY_STAGES:
+        if int(stage.get("chapter", 1)) == chapter:
+            out.append(stage)
+    return out
+
+func chapter_count() -> int:
+    return CHAPTER_META.size()
+
+func show_story_chapters() -> void:
+    # The overview screen that sits above the per-chapter roads: the whole
+    # newcomer arc — nothing to a life rebuilt — read as four distinct acts
+    # instead of one long, undifferentiated string of battle cards.
+    clear_screen(); add_background(0.62)
+    header("STORY MODE", "One day at a time — four chapters of the same journey")
     currency_bar()
     var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
     var unlocked := int(cfg.get_value("story", "unlocked_stage", 1))
+
+    for i in range(CHAPTER_META.size()):
+        var meta: Dictionary = CHAPTER_META[i]
+        var chapter_num := i + 1
+        var stages := stages_for_chapter(chapter_num)
+        var first_id := int(stages[0]["id"])
+        var last_id := int(stages[stages.size() - 1]["id"])
+        var cleared_count := 0
+        for stage in stages:
+            if bool(cfg.get_value("story", "cleared_%d" % int(stage["id"]), false)):
+                cleared_count += 1
+        var available := first_id <= unlocked
+        var complete := cleared_count == stages.size()
+
+        var pos := Vector2(60 + i * 300, 190)
+        var size_value := Vector2(270, 420)
+        var panel := Panel.new(); panel.position = pos; panel.size = size_value
+        panel.add_theme_stylebox_override("panel", style(class_color(str(stages[0]["class"])) if available else Color(0.18, 0.20, 0.24), 18))
+        root_layer.add_child(panel)
+
+        var badge_text := "COMPLETE" if complete else ("IN PROGRESS" if available else "LOCKED")
+        var badge_color := GOLD_COLOR if complete else (Color(0.82, 0.92, 1.0) if available else Color(0.55, 0.57, 0.62))
+        var badge := label("CHAPTER %d — %s" % [chapter_num, badge_text], Vector2(16, 20), Vector2(238, 22), 13, panel)
+        badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        badge.add_theme_color_override("font_color", badge_color)
+
+        var title_label := label(str(meta["title"]), Vector2(14, 50), Vector2(242, 60), 24, panel)
+        title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+        var sub_label := label(str(meta["subtitle"]), Vector2(20, 116), Vector2(230, 60), 14, panel)
+        sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        sub_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        sub_label.add_theme_color_override("font_color", Color(0.78, 0.84, 0.92))
+
+        # A small progress bar instead of just text, so completion reads at a
+        # glance before the player even opens the chapter.
+        var bar_bg := ColorRect.new()
+        bar_bg.color = Color(0.15, 0.16, 0.19)
+        bar_bg.position = Vector2(24, 200)
+        bar_bg.size = Vector2(222, 10)
+        panel.add_child(bar_bg)
+        var bar_fill := ColorRect.new()
+        bar_fill.color = GOLD_COLOR if available else Color(0.35, 0.37, 0.42)
+        var fill_ratio := float(cleared_count) / float(stages.size())
+        bar_fill.size = Vector2(222 * fill_ratio, 10)
+        bar_fill.position = Vector2(24, 200)
+        panel.add_child(bar_fill)
+        var progress_label := label("%d / %d STAGES CLEARED" % [cleared_count, stages.size()], Vector2(16, 218), Vector2(238, 22), 12, panel)
+        progress_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        progress_label.add_theme_color_override("font_color", Color(0.7, 0.72, 0.78))
+
+        if not available:
+            var lock_notice := label("🔒\nFINISH THE PREVIOUS CHAPTER", Vector2(20, 260), Vector2(230, 60), 13, panel)
+            lock_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            lock_notice.add_theme_color_override("font_color", Color(0.6, 0.62, 0.68))
+
+        var chapter_num_value := chapter_num
+        var enter := button("REVISIT" if complete else ("CONTINUE" if available else "LOCKED"), Vector2(35, 350), Vector2(200, 48), func(): show_story_mode(chapter_num_value), panel)
+        enter.disabled = not available
+
+    button("HOME", Vector2(40, 645), Vector2(180, 48), show_home)
+
+func show_story_mode(chapter: int = 1) -> void:
+    clear_screen(); add_background(0.66)
+    var meta: Dictionary = CHAPTER_META[chapter - 1]
+    header("STORY MODE — CHAPTER %d: %s" % [chapter, str(meta["title"]).to_upper()], str(meta["subtitle"]))
+    currency_bar()
+    var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
+    var unlocked := int(cfg.get_value("story", "unlocked_stage", 1))
+    var chapter_stages := stages_for_chapter(chapter)
 
     # A connecting road behind the stage cards so the chapter reads as one
     # continuous journey instead of five disconnected panels — cleared and
@@ -1912,8 +2093,8 @@ func show_story_mode() -> void:
     road.position = Vector2(95, 218)
     road.size = Vector2(1090, 4)
     root_layer.add_child(road)
-    for i in range(STORY_STAGES.size() - 1):
-        var stage_id := int(STORY_STAGES[i]["id"])
+    for i in range(chapter_stages.size() - 1):
+        var stage_id := int(chapter_stages[i]["id"])
         var lit := stage_id < unlocked or bool(cfg.get_value("story", "cleared_%d" % stage_id, false))
         var seg := ColorRect.new()
         seg.color = GOLD_COLOR if lit else Color(0.35, 0.37, 0.42, 0.4)
@@ -1921,8 +2102,8 @@ func show_story_mode() -> void:
         seg.size = Vector2(224, 8)
         root_layer.add_child(seg)
 
-    for i in range(STORY_STAGES.size()):
-        var stage: Dictionary = STORY_STAGES[i]
+    for i in range(chapter_stages.size()):
+        var stage: Dictionary = chapter_stages[i]
         var stage_id := int(stage["id"])
         var cleared := bool(cfg.get_value("story", "cleared_%d" % stage_id, false))
         var available := stage_id <= unlocked
@@ -1996,6 +2177,7 @@ func show_story_mode() -> void:
     footer.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
     root_layer.add_child(footer)
     button("HOME", Vector2(40, 645), Vector2(180, 48), show_home)
+    button("ALL CHAPTERS", Vector2(230, 645), Vector2(180, 48), show_story_chapters)
     button("REPLAY TRAINING", Vector2(1060, 645), Vector2(180, 48), show_first_day_intro)
 
 func show_story_stage_intro(stage: Dictionary) -> void:
@@ -2031,7 +2213,7 @@ func show_story_stage_intro(stage: Dictionary) -> void:
     rw.add_theme_color_override("font_color", GOLD_COLOR)
 
     button("BEGIN BATTLE", Vector2(490, 335), Vector2(280, 56), func(): begin_story_stage(stage), panel)
-    button("BACK", Vector2(40, 335), Vector2(140, 56), show_story_mode, panel)
+    button("BACK", Vector2(40, 335), Vector2(140, 56), func(): show_story_mode(int(stage.get("chapter", 1))), panel)
 
 func begin_story_stage(stage: Dictionary) -> void:
     var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
