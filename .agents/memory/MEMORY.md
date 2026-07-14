@@ -12,3 +12,4 @@
 - [Godot assets missing .import sidecar files](godot-unimported-assets.md) — headless script checks never trigger asset import; un-imported assets pass local checks but fall back to placeholders on real exports.
 - [wf-sober-ccg version bulletin workflow](wf-sober-ccg-version-bulletin.md) — user wants every change bumped into data/version_manifest.json's What's New bulletin proactively, not just on request.
 - [add_child crashes surviving scene/node teardown](godot-add-child-after-scene-free.md) — fixing one crash site isn't enough; guard every add_child-after-await with a safe_add_child helper.
+- [Two-button handoff closure soft-locks](wf-sober-ccg-closure-two-button-handoff.md) — a button's callback referencing itself or a sibling button variable directly captures null forever; box both in a shared Dictionary instead.
