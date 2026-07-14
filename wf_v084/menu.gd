@@ -7,6 +7,27 @@ const APP_VERSION := "0.5.7"
 const BUILD_NAME := "v0.8.4 • AUDIO & CARD ART RECOVERY"
 const CLASSES := ["Hope", "Courage", "Serenity", "Purpose"]
 const RARITIES := ["Bronze", "Silver", "Gold", "Epic", "Legendary", "Signature Platinum"]
+# Total interactive Academy tutorial lessons. Kept as one const instead of a
+# scattered literal "8" so lesson_titles/mentors/tracker/step-count all stay
+# in sync when a lesson is added or removed.
+const ACADEMY_LESSON_COUNT := 11
+# Each leader's real Signature Platinum "special card" -- the closest true
+# analog to a leader-defining card in this game's data, used by the Academy's
+# leader-showcase lesson. Purpose additionally has the game's only real
+# Amulet-type card (Daily Progress, JD-054), taught separately.
+const LEADER_SIGNATURE_CARD_IDS := {"Hope": "JD-015", "Courage": "JD-030", "Serenity": "JD-045", "Purpose": "JD-060"}
+# One representative card per keyword mechanic, for the Academy's card-effects
+# lesson. Picked for having the cleanest, least-cluttered effect text so the
+# keyword's meaning reads clearly on its own.
+const KEYWORD_EXAMPLE_CARDS := [
+    {"keyword": "Arrival", "id": "JD-046", "meaning": "Triggers the moment this card enters play."},
+    {"keyword": "Legacy", "id": "JD-086", "meaning": "Triggers when this card is destroyed or sent to the Relapse Zone."},
+    {"keyword": "Protector", "id": "JD-083", "meaning": "Enemies must attack this follower before they can attack anything else."},
+    {"keyword": "Determination", "id": "JD-089", "meaning": "Rewards this follower for surviving combat."},
+    {"keyword": "Breakthrough", "id": "JD-090", "meaning": "Excess combat damage carries through to the enemy leader."},
+    {"keyword": "Calm", "id": "JD-032", "meaning": "Rewards you for holding back and not attacking last turn."},
+    {"keyword": "Inspire", "id": "JD-082", "meaning": "Triggers whenever another allied follower enters play."},
+]
 const COPY_LIMITS := {"Bronze":3, "Silver":3, "Gold":3, "Epic":3, "Legendary":2, "Platinum":1, "Signature Gold":1, "Signature Platinum":1}
 const DUST_VALUES := {"Bronze":10, "Silver":40, "Gold":150, "Epic":275, "Legendary":600, "Platinum":1500, "Signature Platinum":1500}
 const CRAFT_COSTS := {"Bronze":50, "Silver":150, "Gold":500, "Epic":900, "Legendary":2000, "Platinum":4500, "Signature Platinum":4500}
@@ -1506,11 +1527,11 @@ func academy_feedback_text(text_value: String, positive := true) -> void:
 func show_academy_lesson() -> void:
     clear_screen(); add_background(0.68)
     academy_action_stage = 0
-    var lesson_titles := ["PROVING YOURSELF", "THE BATTLEFIELD", "PLAY A FOLLOWER", "COMBAT", "SPELLS & AMULETS", "RECOVERY & REVIVE", "SPONSOR & SPONSEE", "BUILDING YOUR DECK"]
-    var mentors := ["Purpose Champion", "Hope Mentor", "Courage Veteran", "Courage Veteran", "Serenity Guardian", "Hope Mentor", "Purpose Champion", "Recovery Academy Dean"]
+    var lesson_titles := ["PROVING YOURSELF", "THE BATTLEFIELD", "PLAY A FOLLOWER", "COMBAT", "END YOUR TURN", "SPELLS & AMULETS", "LEADER SIGNATURE CARDS", "CARD EFFECTS & KEYWORDS", "RECOVERY & REVIVE", "SPONSOR & SPONSEE", "BUILDING YOUR DECK"]
+    var mentors := ["Purpose Champion", "Hope Mentor", "Courage Veteran", "Courage Veteran", "Courage Veteran", "Serenity Guardian", "Recovery Academy Dean", "Purpose Champion", "Hope Mentor", "Purpose Champion", "Recovery Academy Dean"]
     var lesson_class: String = CLASSES[academy_step % CLASSES.size()]
     var accent := class_color(lesson_class)
-    header(lesson_titles[academy_step], "Lesson %d of 8 • %s" % [academy_step + 1, mentors[academy_step]])
+    header(lesson_titles[academy_step], "Lesson %d of %d • %s" % [academy_step + 1, ACADEMY_LESSON_COUNT, mentors[academy_step]])
 
     # Mentor portrait chip layered onto the header, so each lesson has a face
     # attached to its voice instead of just a name in small text — the header
@@ -1538,9 +1559,10 @@ func show_academy_lesson() -> void:
     tracker.size = Vector2(1090, 14)
     tracker.add_theme_constant_override("separation", 8)
     root_layer.add_child(tracker)
-    for i in range(8):
+    var seg_w: float = (1090.0 - float(ACADEMY_LESSON_COUNT - 1) * 8.0) / float(ACADEMY_LESSON_COUNT)
+    for i in range(ACADEMY_LESSON_COUNT):
         var segment := ColorRect.new()
-        segment.custom_minimum_size = Vector2(125, 8)
+        segment.custom_minimum_size = Vector2(seg_w, 8)
         segment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         if i < academy_step:
             segment.color = accent
@@ -1596,19 +1618,37 @@ func show_academy_lesson() -> void:
             instruction.text = "Attack an enemy follower, then finish by striking the enemy leader."
             build_combat_lesson(board)
         4:
-            instruction.text = "Cast a spell for an immediate effect, then play an Amulet for ongoing value."
-            build_spell_amulet_lesson(board)
+            instruction.text = "End your turn and see exactly what changes for both players."
+            build_end_turn_lesson(board)
         5:
+            instruction.text = "Cast a spell for an immediate effect, then play Purpose's real Amulet for ongoing value."
+            build_spell_amulet_lesson(board)
+        6:
+            instruction.text = "Reveal each leader's signature card — the one card that defines their whole strategy."
+            build_signature_lesson(board)
+        7:
+            instruction.text = "Reveal each keyword to learn what it does, using a real card as the example."
+            build_keyword_lesson(board)
+        8:
             instruction.text = "Move a follower to the Relapse Zone, recover it, then see how overdraw is Revived."
             build_recovery_lesson(board)
-        6:
+        9:
             instruction.text = "Play Sponsor, choose a Sponsee, and trigger the protective bond."
             build_sponsor_lesson(board)
-        7:
+        10:
             instruction.text = "Learn the rules for building a legal deck before you head to the Deck Builder."
             build_deck_building_lesson(board)
 
 func build_second_chance_lesson(board: Control) -> void:
+    # Explicit up-front reference for the discard-count -> Momentum scaling,
+    # instead of only revealing it reactively after each click -- the whole
+    # point of "how it works" is knowing the cost before you commit to it.
+    var scale_note := centered_label(
+        "Second Chance lets you throw away as many cards as you want and draw new ones — but every card you discard hands your opponent Momentum:\n0-1 discarded → 0 Momentum      2-3 discarded → 1 Momentum      4+ discarded → 2 Momentum",
+        Vector2(50, 15), Vector2(990, 62), 15, board)
+    scale_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    scale_note.add_theme_color_override("font_color", Color(0.90, 0.85, 0.65))
+
     var selected: Array[int] = []
     var card_buttons: Array[Button] = []
     var controls := {"confirm": null, "momentum": null}
@@ -1684,7 +1724,7 @@ func lesson_complete() -> void:
     academy_step += 1
     academy_action_stage = 0
     save_profile()
-    if academy_step >= 8:
+    if academy_step >= ACADEMY_LESSON_COUNT:
         show_academy_graduation()
     else:
         show_academy_lesson()
@@ -1762,32 +1802,221 @@ func build_combat_lesson(board: Control) -> void:
     , board)
     centered_label("1. Click ENEMY GUARD   2. Click ENEMY LEADER", Vector2(260,405), Vector2(570,38), 18, board)
 
+func build_end_turn_lesson(board: Control) -> void:
+    # A real two-phase simulation of the End Turn button instead of a wall of
+    # rules text: clicking it shows the opponent's turn happening, then your
+    # next turn actually reflects the PP-cap increase, the draw, and
+    # followers readying -- the same three things start_player_turn() does
+    # for real in main.gd.
+    var status := centered_label(
+        "YOUR TURN 2\nPlay Points: 1 / 3 remaining\nHand: 4 cards\nYour follower: TAPPED (already attacked)",
+        Vector2(60, 130), Vector2(500, 110), 18, board)
+    status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+    var upkeep_note := centered_label(
+        "Anything with an end-of-turn effect (a Sponsor, or an Amulet like Daily Progress) also resolves the moment you end your turn.",
+        Vector2(610, 130), Vector2(430, 90), 14, board)
+    upkeep_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    upkeep_note.add_theme_color_override("font_color", Color(0.80,0.88,1.0))
+
+    var end_turn_btn: Button
+    var continue_btn: Button
+    end_turn_btn = button("END TURN", Vector2(430, 260), Vector2(230, 62), func():
+        if academy_action_stage != 0: return
+        academy_action_stage = 1
+        if is_instance_valid(end_turn_btn):
+            end_turn_btn.disabled = true
+            end_turn_btn.text = "ENDING TURN..."
+        safe_set_text(status, "YOUR TURN 2 — ENDED\nOpponent's turn is happening now...")
+        academy_feedback_text("Your turn is over. The opponent now plays their turn before control returns to you.")
+        await get_tree().create_timer(1.0).timeout
+        safe_set_text(status,
+            "YOUR TURN 3\nPlay Points: 4 / 4 (max PP went up!)\nHand: 5 cards (you drew 1)\nYour follower: READY — can attack again")
+        academy_feedback_text("Every End Turn: your max PP rises (until it caps), you draw a card, and all your followers ready. Click CONTINUE.")
+        if is_instance_valid(end_turn_btn):
+            end_turn_btn.visible = false
+        if is_instance_valid(continue_btn):
+            continue_btn.visible = true
+    , board)
+
+    continue_btn = button("CONTINUE", Vector2(430, 260), Vector2(230, 62), func():
+        if academy_action_stage != 1: return
+        lesson_complete()
+    , board)
+    continue_btn.visible = false
+
+func build_signature_lesson(board: Control) -> void:
+    # Every leader's Signature Platinum card is the closest thing this game
+    # has to a "leader's special card" -- an evolve-for-free finisher that
+    # defines their whole strategy. Purpose's true Amulet is taught
+    # separately (Spells & Amulets lesson) since it's a different card type.
+    var revealed: Dictionary = {}
+    var controls := {"confirm": null}
+    for i in range(CLASSES.size()):
+        var c: String = CLASSES[i]
+        var cd := card_by_id(str(LEADER_SIGNATURE_CARD_IDS.get(c, "")))
+        if cd.is_empty():
+            continue
+        var wrap := VBoxContainer.new()
+        wrap.position = Vector2(35 + i * 260, 20)
+        wrap.custom_minimum_size = Vector2(240, 430)
+        wrap.add_theme_constant_override("separation", 6)
+        board.add_child(wrap)
+        var title := centered_label(c.to_upper(), Vector2(0,0), Vector2(240,26), 16, wrap)
+        title.add_theme_color_override("font_color", class_color(c))
+        var cp := card_panel(cd, Vector2.ZERO, Vector2(200, 280), false)
+        var cp_holder := CenterContainer.new(); cp_holder.custom_minimum_size = Vector2(240, 280)
+        wrap.add_child(cp_holder); cp_holder.add_child(cp)
+        var hint := centered_label("Tap to reveal", Vector2(0,0), Vector2(240,24), 12, wrap)
+        hint.add_theme_color_override("font_color", Color(0.75,0.80,0.90))
+
+        var tap_catcher := Button.new()
+        tap_catcher.flat = true
+        tap_catcher.focus_mode = Control.FOCUS_NONE
+        tap_catcher.position = Vector2.ZERO
+        tap_catcher.size = Vector2(200, 280)
+        tap_catcher.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        cp.add_child(tap_catcher)
+        tap_catcher.pressed.connect(func():
+            show_card_preview(cd)
+            if revealed.has(c):
+                return
+            revealed[c] = true
+            safe_set_text(hint, "Revealed ✓")
+            academy_feedback_text("%d of 4 signature cards revealed." % revealed.size())
+            var confirm_button = controls.get("confirm")
+            if revealed.size() == CLASSES.size() and is_instance_valid(confirm_button):
+                confirm_button.disabled = false
+        )
+
+    var continue_button := button("CONTINUE", Vector2(455, 505), Vector2(200, 50), func():
+        var confirm_button = controls.get("confirm")
+        if is_instance_valid(confirm_button) and confirm_button.disabled: return
+        lesson_complete()
+    , board)
+    continue_button.disabled = true
+    controls["confirm"] = continue_button
+
+func build_keyword_lesson(board: Control) -> void:
+    # A real card teaches each keyword instead of a glossary -- tapping opens
+    # the same show_card_preview popup used everywhere else in the app, so
+    # the lesson doubles as practice using the inspector players will rely
+    # on during real matches.
+    var revealed: Dictionary = {}
+    var controls := {"confirm": null}
+    var cols := 4
+    for i in range(KEYWORD_EXAMPLE_CARDS.size()):
+        var entry: Dictionary = KEYWORD_EXAMPLE_CARDS[i]
+        var kw := str(entry.get("keyword", ""))
+        var cd := card_by_id(str(entry.get("id", "")))
+        if cd.is_empty():
+            continue
+        var col := i % cols
+        var row := i / cols
+        var wrap := VBoxContainer.new()
+        wrap.position = Vector2(35 + col * 255, 15 + row * 250)
+        wrap.custom_minimum_size = Vector2(235, 240)
+        wrap.add_theme_constant_override("separation", 4)
+        board.add_child(wrap)
+        var title := centered_label(kw.to_upper(), Vector2(0,0), Vector2(235,22), 15, wrap)
+        title.add_theme_color_override("font_color", GOLD_COLOR)
+        var cp := card_panel(cd, Vector2.ZERO, Vector2(150, 150), false)
+        var cp_holder := CenterContainer.new(); cp_holder.custom_minimum_size = Vector2(235, 150)
+        wrap.add_child(cp_holder); cp_holder.add_child(cp)
+        var hint := centered_label("Tap card to reveal", Vector2(0,0), Vector2(235,20), 11, wrap)
+        hint.add_theme_color_override("font_color", Color(0.75,0.80,0.90))
+
+        var tap_catcher := Button.new()
+        tap_catcher.flat = true
+        tap_catcher.focus_mode = Control.FOCUS_NONE
+        tap_catcher.position = Vector2.ZERO
+        tap_catcher.size = Vector2(150, 150)
+        tap_catcher.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        cp.add_child(tap_catcher)
+        tap_catcher.pressed.connect(func():
+            show_card_preview(cd)
+            if revealed.has(kw):
+                return
+            revealed[kw] = true
+            safe_set_text(hint, str(entry.get("meaning", "")))
+            academy_feedback_text("%s: %s (%d of %d keywords revealed)" % [kw, str(entry.get("meaning","")), revealed.size(), KEYWORD_EXAMPLE_CARDS.size()])
+            var confirm_button = controls.get("confirm")
+            if revealed.size() == KEYWORD_EXAMPLE_CARDS.size() and is_instance_valid(confirm_button):
+                confirm_button.disabled = false
+        )
+
+    var continue_button := button("CONTINUE", Vector2(455, 510), Vector2(200, 50), func():
+        var confirm_button = controls.get("confirm")
+        if is_instance_valid(confirm_button) and confirm_button.disabled: return
+        lesson_complete()
+    , board)
+    continue_button.disabled = true
+    controls["confirm"] = continue_button
+
 func build_spell_amulet_lesson(board: Control) -> void:
-    var status := centered_label("Enemy follower: 4/4\nOngoing effects: none",Vector2(415,125),Vector2(280,125),20,board)
+    var status := centered_label("Enemy follower: 4/4\nOngoing effects: none",Vector2(60,125),Vector2(280,44),14,board)
     var spell: Button
-    spell = academy_card("DEEP BREATH", "Spell • Freeze enemy", Vector2(120,285), class_color("Serenity"), func():
+    spell = academy_card("DEEP BREATH", "Spell • Freeze enemy", Vector2(60,180), class_color("Serenity"), func():
         if academy_action_stage != 0: return
         academy_action_stage = 1
         if is_instance_valid(spell):
             spell.disabled = true
             spell.text = "DEEP BREATH\nCAST ✓"
         safe_set_text(status, "Enemy follower: 4/4\nFROZEN — cannot attack")
-        academy_feedback_text("Spells resolve immediately and then leave play. Now play the Amulet.")
+        academy_feedback_text("Spells resolve immediately and then leave play. Now play Purpose's real Amulet.")
     , board)
-    var amulet: Button
-    amulet = academy_card("HOME GROUP", "Amulet • Ongoing healing", Vector2(790,285), GOLD_COLOR, func():
+
+    # Amulets don't have Attack/Defense and can't be attacked or damaged —
+    # the only card type that persists purely for its ongoing text. Using
+    # the game's one actual Amulet (Daily Progress) instead of an invented
+    # example teaches the real end-turn-with-0-PP payoff players will
+    # actually see when they pilot Purpose. Everything for this column lives
+    # inside one VBoxContainer so the card art, its label, and the Progress
+    # counter always stack cleanly instead of risking overlap with the spell
+    # column at fixed absolute coordinates.
+    var daily_progress := card_by_id("JD-054")
+    var amulet_wrap := VBoxContainer.new()
+    amulet_wrap.position = Vector2(740, 125)
+    amulet_wrap.custom_minimum_size = Vector2(190, 260)
+    amulet_wrap.add_theme_constant_override("separation", 8)
+    board.add_child(amulet_wrap)
+    centered_label("PURPOSE'S REAL AMULET", Vector2(0,0), Vector2(190,22), 13, amulet_wrap).add_theme_color_override("font_color", GOLD_COLOR)
+    if not daily_progress.is_empty():
+        var amulet_cp := card_panel(daily_progress, Vector2.ZERO, Vector2(190, 190))
+        amulet_wrap.add_child(amulet_cp)
+    var progress_note := centered_label("Progress: 0 / 6", Vector2(0,0), Vector2(190,26), 16, amulet_wrap)
+    progress_note.add_theme_color_override("font_color", Color(0.90,0.85,0.65))
+
+    var progress := [0]
+    var play_amulet: Button
+    play_amulet = button("PLAY DAILY PROGRESS", Vector2(60, 320), Vector2(280, 56), func():
         if academy_action_stage != 1:
             academy_feedback_text("Cast Deep Breath first.", false)
             return
         academy_action_stage = 2
-        if is_instance_valid(amulet):
-            amulet.disabled = true
-            amulet.text = "HOME GROUP\nACTIVE ✓"
-        if is_instance_valid(status):
-            status.text += "\nHome Group: restore 1 each turn"
-        academy_feedback_text("Amulets stay in play and keep providing value.")
-        await get_tree().create_timer(0.8).timeout
-        lesson_complete()
+        if is_instance_valid(play_amulet):
+            play_amulet.disabled = true
+            play_amulet.text = "DAILY PROGRESS\nON THE BOARD ✓"
+        academy_feedback_text("It's in play. Now end a turn with 0 PP left to gain Progress.")
+    , board)
+
+    var end_turn_zero_pp: Button
+    end_turn_zero_pp = button("END TURN WITH 0 PP LEFT", Vector2(360, 320), Vector2(300, 56), func():
+        if academy_action_stage != 2:
+            academy_feedback_text("Play Daily Progress first.", false)
+            return
+        progress[0] += 1
+        safe_set_text(progress_note, "Progress: %d / 6" % progress[0])
+        if progress[0] == 3:
+            academy_feedback_text("3 Progress reached: +1 maximum PP and your current followers are empowered.")
+        elif progress[0] >= 6:
+            safe_set_text(progress_note, "Progress: 6 / 6 — TRANSFORMED")
+            academy_feedback_text("6 Progress: Daily Progress transforms into A Life Rebuilt. Amulets keep paying off the longer they stay in play.")
+            academy_action_stage = 3
+            await get_tree().create_timer(0.9).timeout
+            lesson_complete()
+        else:
+            academy_feedback_text("+1 Progress. Do this again — at 3 Progress it empowers your board, and at 6 it transforms.")
     , board)
 
 func build_recovery_lesson(board: Control) -> void:
@@ -1934,7 +2163,7 @@ func graduate_with_class(c: String) -> void:
     grant_starter_collection(c)
     build_starter_deck(c)
     academy_complete = true
-    academy_step = 8
+    academy_step = ACADEMY_LESSON_COUNT
     if not academy_reward_claimed:
         gold_balance += 500
         academy_reward_claimed = true
