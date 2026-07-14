@@ -208,6 +208,7 @@ var battle_select_class := "Hope"
 var battle_select_mode := "custom"
 var battle_opponent_class := "Courage"
 var battle_opponent_mode := "prebuilt"
+var pending_after_class_choice: Callable = Callable()
 var status_label: Label
 var academy_complete := false
 var academy_step := 0
@@ -2046,7 +2047,13 @@ func choose_class(c: String) -> void:
     selected_class = c; selected_deck_class = c
     grant_starter_collection(c)
     build_starter_deck(c)
-    save_profile(); show_home()
+    save_profile()
+    if pending_after_class_choice.is_valid():
+        var callback := pending_after_class_choice
+        pending_after_class_choice = Callable()
+        callback.call()
+    else:
+        show_home()
 
 func grant_starter_collection(c: String) -> void:
     for card_data in cards:
@@ -2128,6 +2135,15 @@ func show_story_chapters() -> void:
     # The overview screen that sits above the per-chapter roads: the whole
     # newcomer arc — nothing to a life rebuilt — read as four distinct acts
     # instead of one long, undifferentiated string of battle cards.
+    if selected_class == "":
+        clear_screen(); add_background(0.70)
+        header("STORY MODE", "One day at a time — four chapters of the same journey")
+        label("CHOOSE YOUR LEADER FIRST", Vector2(380, 245), Vector2(520, 60), 34).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        label("Story Mode plays as you — pick who you're stepping into the fight as before your first battle.", Vector2(320, 320), Vector2(640, 70), 19).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        pending_after_class_choice = show_story_chapters
+        button("CHOOSE MY LEADER", Vector2(485, 420), Vector2(310, 60), show_class_choice)
+        button("HOME", Vector2(40, 645), Vector2(180, 48), show_home)
+        return
     clear_screen(); add_background(0.62)
     header("STORY MODE", "One day at a time — four chapters of the same journey")
     currency_bar()
@@ -2372,6 +2388,13 @@ func show_story_stage_intro(stage: Dictionary) -> void:
     play_story_voice(stage)
 
 func begin_story_stage(stage: Dictionary) -> void:
+    # Story Mode is a fixed, hand-placed encounter, not a freeform match:
+    # the player's own leader is whoever they already chose (gated in
+    # show_story_chapters, never silently assumed here) and the opponent's
+    # class/deck is dictated entirely by the stage. Going through
+    # start_battle()/show_match_deck_selection() would let the player pick a
+    # *different* opponent than the one the story is actually about, so this
+    # jumps straight to the battle intro instead of that freeform screen.
     var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
     var stage_id := int(stage["id"])
     var already_cleared := bool(cfg.get_value("story", "cleared_%d" % stage_id, false))
@@ -2380,12 +2403,21 @@ func begin_story_stage(stage: Dictionary) -> void:
     cfg.set_value("challenge","name",str(stage["name"]))
     cfg.set_value("challenge","story_stage",stage_id)
     cfg.save(SAVE_PATH)
+    var your_class := selected_class if selected_class != "" else "Hope"
+    var opponent_class := str(stage["class"])
     var battle_cfg := ConfigFile.new()
     battle_cfg.set_value("battle","mode","story")
-    battle_cfg.set_value("battle","your_class",selected_class if selected_class != "" else "Hope")
-    battle_cfg.set_value("battle","opponent_class",str(stage["class"]))
+    battle_cfg.set_value("battle","your_class",your_class)
+    battle_cfg.set_value("battle","your_deck_mode","custom")
+    battle_cfg.set_value("battle","opponent_class",opponent_class)
+    battle_cfg.set_value("battle","opponent_deck_mode","prebuilt")
+    # Seeds the opponent's deck build so different story stages (even ones
+    # sharing a class) don't all field the exact same 40-card list — see
+    # build_story_opponent_deck in main.gd.
+    battle_cfg.set_value("battle","story_stage_id",stage_id)
     battle_cfg.save("user://battle_setup.cfg")
-    start_battle()
+    ensure_home_music()
+    await _show_battle_intro(your_class, opponent_class)
 
 func show_recovery_road() -> void:
     clear_screen(); add_background(0.70); header("RECOVERY ROAD","Defeat increasingly overpowered class decks to earn gold"); currency_bar()
