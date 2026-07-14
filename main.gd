@@ -81,6 +81,12 @@ var practice_mode := false
 # as a field (not a local) so show_game_over() can force-free it early if the
 # result screen fires while the sequence is still mid-animation.
 var finish_layer: Control = null
+# Reward lines (e.g. "+75 Gold", "+1 Pack") earned by the win that's about to
+# be shown on the result screen. Populated by check_winner() -- which is
+# where award_pending_challenge/record_recovery_challenge_win/
+# award_pending_trial actually run -- and consumed by _finish_match() when it
+# builds the game-over screen further down the coroutine chain.
+var pending_match_rewards: Array = []
 # Beginner-friendly practice AI: it still plays a legal deck, but it doesn't
 # optimize its mana curve, doesn't attack with everything, and evolves less
 # often, so new players have real room to experiment without getting run over.
@@ -203,6 +209,21 @@ func ui_font(value: int) -> int:
 func safe_set_disabled(node: Object, value: bool) -> void:
     if node != null and is_instance_valid(node) and "disabled" in node:
         node.set("disabled", value)
+
+# Guards every add_child call that happens after an await, where the parent
+# (often `self`, the whole match scene) can have been freed in the meantime
+# by the player backing out to the main menu or starting a new match while a
+# damage popup / speech bubble / victory-banner coroutine was still mid-flight.
+# Without this guard those calls crash with "Cannot call method 'add_child'
+# on a previously freed instance"; with it, the leftover cosmetic effect is
+# just silently dropped instead. Returns true if the child was actually added.
+func safe_add_child(parent: Object, child: Node) -> bool:
+    if parent == null or not is_instance_valid(parent) or child == null:
+        if child != null and is_instance_valid(child):
+            child.queue_free()
+        return false
+    parent.add_child(child)
+    return true
 
 var spell_choice_result: int = -1
 
@@ -1188,7 +1209,7 @@ func leader_speech_bubble(leader: Control, text: String, accent: Color) -> void:
     bubble.scale = Vector2(0.3, 0.3)
     bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
     bubble.position = leader.global_position + Vector2(leader.size.x * 0.5 - bubble_width * 0.5, -bubble_height - 10)
-    add_child(bubble)
+    if not safe_add_child(self, bubble): return
     var line := Label.new()
     line.text = text
     line.position = Vector2(10, 6)
@@ -4729,8 +4750,15 @@ func perform_player_attack(target_index: int) -> void:
     if selected_attacker < 0 or selected_attacker >= player_board.size(): return
     busy = true
     var attacker_index := selected_attacker; selected_attacker = -1
-    var ability := str(player_board[attacker_index].get("ability", ""))
-    if ability == "rush" and target_index < 0: status_label.text = "Rush can only attack enemy allies this turn."; busy = false; refresh_ui(); return
+    var attacker_data: Dictionary = player_board[attacker_index]
+    var ability := str(attacker_data.get("ability", ""))
+    # Rush only restricts attacking the leader on the turn the follower was
+    # summoned (it trades summoning sickness for "can attack followers right
+    # away"). "ability" is a permanent tag on the card, so without checking
+    # summoned_turn this blocked Rush followers from ever attacking the
+    # leader again, on every later turn as well.
+    var summoned_this_turn := int(attacker_data.get("summoned_turn", -1)) == turn_number
+    if ability == "rush" and target_index < 0 and summoned_this_turn: status_label.text = "Rush can only attack enemy allies this turn."; busy = false; refresh_ui(); return
     await animate_attack(attacker_index, target_index, true)
     busy = false; refresh_ui()
 
@@ -4858,10 +4886,12 @@ func check_winner() -> void:
         game_over = true
         player_turn_active = false
         busy = true
+        pending_match_rewards = []
         if not practice_mode:
-            award_pending_challenge()
-            record_recovery_challenge_win(selected_class)
-            award_pending_trial()
+            var challenge_reward := award_pending_challenge()
+            var recovery_reward := record_recovery_challenge_win(selected_class)
+            var trial_reward := award_pending_trial()
+            pending_match_rewards = _combine_reward_lines([challenge_reward, recovery_reward, trial_reward])
         play_battle_bark(player_leader, selected_class, "victory", true, true)
         play_battle_bark(enemy_leader, enemy_class, "defeat", false, true)
         call_deferred("_finish_match", true)
@@ -4928,9 +4958,10 @@ func _finish_match(player_won: bool) -> void:
     if is_instance_valid(training_panel):
         training_panel.queue_free()
     if player_won:
-        show_game_over("VICTORY", "You are Walking Free!", true)
+        show_game_over("VICTORY", "You are Walking Free!", true, pending_match_rewards)
     else:
-        show_game_over("YOU LOSE", "Every setback is a chance to begin again.", false)
+        show_game_over("YOU LOSE", "Every setback is a chance to begin again.", false, [])
+    pending_match_rewards = []
     busy = false
 
 func _play_victory_sequence(winner: Control, loser: Control) -> void:
@@ -4944,7 +4975,8 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
     finish_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     finish_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
     finish_layer.z_index = 500
-    add_child(finish_layer)
+    if not safe_add_child(self, finish_layer):
+        return
 
     var flash := ColorRect.new()
     flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -5081,43 +5113,48 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         finish_layer.queue_free()
     await get_tree().create_timer(0.18).timeout
 
-func record_recovery_challenge_win(winning_class: String) -> void:
+func record_recovery_challenge_win(winning_class: String) -> Dictionary:
     # Tracks the home screen's "Win 3 matches with <class>" Recovery
     # Challenge. Progress is stored directly in the shared profile file
     # (main.gd and menu.gd are separate scenes) and read back by the menu
     # the next time it loads or rebuilds the home screen.
     if winning_class == "":
-        return
+        return {}
     var cfg := ConfigFile.new()
     cfg.load("user://journeys_dawn_profile.cfg") # Missing file is fine; defaults apply below.
     var progress: Dictionary = cfg.get_value("challenge", "recovery_progress", {})
     var count := int(progress.get(winning_class, 0)) + 1
+    var result := {}
     if count >= 3:
         var gold := int(cfg.get_value("economy", "gold", 0))
         var packs := int(cfg.get_value("economy", "packs", 0))
         cfg.set_value("economy", "gold", gold + 75)
         cfg.set_value("economy", "packs", packs + 1)
         progress[winning_class] = 0
+        result = {"gold": 75, "packs": 1}
     else:
         progress[winning_class] = count
     cfg.set_value("challenge", "recovery_progress", progress)
     cfg.save("user://journeys_dawn_profile.cfg")
+    return result
 
-func award_pending_challenge() -> void:
+func award_pending_challenge() -> Dictionary:
     var cfg := ConfigFile.new()
     if cfg.load("user://journeys_dawn_profile.cfg") != OK:
-        return
+        return {}
     var reward := int(cfg.get_value("challenge", "pending_reward", 0))
     var pack_reward := int(cfg.get_value("challenge", "pending_packs", 0))
     if reward <= 0 and pack_reward <= 0:
-        return
+        return {}
     var challenge_name := str(cfg.get_value("challenge", "name", "Recovery Road"))
     var gold := int(cfg.get_value("economy", "gold", 600))
     var packs := int(cfg.get_value("economy", "packs", 0))
     var first_key := "cleared_" + challenge_name.to_lower().replace(" ", "_")
     var first_clear := not bool(cfg.get_value("road", first_key, false))
+    var bonus_special := ""
     if challenge_name == "Recovery Master" and first_clear:
         reward += 500
+        bonus_special = "Recovery Master Cleared: +500 Bonus Gold"
     cfg.set_value("economy", "gold", gold + reward)
     cfg.set_value("economy", "packs", packs + pack_reward)
     cfg.set_value("road", first_key, true)
@@ -5141,10 +5178,14 @@ func award_pending_challenge() -> void:
     cfg.set_value("challenge", "pending_packs", 0)
     cfg.set_value("challenge", "story_stage", 0)
     cfg.save("user://journeys_dawn_profile.cfg")
+    var out := {"gold": reward, "packs": pack_reward}
+    if bonus_special != "":
+        out["special"] = bonus_special
+    return out
 
 const TRIAL_GOLD_REWARDS := {1: 50, 2: 90, 3: 150, 4: 400}
 
-func award_pending_trial() -> void:
+func award_pending_trial() -> Dictionary:
     # Mirrors award_pending_challenge's pattern: menu.gd stamps a pending
     # trial into the shared profile cfg before launching the battle scene,
     # and this reads/clears it on victory. Trials are repeatable -- gold is
@@ -5152,19 +5193,21 @@ func award_pending_trial() -> void:
     # reward only unlocks the first time he's beaten.
     var cfg := ConfigFile.new()
     if cfg.load("user://journeys_dawn_profile.cfg") != OK:
-        return
+        return {}
     var opponent := str(cfg.get_value("trials", "pending_opponent", ""))
     var tier := int(cfg.get_value("trials", "pending_tier", 0))
     if opponent.is_empty() or tier <= 0:
-        return
+        return {}
     var gold := int(cfg.get_value("economy", "gold", 0))
-    gold += int(TRIAL_GOLD_REWARDS.get(tier, 0))
+    var gold_awarded := int(TRIAL_GOLD_REWARDS.get(tier, 0))
+    gold += gold_awarded
     cfg.set_value("economy", "gold", gold)
     var cleared = cfg.get_value("trials", "cleared", {})
     var clear_key := "%s_%d" % [opponent, tier]
     var first_clear := not bool(cleared.get(clear_key, false))
     cleared[clear_key] = true
     cfg.set_value("trials", "cleared", cleared)
+    var special := ""
     if tier >= 4:
         if first_clear:
             var owned = cfg.get_value("collection", "owned", {})
@@ -5172,12 +5215,40 @@ func award_pending_trial() -> void:
             cfg.set_value("collection", "owned", owned)
             cfg.set_value("trials", "sponsor_leader_unlocked", true)
             cfg.set_value("trials", "sponsor_sleeve_unlocked", true)
+            special = "The Sponsor Unlocked!"
         cfg.set_value("trials", "sponsor_defeated", true)
     cfg.set_value("trials", "pending_opponent", "")
     cfg.set_value("trials", "pending_tier", 0)
     cfg.save("user://journeys_dawn_profile.cfg")
+    var out := {"gold": gold_awarded}
+    if special != "":
+        out["special"] = special
+    return out
 
-func show_game_over(title_text: String, subtitle: String, player_won: bool) -> void:
+# Merges the {"gold":int, "packs":int, "special":String} dictionaries returned
+# by the reward-granting functions above into the ordered list of lines the
+# game-over screen displays -- gold and packs totalled into single lines,
+# any one-off unlocks/bonuses listed individually beneath them.
+func _combine_reward_lines(rewards: Array) -> Array:
+    var total_gold := 0
+    var total_packs := 0
+    var specials: Array = []
+    for reward in rewards:
+        if not (reward is Dictionary):
+            continue
+        total_gold += int(reward.get("gold", 0))
+        total_packs += int(reward.get("packs", 0))
+        if reward.has("special"):
+            specials.append(str(reward["special"]))
+    var lines: Array = []
+    if total_gold > 0:
+        lines.append("+%d Gold" % total_gold)
+    if total_packs > 0:
+        lines.append("+%d Pack%s" % [total_packs, "" if total_packs == 1 else "s"])
+    lines.append_array(specials)
+    return lines
+
+func show_game_over(title_text: String, subtitle: String, player_won: bool, rewards: Array = []) -> void:
     player_turn_active = false
     # _play_victory_sequence (the VICTORY/DEFEAT banner + sparkles + scrim) runs
     # on its own fixed timers and can still be mid-animation when this fires --
@@ -5203,15 +5274,24 @@ func show_game_over(title_text: String, subtitle: String, player_won: bool) -> v
     game_over_layer.mouse_filter = Control.MOUSE_FILTER_STOP
     game_over_layer.z_index = 10000
     game_over_layer.modulate = Color(1, 1, 1, 0)
-    add_child(game_over_layer)
+    if not safe_add_child(self, game_over_layer):
+        return
+
+    # The panel grows to fit an extra "REWARDS EARNED" section when the match
+    # actually granted something (challenge/trial gold, packs, unlocks) --
+    # empty-handed losses and practice matches keep the shorter, original
+    # layout instead of showing an empty rewards block.
+    var has_rewards := not rewards.is_empty()
+    var panel_height := 460.0 if has_rewards else 400.0
+    var panel_y := (720.0 - panel_height) * 0.5
 
     # A solid, high-contrast card behind the badge/title/buttons -- instead of
     # buttons floating directly on the translucent full-screen dim -- so the
     # result panel reads as one clear focal point instead of controls that
     # look stranded/half-hidden against whatever was on the board underneath.
     var card_panel := Panel.new()
-    card_panel.position = Vector2(340, 170)
-    card_panel.size = Vector2(600, 400)
+    card_panel.position = Vector2(340, panel_y)
+    card_panel.size = Vector2(600, panel_height)
     var card_style := StyleBoxFlat.new()
     card_style.bg_color = Color(0.035, 0.05, 0.09, 0.97)
     card_style.border_color = Color(1.0, 0.86, 0.32) if player_won else Color(0.6, 0.74, 1.0)
@@ -5223,10 +5303,10 @@ func show_game_over(title_text: String, subtitle: String, player_won: bool) -> v
     game_over_layer.add_child(card_panel)
 
     var box := VBoxContainer.new()
-    box.position = Vector2(350, 190)
-    box.size = Vector2(580, 350)
+    box.position = Vector2(350, panel_y + 20)
+    box.size = Vector2(580, panel_height - 40)
     box.alignment = BoxContainer.ALIGNMENT_CENTER
-    box.add_theme_constant_override("separation", 14)
+    box.add_theme_constant_override("separation", 12)
     game_over_layer.add_child(box)
 
     var badge := Label.new()
@@ -5249,6 +5329,41 @@ func show_game_over(title_text: String, subtitle: String, player_won: bool) -> v
     sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     sub.add_theme_font_size_override("font_size", ui_font(20))
     box.add_child(sub)
+
+    if has_rewards:
+        var rewards_panel := PanelContainer.new()
+        var rewards_style := StyleBoxFlat.new()
+        rewards_style.bg_color = Color(1.0, 0.86, 0.32, 0.10) if player_won else Color(0.6, 0.74, 1.0, 0.10)
+        rewards_style.border_color = Color(1.0, 0.86, 0.32, 0.55) if player_won else Color(0.6, 0.74, 1.0, 0.55)
+        rewards_style.set_border_width_all(1)
+        rewards_style.set_corner_radius_all(10)
+        rewards_style.content_margin_left = 18
+        rewards_style.content_margin_right = 18
+        rewards_style.content_margin_top = 10
+        rewards_style.content_margin_bottom = 10
+        rewards_panel.add_theme_stylebox_override("panel", rewards_style)
+        box.add_child(rewards_panel)
+
+        var rewards_box := VBoxContainer.new()
+        rewards_box.alignment = BoxContainer.ALIGNMENT_CENTER
+        rewards_box.add_theme_constant_override("separation", 4)
+        rewards_panel.add_child(rewards_box)
+
+        var rewards_header := Label.new()
+        rewards_header.text = "REWARDS EARNED"
+        rewards_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        rewards_header.add_theme_font_size_override("font_size", ui_font(15))
+        rewards_header.add_theme_color_override("font_color", Color(0.7, 0.76, 0.86))
+        rewards_box.add_child(rewards_header)
+
+        for reward_line in rewards:
+            var reward_label := Label.new()
+            reward_label.text = str(reward_line)
+            reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            reward_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            reward_label.add_theme_font_size_override("font_size", ui_font(19))
+            reward_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.55) if player_won else Color(0.86, 0.92, 1.0))
+            rewards_box.add_child(reward_label)
 
     # Both buttons get explicit high-contrast styling. Every other button in
     # this UI is hand-styled with a StyleBoxFlat -- leaving these two on the
@@ -5308,8 +5423,10 @@ func _return_to_main_menu() -> void:
         push_error("Could not return to main menu: %s" % err)
 
 func show_vfx(text_value: String, world_pos: Vector2, color: Color) -> void:
-    var label := Label.new(); label.text = text_value; label.position = world_pos; label.z_index = 900; label.add_theme_font_size_override("font_size", ui_font(31)); label.add_theme_color_override("font_color", color); label.add_theme_color_override("font_shadow_color", Color.BLACK); label.add_theme_constant_override("shadow_offset_x", 3); label.add_theme_constant_override("shadow_offset_y", 3); add_child(label)
-    var tween := create_tween().set_parallel(true); tween.tween_property(label, "position:y", world_pos.y - 55, 0.55); tween.tween_property(label, "modulate:a", 0.0, 0.55); await tween.finished; label.queue_free()
+    var label := Label.new(); label.text = text_value; label.position = world_pos; label.z_index = 900; label.add_theme_font_size_override("font_size", ui_font(31)); label.add_theme_color_override("font_color", color); label.add_theme_color_override("font_shadow_color", Color.BLACK); label.add_theme_constant_override("shadow_offset_x", 3); label.add_theme_constant_override("shadow_offset_y", 3)
+    if not safe_add_child(self, label): return
+    var tween := create_tween().set_parallel(true); tween.tween_property(label, "position:y", world_pos.y - 55, 0.55); tween.tween_property(label, "modulate:a", 0.0, 0.55); await tween.finished
+    if is_instance_valid(label): label.queue_free()
 
 func refresh_ui(animate_new: bool = false, new_index: int = -1, new_player_side: bool = true) -> void:
     if not game_over:
