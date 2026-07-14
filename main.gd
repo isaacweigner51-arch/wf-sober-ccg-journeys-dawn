@@ -1173,12 +1173,70 @@ func leader_feedback(leader: Control, damage: int, healing: bool = false) -> voi
     if healing:
         tween.tween_property(leader, "modulate", Color(0.55, 1.35, 0.70), 0.10)
         tween.tween_property(leader, "modulate", Color.WHITE, 0.22)
+        leader_emote(leader, "♥", Color(0.55, 1.0, 0.70))
     else:
         tween.tween_property(leader, "modulate", Color(1.65, 0.35, 0.35), 0.06)
         tween.tween_property(leader, "position", start + Vector2(10, 0), 0.04)
         tween.tween_property(leader, "position", start - Vector2(10, 0), 0.04)
         tween.tween_property(leader, "position", start, 0.04)
         tween.tween_property(leader, "modulate", Color.WHITE, 0.15)
+        leader_emote(leader, "!" if damage < 4 else "✦", Color(1.0, 0.42, 0.32))
+
+# Small floating reaction bubble ("emote") above a leader portrait — pops in,
+# drifts up, and fades. Kept to the handful of glyphs already proven to
+# render cleanly in this project's default font (♥ ✦ ★ • and plain ASCII),
+# since the game ships no custom/emoji font and untested glyphs render as
+# missing-character boxes.
+func leader_emote(leader: Control, symbol: String, color: Color) -> void:
+    if not is_instance_valid(leader):
+        return
+    var bubble := Label.new()
+    bubble.text = symbol
+    bubble.z_index = 400
+    bubble.add_theme_font_size_override("font_size", ui_font(26))
+    bubble.add_theme_color_override("font_color", color)
+    bubble.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+    bubble.add_theme_constant_override("shadow_offset_x", 2)
+    bubble.add_theme_constant_override("shadow_offset_y", 2)
+    bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    bubble.pivot_offset = Vector2(11, 14)
+    bubble.scale = Vector2(0.3, 0.3)
+    bubble.position = leader.global_position + Vector2(leader.size.x * 0.5 - 11, -14)
+    add_child(bubble)
+    var pop := create_tween()
+    pop.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    pop.tween_property(bubble, "scale", Vector2(1.25, 1.25), 0.16)
+    pop.tween_property(bubble, "scale", Vector2(1.0, 1.0), 0.10)
+    var drift := create_tween().set_parallel(true)
+    drift.tween_property(bubble, "position:y", bubble.position.y - 36, 0.75)
+    drift.tween_property(bubble, "modulate:a", 0.0, 0.4).set_delay(0.4)
+    await drift.finished
+    if is_instance_valid(bubble):
+        bubble.queue_free()
+
+# Subtle looping "breathing" animation so leader portraits feel alive on the
+# battlefield instead of sitting as a static image. Runs on the portrait
+# child (not the leader Button itself), which stays free for the separate
+# hit-flinch and victory/defeat scale tweens on the Button to run without
+# fighting over the same "scale" property.
+func start_leader_idle(portrait: TextureRect) -> void:
+    portrait.pivot_offset = portrait.size * 0.5
+    var idle := create_tween().set_loops()
+    idle.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    idle.tween_property(portrait, "scale", Vector2(1.035, 1.035), 1.5)
+    idle.tween_property(portrait, "scale", Vector2(1.0, 1.0), 1.5)
+
+# Leader portraits are square, full-scene paintings with the character in the
+# top ~60% of the canvas (see menu.gd: class_leader_texture, same fix applied
+# here so battle portraits match the framing used everywhere else in the app).
+func leader_portrait_texture(path: String) -> Texture2D:
+    var base := load(path) as Texture2D
+    if base == null:
+        return null
+    var atlas := AtlasTexture.new()
+    atlas.atlas = base
+    atlas.region = Rect2(0, 0, base.get_width(), base.get_height() * 0.6)
+    return atlas
 
 func build_ui() -> void:
     # Neutral arena background: no embedded menus or duplicate UI artwork.
@@ -1378,7 +1436,7 @@ func leader_art_for(faction_name: String) -> String:
 func update_leader_visual(leader: Button, faction_name: String, player_side: bool) -> void:
     var portrait := leader.get_node_or_null("Portrait") as TextureRect
     if portrait != null:
-        var leader_texture := load(leader_art_for(faction_name)) as Texture2D
+        var leader_texture := leader_portrait_texture(leader_art_for(faction_name))
         portrait.texture = leader_texture
         portrait.visible = leader_texture != null
         portrait.modulate = Color.WHITE
@@ -1988,7 +2046,7 @@ func make_leader(label_text: String, pos: Vector2, player_side: bool) -> Button:
     portrait.name = "Portrait"
     portrait.position = Vector2(8, 8)
     portrait.size = Vector2(164, 126)
-    portrait.texture = load("res://assets/leaders/player.png" if player_side else "res://assets/leaders/enemy.png") as Texture2D
+    portrait.texture = leader_portrait_texture("res://assets/leaders/player.png" if player_side else "res://assets/leaders/enemy.png")
     portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     # COVERED instead of CENTERED: the source art is a square 512x512 portrait
     # but this frame is a wide 164x126 box. CENTERED preserves the whole image
@@ -2000,6 +2058,7 @@ func make_leader(label_text: String, pos: Vector2, player_side: bool) -> Button:
     portrait.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
     portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
     leader.add_child(portrait)
+    start_leader_idle(portrait)
 
     var accent_bar := ColorRect.new()
     accent_bar.name = "AccentBar"
