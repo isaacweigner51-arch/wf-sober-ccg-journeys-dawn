@@ -10,3 +10,4 @@
 - [searchVoices/textToSpeech globals unavailable](elevenlabs-tts-connector-proxy.md) — same as music: use @replit/connectors-sdk proxy to ElevenLabs `/v1/text-to-speech/:voice_id`; `/v1/voices` list endpoint needs a permission this key lacks, so use known premade voice IDs instead.
 - [gitPush to a second tracked branch](gitpush-dual-branch.md) — gitPush fails if HEAD is on a branch tracking a different remote branch name; checkout the target local branch, merge --no-ff, then gitPush.
 - [Godot assets missing .import sidecar files](godot-unimported-assets.md) — headless script checks never trigger asset import; un-imported assets pass local checks but fall back to placeholders on real exports.
+- [wf-sober-ccg version bulletin workflow](wf-sober-ccg-version-bulletin.md) — user wants every change bumped into data/version_manifest.json's What's New bulletin proactively, not just on request.
