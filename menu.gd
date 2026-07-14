@@ -2000,14 +2000,113 @@ func _on_billing_products_updated(_products: Dictionary) -> void:
     if is_instance_valid(root_layer) and status_label != null:
         show_store()
 
+func build_pack_visual(pos: Vector2, size_value: Vector2, parent: Control = root_layer) -> Panel:
+    # An actual foil-pack object — gradient body, gold foil edge, wordmark,
+    # and a slow diagonal shimmer — instead of a plain rectangular button
+    # with text in it, so opening a pack in the store reads as opening an
+    # actual product rather than pressing a menu option.
+    var pack := Panel.new()
+    pack.position = pos
+    pack.size = size_value
+    pack.pivot_offset = size_value / 2.0
+    pack.clip_contents = true
+    var pack_style := StyleBoxFlat.new()
+    pack_style.bg_color = Color(0.05, 0.06, 0.12, 1.0)
+    pack_style.border_color = GOLD_COLOR
+    pack_style.set_border_width_all(4)
+    pack_style.set_corner_radius_all(16)
+    pack_style.shadow_color = Color(0, 0, 0, 0.6)
+    pack_style.shadow_size = 10
+    pack.add_theme_stylebox_override("panel", pack_style)
+    parent.add_child(pack)
+
+    var body := TextureRect.new()
+    var body_gradient := GradientTexture2D.new()
+    var g := Gradient.new()
+    g.colors = PackedColorArray([Color(0.16, 0.10, 0.42, 1.0), Color(0.04, 0.08, 0.22, 1.0), Color(0.02, 0.03, 0.08, 1.0)])
+    g.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+    body_gradient.gradient = g
+    body_gradient.fill_from = Vector2(0.15, 0.0)
+    body_gradient.fill_to = Vector2(0.85, 1.0)
+    body.texture = body_gradient
+    body.position = Vector2(4, 4)
+    body.size = size_value - Vector2(8, 8)
+    body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pack.add_child(body)
+
+    var emblem := label("✦", Vector2(0, size_value.y * 0.22), size_value, 54, pack)
+    emblem.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    emblem.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0, 0.9))
+
+    var wordmark := label("JOURNEY'S DAWN", Vector2(0, size_value.y * 0.52), size_value, 20, pack)
+    wordmark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    wordmark.add_theme_color_override("font_color", GOLD_COLOR)
+
+    var subtitle := label("BOOSTER PACK  •  5 CARDS", Vector2(0, size_value.y * 0.60), size_value, 12, pack)
+    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    subtitle.add_theme_color_override("font_color", Color(0.78, 0.84, 0.94))
+
+    var foil_line_a := ColorRect.new()
+    foil_line_a.color = Color(1, 1, 1, 0.12)
+    foil_line_a.position = Vector2(size_value.x * 0.18, 0)
+    foil_line_a.size = Vector2(3, size_value.y)
+    foil_line_a.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pack.add_child(foil_line_a)
+    var foil_line_b := ColorRect.new()
+    foil_line_b.color = Color(1, 1, 1, 0.08)
+    foil_line_b.position = Vector2(size_value.x * 0.78, 0)
+    foil_line_b.size = Vector2(3, size_value.y)
+    foil_line_b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pack.add_child(foil_line_b)
+
+    var shimmer := ColorRect.new()
+    shimmer.color = Color(1, 1, 1, 0.0)
+    shimmer.size = Vector2(size_value.x * 0.4, size_value.y * 1.6)
+    shimmer.rotation = -0.35
+    shimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pack.add_child(shimmer)
+    var shimmer_tween := create_tween().set_loops()
+    shimmer_tween.tween_callback(func(): shimmer.position = Vector2(-size_value.x * 0.5, -size_value.y * 0.3); shimmer.color = Color(1, 1, 1, 0.0))
+    shimmer_tween.tween_property(shimmer, "color", Color(1, 1, 1, 0.16), 0.25)
+    shimmer_tween.parallel().tween_property(shimmer, "position:x", size_value.x * 1.1, 1.3).set_trans(Tween.TRANS_SINE)
+    shimmer_tween.tween_property(shimmer, "color", Color(1, 1, 1, 0.0), 0.25)
+    shimmer_tween.tween_interval(1.6)
+
+    return pack
+
 func show_pack_opening() -> void:
     clear_screen(); add_background(0.78); header("OPEN PACKS","Each opening permanently updates your collection"); currency_bar()
     if pack_inventory <= 0:
         label("NO PACKS OWNED",Vector2(390,275),Vector2(500,70),34).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
         button("RETURN TO STORE",Vector2(490,385),Vector2(300,55),show_store)
         return
-    button("OPEN ONE JOURNEY'S DAWN PACK",Vector2(430,250),Vector2(420,120),open_pack)
-    label("Platinum pity: %d / 40   •   Average pull target: 1 in 11 packs" % platinum_pity,Vector2(310,420),Vector2(660,42),19).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    var pack_size := Vector2(260, 360)
+    var pack_pos := Vector2(510, 165)
+    var pack_visual := build_pack_visual(pack_pos, pack_size)
+    var owned_badge := Panel.new()
+    owned_badge.position = Vector2(pack_size.x - 54, -14)
+    owned_badge.size = Vector2(68, 32)
+    var owned_style := StyleBoxFlat.new()
+    owned_style.bg_color = GOLD_COLOR
+    owned_style.set_corner_radius_all(16)
+    owned_style.border_color = Color(0.05, 0.06, 0.1)
+    owned_style.set_border_width_all(2)
+    owned_badge.add_theme_stylebox_override("panel", owned_style)
+    owned_badge.z_index = 10
+    pack_visual.add_child(owned_badge)
+    var owned_label := label("x%d" % pack_inventory, Vector2(0, 4), Vector2(68, 24), 15, owned_badge)
+    owned_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    owned_label.add_theme_color_override("font_color", Color(0.08, 0.06, 0.02))
+    var tap_catcher := Button.new()
+    tap_catcher.flat = true
+    tap_catcher.focus_mode = Control.FOCUS_NONE
+    tap_catcher.size = pack_size
+    tap_catcher.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    tap_catcher.tooltip_text = "Tap to open this pack"
+    tap_catcher.pressed.connect(open_pack)
+    pack_visual.add_child(tap_catcher)
+    label("TAP THE PACK TO OPEN IT", Vector2(390, 545), Vector2(500, 30), 17).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    label("Platinum pity: %d / 40   •   Average pull target: 1 in 11 packs" % platinum_pity,Vector2(310,590),Vector2(660,42),16).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 
 func open_pack() -> void:
     if pack_inventory <= 0: return
@@ -2190,12 +2289,19 @@ func card_rarity_color(rarity: String) -> Color:
         return Color(0.75, 0.95, 1.0)
     return Color(0.6, 0.66, 0.74)
 
+func card_int_value(cd: Dictionary, field: String) -> int:
+    # Card data sometimes stores numeric fields (cost/attack/health) as
+    # floats, which used to print as "7.0" instead of "7" anywhere a card
+    # was rendered in the menus — a small but very visible tell that these
+    # were data labels slapped on a photo instead of a real card stat.
+    return int(round(float(cd.get(field, 0))))
+
 func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable := true) -> Panel:
     var p := Panel.new()
     p.position = pos
     p.size = size_value
     p.custom_minimum_size = size_value
-    p.clip_contents = true
+    p.clip_contents = false
 
     var rarity := str(cd.get("rarity", "Bronze"))
     var border := class_color(str(cd.get("class", "Neutral")))
@@ -2203,13 +2309,10 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
         border = card_rarity_color(rarity)
 
     var frame_style := StyleBoxFlat.new()
-    frame_style.bg_color = Color(0.015, 0.025, 0.055, 1.0)
+    frame_style.bg_color = Color(0.05, 0.045, 0.07, 1.0)
     frame_style.border_color = border
     frame_style.set_border_width_all(3)
-    frame_style.corner_radius_top_left = 12
-    frame_style.corner_radius_top_right = 12
-    frame_style.corner_radius_bottom_left = 12
-    frame_style.corner_radius_bottom_right = 12
+    frame_style.set_corner_radius_all(12)
     frame_style.shadow_color = Color(0, 0, 0, 0.55)
     frame_style.shadow_size = 6
     p.add_theme_stylebox_override("panel", frame_style)
@@ -2225,31 +2328,66 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
     inner_style.bg_color = Color(0, 0, 0, 0)
     inner_style.border_color = Color(border.r, border.g, border.b, 0.55).lightened(0.3)
     inner_style.set_border_width_all(1)
-    inner_style.corner_radius_top_left = 9
-    inner_style.corner_radius_top_right = 9
-    inner_style.corner_radius_bottom_left = 9
-    inner_style.corner_radius_bottom_right = 9
+    inner_style.set_corner_radius_all(9)
     inner_frame.add_theme_stylebox_override("panel", inner_style)
     p.add_child(inner_frame)
 
     var compact_panel := size_value.y < 230.0
-    var outer_pad := 7.0
-    var art_height := size_value.y * (0.61 if compact_panel else 0.60)
+    var pad := 8.0
+
+    # A real, opaque name plate above the art — the single biggest thing
+    # that used to make these read as "a photo with text stamped on it"
+    # instead of a card: the name now lives in its own frame segment
+    # instead of floating over a darkened patch of the artwork.
+    var name_h: float = clampf(size_value.y * 0.14, 22.0, 34.0)
+    var plate := Panel.new()
+    plate.position = Vector2(pad, pad)
+    plate.size = Vector2(size_value.x - pad * 2.0, name_h)
+    plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var plate_style := StyleBoxFlat.new()
+    plate_style.bg_color = Color(0.04, 0.045, 0.08, 0.95)
+    plate_style.border_color = Color(border.r, border.g, border.b, 0.8)
+    plate_style.border_width_bottom = 2
+    plate_style.corner_radius_top_left = 8
+    plate_style.corner_radius_top_right = 8
+    plate.add_theme_stylebox_override("panel", plate_style)
+    p.add_child(plate)
+    var n := label(str(cd.get("name", "Card")), Vector2(4, 0), Vector2(size_value.x - pad * 2.0 - 8, name_h), 12 if compact_panel else 15, plate)
+    n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    n.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    n.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    n.clip_text = true
+
+    # The art sits in its own bordered window below the name plate instead
+    # of bleeding edge-to-edge, like the picture frame on a real card.
+    var art_top := pad + name_h + 4.0
+    var art_height := size_value.y * (0.42 if compact_panel else 0.40)
+    var art_frame := Panel.new()
+    art_frame.position = Vector2(pad, art_top)
+    art_frame.size = Vector2(size_value.x - pad * 2.0, art_height)
+    art_frame.clip_contents = true
+    var art_frame_style := StyleBoxFlat.new()
+    art_frame_style.bg_color = Color(0, 0, 0, 1)
+    art_frame_style.border_color = Color(border.r, border.g, border.b, 0.9)
+    art_frame_style.set_border_width_all(2)
+    art_frame_style.set_corner_radius_all(6)
+    art_frame.add_theme_stylebox_override("panel", art_frame_style)
+    p.add_child(art_frame)
 
     var art := TextureRect.new()
     art.texture = card_art_texture(cd)
-    art.position = Vector2(outer_pad, outer_pad)
-    art.size = Vector2(size_value.x - outer_pad * 2.0, art_height)
+    art.position = Vector2(2, 2)
+    art.size = art_frame.size - Vector2(4, 4)
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    p.add_child(art)
+    art_frame.add_child(art)
 
     # Diagonal glass sheen across the art — a cheap, standard trick that makes
     # a flat photo read as a coated/printed card instead of a pasted image.
     var sheen := GradientTexture2D.new()
     var sheen_gradient := Gradient.new()
-    sheen_gradient.colors = PackedColorArray([Color(1,1,1,0.16), Color(1,1,1,0.0)])
+    sheen_gradient.colors = PackedColorArray([Color(1,1,1,0.18), Color(1,1,1,0.0)])
     sheen_gradient.offsets = PackedFloat32Array([0.0, 1.0])
     sheen.gradient = sheen_gradient
     sheen.fill_from = Vector2(0.05, 0.0)
@@ -2259,60 +2397,60 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
     sheen_rect.position = art.position
     sheen_rect.size = art.size
     sheen_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    p.add_child(sheen_rect)
+    art_frame.add_child(sheen_rect)
 
-    # Dark fade keeps the card name readable without hiding the art.
-    var fade := GradientTexture2D.new()
-    var gradient := Gradient.new()
-    gradient.colors = PackedColorArray([Color(0,0,0,0.0), Color(0.01,0.02,0.05,0.96)])
-    gradient.offsets = PackedFloat32Array([0.0, 1.0])
-    fade.gradient = gradient
-    fade.fill_from = Vector2(0.5, 0.0)
-    fade.fill_to = Vector2(0.5, 1.0)
-    var shade := TextureRect.new()
-    shade.texture = fade
-    shade.position = Vector2(outer_pad, max(outer_pad, art_height * 0.43))
-    shade.size = Vector2(size_value.x - outer_pad * 2.0, art_height * 0.58)
-    shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    p.add_child(shade)
+    # A circular cost gem stamped over the plate/art seam, exactly where a
+    # real card's mana/cost icon would sit — not a bare number floating on
+    # top of the artwork with nothing framing it.
+    var cost_gem := Panel.new()
+    var gem_size := 30.0 if compact_panel else 36.0
+    cost_gem.position = Vector2(pad - gem_size * 0.32, art_top - gem_size * 0.5)
+    cost_gem.size = Vector2(gem_size, gem_size)
+    var gem_style := StyleBoxFlat.new()
+    gem_style.bg_color = Color(0.16, 0.5, 0.92)
+    gem_style.border_color = Color(0.9, 0.95, 1.0)
+    gem_style.set_border_width_all(2)
+    gem_style.set_corner_radius_all(int(gem_size / 2.0))
+    gem_style.shadow_color = Color(0, 0, 0, 0.5)
+    gem_style.shadow_size = 3
+    cost_gem.add_theme_stylebox_override("panel", gem_style)
+    cost_gem.z_index = 5
+    p.add_child(cost_gem)
+    var cost_label := label(str(card_int_value(cd, "cost")), Vector2(0, 0), Vector2(gem_size, gem_size), 15 if compact_panel else 18, cost_gem)
+    cost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    cost_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    cost_label.add_theme_color_override("font_color", Color.WHITE)
 
-    var cost_orb := Label.new()
-    cost_orb.text = str(cd.get("cost", 0))
-    cost_orb.position = Vector2(8, 7)
-    cost_orb.size = Vector2(34, 34)
-    cost_orb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    cost_orb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    cost_orb.add_theme_font_size_override("font_size", 17 if compact_panel else 20)
-    cost_orb.add_theme_color_override("font_color", Color.WHITE)
-    cost_orb.add_theme_color_override("font_shadow_color", Color.BLACK)
-    cost_orb.add_theme_constant_override("shadow_offset_x", 2)
-    cost_orb.add_theme_constant_override("shadow_offset_y", 2)
-    cost_orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    p.add_child(cost_orb)
+    var stats_y := art_top + art_height + 6.0
+    var is_amulet := bool(cd.get("is_amulet", false))
+    if is_amulet:
+        var amulet_label := label("AMULET", Vector2(9, stats_y), Vector2(size_value.x - 18, 22), 13 if compact_panel else 15, p)
+        amulet_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        amulet_label.add_theme_color_override("font_color", GOLD_COLOR)
+    else:
+        var sword := label("⚔", Vector2(pad + 6, stats_y), Vector2(24, 22), 14 if compact_panel else 16, p)
+        var stats_text := "%d     %d" % [card_int_value(cd, "attack"), card_int_value(cd, "health")]
+        var st := label(stats_text, Vector2(9, stats_y), Vector2(size_value.x - 18, 22), 13 if compact_panel else 16, p)
+        st.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        var heart := label("♥", Vector2(size_value.x - pad - 30, stats_y), Vector2(24, 22), 14 if compact_panel else 16, p)
+        heart.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+        heart.add_theme_color_override("font_color", Color(1.0, 0.4, 0.42))
 
-    var name_y := art_height - (43.0 if compact_panel else 48.0)
-    var n := label(str(cd.get("name", "Card")), Vector2(9, name_y), Vector2(size_value.x-18, 42), 13 if compact_panel else 16, p)
-    n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    n.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    n.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    n.add_theme_color_override("font_shadow_color", Color.BLACK)
-    n.add_theme_constant_override("shadow_offset_x", 2)
-    n.add_theme_constant_override("shadow_offset_y", 2)
-
-    var rarity_y := art_height + 10.0
-    var r := label(rarity.to_upper(), Vector2(9, rarity_y), Vector2(size_value.x-18, 20), 10 if compact_panel else 12, p)
+    var rarity_y := stats_y + 22.0
+    var r := label(rarity.to_upper(), Vector2(9, rarity_y), Vector2(size_value.x - 18, 18), 9 if compact_panel else 11, p)
     r.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     r.add_theme_color_override("font_color", border)
 
-    var stats_y := rarity_y + 22.0
-    var stats_text := "%s PP    %s/%s" % [str(cd.get("cost",0)), str(cd.get("attack",0)), str(cd.get("health",0))]
-    var st := label(stats_text, Vector2(9, stats_y), Vector2(size_value.x-18, 24), 11 if compact_panel else 13, p)
-    st.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
     if not compact_panel:
-        var effect_y := stats_y + 28.0
-        var effect := label(str(cd.get("effect", "")), Vector2(11, effect_y), Vector2(size_value.x-22, size_value.y-effect_y-9), 11, p)
+        var divider := ColorRect.new()
+        divider.color = Color(border.r, border.g, border.b, 0.35)
+        divider.position = Vector2(pad, rarity_y + 20.0)
+        divider.size = Vector2(size_value.x - pad * 2.0, 1)
+        divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        p.add_child(divider)
+
+        var effect_y := rarity_y + 26.0
+        var effect := label(str(cd.get("effect", "")), Vector2(11, effect_y), Vector2(size_value.x - 22, size_value.y - effect_y - 9), 11, p)
         effect.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         effect.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
         effect.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
