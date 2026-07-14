@@ -167,6 +167,7 @@ func _ready() -> void:
     setup_audio()
     set_battle_music("battle_early_v2")
     call_deferred("play_class_battle_ambience")
+    call_deferred("play_leader_voice")
     if not NetworkManager.game_message.is_connected(_on_online_game_message):
         NetworkManager.game_message.connect(_on_online_game_message)
     if not NetworkManager.disconnected_from_service.is_connected(_on_online_disconnected):
@@ -894,12 +895,24 @@ func signature_voice_key(card_name: String, attack_line: bool = false) -> String
     var base := card_name.to_lower().replace(" ", "_")
     return base + ("_attack" if attack_line else "")
 
+# Signature Platinum voice clips are organized by class under
+# assets/audio/voices/cards/<folder>/ so they sit next to their leader's
+# other assets instead of one flat folder.
+func signature_voice_folder(card_name: String) -> String:
+    match card_name:
+        "Beacon of Hope": return "hope"
+        "Rally the Free": return "courage"
+        "Inner Peace": return "serenity"
+        "Walking Free": return "purpose"
+        "The Sponsor": return "neutral"
+        _: return "neutral"
+
 func play_signature_voice(card_name: String, player_side: bool, attack_line: bool = false) -> void:
     var side_prefix := "player" if player_side else "enemy"
     var key := side_prefix + ":" + signature_voice_key(card_name, attack_line)
     if signature_voice_played.has(key):
         return
-    var path := "res://assets/audio/voices/%s.wav" % signature_voice_key(card_name, attack_line)
+    var path := "res://assets/audio/voices/cards/%s/%s.wav" % [signature_voice_folder(card_name), signature_voice_key(card_name, attack_line)]
     if not ResourceLoader.exists(path) or not is_instance_valid(voice_player):
         return
     signature_voice_played[key] = true
@@ -1453,6 +1466,32 @@ func update_leader_visual(leader: Button, faction_name: String, player_side: boo
 func update_leaders() -> void:
     update_leader_visual(player_leader, selected_class, true)
     update_leader_visual(enemy_leader, enemy_class, false)
+
+# Each leader has a short battle-start voice line, organized under
+# assets/audio/voices/leaders/. Only your own leader speaks so lines never
+# overlap or talk over each other.
+func leader_voice_key(faction_name: String) -> String:
+    match faction_name:
+        "Hope": return "hope_lyra"
+        "Courage": return "courage_kael"
+        "Serenity": return "serenity_aurelia"
+        "Purpose": return "purpose_orin"
+        _: return ""
+
+var leader_voice_played := false
+
+func play_leader_voice() -> void:
+    if leader_voice_played or not is_instance_valid(voice_player):
+        return
+    var key := leader_voice_key(selected_class)
+    if key.is_empty():
+        return
+    var path := "res://assets/audio/voices/leaders/%s.wav" % key
+    if not ResourceLoader.exists(path):
+        return
+    leader_voice_played = true
+    voice_player.stream = load(path)
+    voice_player.play()
 
 func build_turn_timer() -> void:
     var timer_panel := Panel.new()

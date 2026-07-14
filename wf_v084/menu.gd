@@ -2280,6 +2280,7 @@ func show_story_stage_intro(stage: Dictionary) -> void:
 
     button("BEGIN BATTLE", Vector2(490, 335), Vector2(280, 56), func(): begin_story_stage(stage), panel)
     button("BACK", Vector2(40, 335), Vector2(140, 56), func(): show_story_mode(int(stage.get("chapter", 1))), panel)
+    play_story_voice(stage)
 
 func begin_story_stage(stage: Dictionary) -> void:
     var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
@@ -2381,6 +2382,31 @@ func play_pack_sfx(sound_name: String, volume_db: float = 0.0) -> void:
             break
     target.stream = load(path)
     target.volume_db = volume_db
+    target.play()
+
+# Recurring story characters (Dez, Nora, Reggie, Angela) have a handful of
+# voiced lines tied to specific stages, organized under
+# assets/audio/voices/story/<character>/. Most stages have no line for their
+# opponent yet, so this is a lookup, not a guarantee — missing files are
+# silently skipped.
+func story_voice_path(stage: Dictionary) -> String:
+    var opponent := str(stage.get("opponent_name", ""))
+    var stage_id := int(stage.get("id", 0))
+    var character := opponent.to_lower().replace(" ", "_")
+    return "res://assets/audio/voices/story/%s/stage%02d.wav" % [character, stage_id]
+
+func play_story_voice(stage: Dictionary) -> void:
+    var path := story_voice_path(stage)
+    if not ResourceLoader.exists(path):
+        return
+    _ensure_pack_sfx_pool()
+    var target: AudioStreamPlayer = _pack_sfx_pool[0]
+    for candidate in _pack_sfx_pool:
+        if not candidate.playing:
+            target = candidate
+            break
+    target.stream = load(path)
+    target.volume_db = 0.0
     target.play()
 
 # Shared by the pack-reveal spotlight moment: a radial burst of small glyphs,
