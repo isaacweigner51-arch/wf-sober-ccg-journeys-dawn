@@ -653,6 +653,7 @@ const STORY_STAGES_BY_LEADER := {
     "Purpose": STORY_STAGES_PURPOSE,
 }
 
+const TRIAL_GOLD_REWARDS := {1: 50, 2: 90, 3: 150, 4: 400}
 const CHALLENGES := [
     {"name":"Hope Mentor", "class":"Hope", "reward":25, "stars":"★"},
     {"name":"Courage Veteran", "class":"Courage", "reward":40, "stars":"★★"},
@@ -674,6 +675,15 @@ var _menu_art_cache: Dictionary = {}
 var saved_deck: Array = []
 var saved_decks: Dictionary = {}
 var recovery_challenge_progress: Dictionary = {}
+# The Trials: repeatable PvE gauntlet. trials_cleared keys are "<Class>_<tier>"
+# (tier 1-3) or "Sponsor_4" for the bonus boss. Cosmetic rewards are separate
+# flags since they persist even if sponsor_defeated bookkeeping ever changes.
+var trials_cleared: Dictionary = {}
+var sponsor_leader_unlocked := false
+var sponsor_sleeve_unlocked := false
+var sponsor_defeated := false
+var selected_leader_skin := "" # "" (normal) or "sponsor"
+var trial_select_class := "Hope"
 var selected_deck_class := "Hope"
 # Collection screen filter state -- "All" plus the four leader classes plus
 # "Neutral" for the class tabs, "All" plus each rarity name for the rarity
@@ -878,6 +888,11 @@ func load_profile() -> void:
         daily_reward_day = int(cfg.get_value("daily", "reward_day", 0))
         daily_last_claim_day = int(cfg.get_value("daily", "last_claim_day", -1))
         recovery_challenge_progress = cfg.get_value("challenge", "recovery_progress", {})
+        trials_cleared = cfg.get_value("trials", "cleared", {})
+        sponsor_leader_unlocked = bool(cfg.get_value("trials", "sponsor_leader_unlocked", false))
+        sponsor_sleeve_unlocked = bool(cfg.get_value("trials", "sponsor_sleeve_unlocked", false))
+        sponsor_defeated = bool(cfg.get_value("trials", "sponsor_defeated", false))
+        selected_leader_skin = str(cfg.get_value("trials", "selected_leader_skin", ""))
         last_seen_whats_new_version = str(cfg.get_value("meta", "last_seen_whats_new_version", ""))
         # Existing players from earlier builds should not lose access.
         if selected_class != "" and not cfg.has_section_key("academy", "complete"):
@@ -934,6 +949,11 @@ func save_profile() -> void:
     cfg.set_value("daily", "reward_day", daily_reward_day)
     cfg.set_value("daily", "last_claim_day", daily_last_claim_day)
     cfg.set_value("challenge", "recovery_progress", recovery_challenge_progress)
+    cfg.set_value("trials", "cleared", trials_cleared)
+    cfg.set_value("trials", "sponsor_leader_unlocked", sponsor_leader_unlocked)
+    cfg.set_value("trials", "sponsor_sleeve_unlocked", sponsor_sleeve_unlocked)
+    cfg.set_value("trials", "sponsor_defeated", sponsor_defeated)
+    cfg.set_value("trials", "selected_leader_skin", selected_leader_skin)
     cfg.set_value("meta", "last_seen_whats_new_version", last_seen_whats_new_version)
     cfg.save(SAVE_PATH)
 
@@ -1022,7 +1042,7 @@ func show_home() -> void:
     root_layer.add_child(top)
 
     var avatar := TextureRect.new()
-    avatar.texture = class_leader_texture(active_class)
+    avatar.texture = current_leader_texture(active_class)
     avatar.position = Vector2(10, 8)
     avatar.size = Vector2(48, 48)
     avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -1074,6 +1094,12 @@ func show_home() -> void:
     nav_button.call("HOME", show_home, false)
     nav_group.call("PLAY")
     nav_button.call("BATTLE", start_battle, true)
+    # A slightly shorter button than nav_button's standard 42px slot -- the
+    # nav column has a fixed, already-full height, and this squeezes in the
+    # new Trials entry without pushing the daily-reward panel off the bottom.
+    var trials_nav_btn := button("TRIALS", Vector2(14, nav_state.y), Vector2(190, 36), show_trials, nav)
+    trials_nav_btn.add_theme_font_size_override("font_size", ui_font_size(17))
+    nav_state.y += 38.0
     nav_button.call("DECK BUILDER", show_deck_builder, false)
     nav_button.call("STORY MODE", show_story_chapters, false)
     nav_button.call("ONLINE VS", show_online_vs_setup, false)
@@ -1083,11 +1109,11 @@ func show_home() -> void:
     nav_group.call("LEARN")
     nav_button.call("HOW TO PLAY", replay_how_to_play, false)
     var reward := Panel.new()
-    reward.position = Vector2(14, 558)
-    reward.size = Vector2(190, 44)
+    reward.position = Vector2(14, nav_state.y + 6.0)
+    reward.size = Vector2(190, 36)
     reward.add_theme_stylebox_override("panel", style(Color(0.58, 0.40, 0.14), 8))
     nav.add_child(reward)
-    centered_label("DAILY REWARD CLAIMED", Vector2(4, 7), Vector2(182, 28), 11, reward).add_theme_color_override("font_color", GOLD_COLOR)
+    centered_label("DAILY REWARD CLAIMED", Vector2(4, 4), Vector2(182, 26), 10, reward).add_theme_color_override("font_color", GOLD_COLOR)
 
     # Main content panel.
     var main := Panel.new()
@@ -1151,7 +1177,7 @@ func show_home() -> void:
     showcase.add_child(art_frame)
 
     var art := TextureRect.new()
-    art.texture = class_leader_texture(active_class)
+    art.texture = current_leader_texture(active_class)
     art.position = Vector2.ZERO
     art.size = art_frame.size
     art.custom_minimum_size = Vector2.ZERO
@@ -1163,6 +1189,12 @@ func show_home() -> void:
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     art.clip_contents = true
     art_frame.add_child(art)
+
+    if sponsor_leader_unlocked:
+        var skin_toggle := button(
+            "SPONSOR SKIN: ON" if selected_leader_skin == "sponsor" else "SPONSOR SKIN: OFF",
+            Vector2(16, 16), Vector2(186, 34), toggle_sponsor_skin, showcase)
+        skin_toggle.add_theme_font_size_override("font_size", ui_font_size(11))
 
     var info_strip := Panel.new()
     info_strip.position = Vector2(8, 356)
@@ -1199,10 +1231,12 @@ func show_home() -> void:
     label("DAILY REFLECTION", Vector2(20, 160), Vector2(362, 30), 18, right).add_theme_color_override("font_color", GOLD_COLOR)
     var reflection := label("Progress begins with one honest choice. Keep moving forward.", Vector2(20, 198), Vector2(362, 76), 15, right)
     reflection.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    var enter := button("ENTER BATTLE", Vector2(20, 310), Vector2(362, 72), start_battle, right)
+    var enter := button("ENTER BATTLE", Vector2(20, 300), Vector2(362, 64), start_battle, right)
     enter.add_theme_font_size_override("font_size", ui_font_size(22))
     enter.add_theme_stylebox_override("normal", style(GOLD_COLOR, 14))
     enter.add_theme_color_override("font_color", Color(0.04, 0.06, 0.10))
+    var trials_cta := button("THE TRIALS", Vector2(20, 372), Vector2(362, 50), show_trials, right)
+    trials_cta.add_theme_font_size_override("font_size", ui_font_size(18))
 
     centered_label(BUILD_NAME, Vector2(20, 566), Vector2(976, 28), 12, main).modulate = Color(0.72, 0.78, 0.86)
 
@@ -2873,6 +2907,19 @@ func class_leader_texture(class_name_value: String) -> Texture2D:
     atlas.region = Rect2(margin, margin, inset_w, inset_h * 0.6)
     return atlas
 
+func current_leader_texture(class_name_value: String) -> Texture2D:
+    # The Sponsor is a cosmetic leader-art swap won from The Trials: it
+    # replaces the portrait shown for whichever class the player is actually
+    # playing, but never changes what class/deck they're building or piloting.
+    if selected_leader_skin == "sponsor" and sponsor_leader_unlocked:
+        return load("res://assets/cards/full/jd-080.jpg")
+    return class_leader_texture(class_name_value)
+
+func toggle_sponsor_skin() -> void:
+    selected_leader_skin = "" if selected_leader_skin == "sponsor" else "sponsor"
+    save_profile()
+    show_home()
+
 func class_description(c: String) -> String:
     match c:
         "Hope": return "Healing, renewal, and card advantage"
@@ -3281,6 +3328,93 @@ func begin_challenge(ch: Dictionary) -> void:
     cfg.set_value("challenge","name",str(ch["name"]))
     cfg.save(SAVE_PATH)
     start_battle()
+
+func show_trials() -> void:
+    # The Trials: a repeatable PvE gauntlet. Each of the four leaders has
+    # three escalating, fully legal decks to beat for Gold; clearing every
+    # leader's Trial 3 unlocks a bonus boss, The Sponsor, whose one-time
+    # rewards are cosmetic (leader-portrait skin + sleeve) plus a real,
+    # normal-copy-limit card added to the collection.
+    clear_screen(); add_background(0.72)
+    header("THE TRIALS", "Beat each leader's escalating gauntlet for Gold. Clear every Trial 3 to call out The Sponsor.")
+    currency_bar()
+    var order := ["Hope", "Purpose", "Serenity", "Courage"]
+    var opponent := trial_select_class if trial_select_class in order else "Hope"
+
+    var tabs := Panel.new(); tabs.position = Vector2(90, 145); tabs.size = Vector2(700, 60); tabs.add_theme_stylebox_override("panel", style(Color(0.22, 0.22, 0.26), 12)); root_layer.add_child(tabs)
+    for i in range(order.size()):
+        var c: String = order[i]
+        var tab_btn := button(c.to_upper(), Vector2(10 + i * 172, 8), Vector2(160, 44), func(): trial_select_class = c; show_trials(), tabs)
+        var tab_style := style(class_color(c), 9)
+        if c != opponent:
+            tab_style.bg_color = Color(0.05, 0.06, 0.09, 0.9)
+        tab_btn.add_theme_stylebox_override("normal", tab_style)
+        tab_btn.add_theme_stylebox_override("hover", style(class_color(c).lightened(0.15), 9))
+
+    var p := Panel.new(); p.position = Vector2(90, 217); p.size = Vector2(700, 380); p.add_theme_stylebox_override("panel", style(class_color(opponent), 16)); root_layer.add_child(p)
+    label("%s'S GAUNTLET" % opponent.to_upper(), Vector2(20, 12), Vector2(660, 32), 22, p).add_theme_color_override("font_color", class_color(opponent))
+    var tier_titles := ["TRIAL 1", "TRIAL 2", "TRIAL 3"]
+    var tier_desc := [
+        "A good, legal %s deck." % opponent,
+        "A tougher, better-built %s deck." % opponent,
+        "%s's single hardest legal deck." % opponent]
+    for t in range(3):
+        var tier := t + 1
+        var y := 56 + t * 104
+        var row := Panel.new(); row.position = Vector2(20, y); row.size = Vector2(660, 92); row.add_theme_stylebox_override("panel", style(Color(0.14, 0.14, 0.18), 10)); p.add_child(row)
+        label(tier_titles[t], Vector2(16, 10), Vector2(220, 28), 18, row).add_theme_color_override("font_color", GOLD_COLOR)
+        label(tier_desc[t], Vector2(16, 42), Vector2(360, 40), 13, row)
+        var cleared := bool(trials_cleared.get("%s_%d" % [opponent, tier], false))
+        var locked := tier > 1 and not bool(trials_cleared.get("%s_%d" % [opponent, tier - 1], false))
+        var reward := int(TRIAL_GOLD_REWARDS.get(tier, 0))
+        var reward_label := label(("CLEARED  •  " if cleared else "") + "%d GOLD" % reward, Vector2(390, 14), Vector2(150, 24), 14, row)
+        reward_label.add_theme_color_override("font_color", Color(0.55, 0.9, 0.6) if cleared else GOLD_COLOR)
+        var fight_btn := button("LOCKED" if locked else "FIGHT", Vector2(548, 20), Vector2(96, 52),
+            (func(): pass) if locked else (func(): launch_trial_battle(opponent, tier)), row)
+        fight_btn.disabled = locked
+
+    var sponsor_unlocked := true
+    for cls in order:
+        if not bool(trials_cleared.get("%s_3" % cls, false)):
+            sponsor_unlocked = false
+    var sp := Panel.new(); sp.position = Vector2(810, 145); sp.size = Vector2(376, 452); sp.add_theme_stylebox_override("panel", style(Color(0.75, 0.62, 0.20), 18)); root_layer.add_child(sp)
+    var sp_art := TextureRect.new()
+    sp_art.texture = load("res://assets/cards/full/jd-080.jpg")
+    sp_art.position = Vector2(12, 12); sp_art.size = Vector2(352, 224)
+    sp_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    sp_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    sp_art.clip_contents = true
+    if not sponsor_unlocked:
+        sp_art.modulate = Color(0.3, 0.3, 0.3)
+    sp.add_child(sp_art)
+    label("THE SPONSOR", Vector2(12, 244), Vector2(352, 34), 24, sp).add_theme_color_override("font_color", GOLD_COLOR)
+    var sp_desc := "Every leader's best cards, all in one deck — and he never stops running 3 copies of himself." if sponsor_unlocked else "Clear Trial 3 for every leader above to call him out."
+    label(sp_desc, Vector2(12, 280), Vector2(352, 74), 14, sp)
+    var sp_reward_text := "%d GOLD" % int(TRIAL_GOLD_REWARDS.get(4, 0))
+    if not sponsor_defeated:
+        sp_reward_text += "\n+ his leader portrait, a card sleeve, and 1 Platinum copy of The Sponsor"
+    var sp_reward_label := label(sp_reward_text, Vector2(12, 356), Vector2(352, 56), 13, sp)
+    sp_reward_label.add_theme_color_override("font_color", Color(0.55, 0.9, 0.6) if sponsor_defeated else GOLD_COLOR)
+    var sp_btn := button("LOCKED" if not sponsor_unlocked else "FACE THE SPONSOR", Vector2(12, 400), Vector2(352, 44),
+        (func(): pass) if not sponsor_unlocked else (func(): launch_trial_battle("Sponsor", 4)), sp)
+    sp_btn.disabled = not sponsor_unlocked
+
+func launch_trial_battle(opponent_class: String, tier: int) -> void:
+    var your_class := selected_class if selected_class != "" else "Hope"
+    var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
+    cfg.set_value("trials", "pending_opponent", opponent_class)
+    cfg.set_value("trials", "pending_tier", tier)
+    cfg.save(SAVE_PATH)
+    var battle_cfg := ConfigFile.new()
+    battle_cfg.set_value("battle", "mode", "trial")
+    battle_cfg.set_value("battle", "your_class", your_class)
+    battle_cfg.set_value("battle", "your_deck_mode", "custom")
+    battle_cfg.set_value("battle", "opponent_class", opponent_class)
+    battle_cfg.set_value("battle", "opponent_deck_mode", "prebuilt")
+    battle_cfg.set_value("battle", "trial_tier", tier)
+    battle_cfg.save("user://battle_setup.cfg")
+    ensure_home_music()
+    await _show_battle_intro(your_class, opponent_class)
 
 func show_store() -> void:
     clear_screen(); add_background(0.72); header("JOURNEY'S DAWN STORE","Buy packs with earned Gold or securely through Google Play"); currency_bar()
