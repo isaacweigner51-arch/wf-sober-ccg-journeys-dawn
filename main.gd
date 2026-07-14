@@ -77,6 +77,12 @@ var trial_tier := 0
 # Practice: your own saved deck vs. a legal AI deck, generous turn clock,
 # no rewards/challenge progress -- purely for trying decks and reading cards.
 var practice_mode := false
+# Beginner-friendly practice AI: it still plays a legal deck, but it doesn't
+# optimize its mana curve, doesn't attack with everything, and evolves less
+# often, so new players have real room to experiment without getting run over.
+const PRACTICE_MISPLAY_CHANCE := 0.35
+const PRACTICE_SKIP_ATTACK_CHANCE := 0.4
+const PRACTICE_SKIP_EVOLVE_CHANCE := 0.6
 var class_overlay: ColorRect
 var evolution_buttons: Array[Button] = []
 var evolution_drag_cost: int = 0
@@ -4094,11 +4100,21 @@ func enemy_turn() -> void:
         unit["evolved_this_turn"] = false
     while true:
         var best := -1
+        var affordable: Array = []
         for i in range(enemy_hand.size()):
             var candidate: Dictionary = enemy_hand[i]
             var can_fit := bool(candidate.get("is_spell", false)) or follower_count(enemy_board) < MAX_BOARD
-            if can_fit and int(candidate["cost"]) <= enemy_mana and (best == -1 or int(candidate["cost"]) > int(enemy_hand[best]["cost"])): best = i
+            if can_fit and int(candidate["cost"]) <= enemy_mana:
+                affordable.append(i)
+                if best == -1 or int(candidate["cost"]) > int(enemy_hand[best]["cost"]): best = i
         if best == -1: break
+        if practice_mode:
+            # A beginner opponent doesn't optimize its curve: sometimes it
+            # leaves mana on the table for the rest of the turn, and when it
+            # does play, it isn't always the best/most expensive option.
+            if randf() < PRACTICE_MISPLAY_CHANCE:
+                break
+            best = affordable[randi() % affordable.size()]
         var unit: Dictionary = enemy_hand.pop_at(best)
         enemy_mana -= int(unit["cost"])
         if bool(unit.get("is_spell", false)):
@@ -4135,6 +4151,8 @@ func enemy_turn() -> void:
         var attacker_text := (str(attacker.get("text", "")) + " " + str(attacker.get("display_text", "")) + " " + str(attacker.get("ability", ""))).to_lower()
         if target_index < 0 and bool(attacker.get("evolved_this_turn", false)) and not ("breakthrough" in attacker_text or "storm" in attacker_text):
             continue
+        if practice_mode and randf() < PRACTICE_SKIP_ATTACK_CHANCE:
+            continue
         await animate_enemy_attack(enemy_board.find(attacker), target_index)
         if game_over: return
         await get_tree().create_timer(0.22).timeout
@@ -4153,6 +4171,8 @@ func enemy_use_evolution() -> void:
             chosen_cost = cost
             break
     if chosen_cost == 0:
+        return
+    if practice_mode and randf() < PRACTICE_SKIP_EVOLVE_CHANCE:
         return
     var target_index: int = -1
     var best_attack: int = -1
