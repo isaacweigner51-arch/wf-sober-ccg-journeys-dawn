@@ -4466,26 +4466,77 @@ func show_deck_builder() -> void:
             locked.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
             box.add_child(locked)
         grid.add_child(box)
-    var side:=Panel.new(); side.position=Vector2(860,210); side.size=Vector2(360,430); side.add_theme_stylebox_override("panel",style(class_color(selected_deck_class),14)); root_layer.add_child(side)
+    var side:=Panel.new(); side.position=Vector2(860,180); side.size=Vector2(360,460); side.add_theme_stylebox_override("panel",style(class_color(selected_deck_class),14)); root_layer.add_child(side)
     var deck_leader_frame := Panel.new()
-    deck_leader_frame.position = Vector2(92, 14)
-    deck_leader_frame.size = Vector2(176, 166)
+    deck_leader_frame.position = Vector2(92, 10)
+    deck_leader_frame.size = Vector2(176, 132)
     deck_leader_frame.clip_contents = true
     deck_leader_frame.add_theme_stylebox_override("panel", style(class_color(selected_deck_class).lightened(0.12), 12))
     side.add_child(deck_leader_frame)
     var deck_leader_art := TextureRect.new()
     deck_leader_art.texture = class_leader_texture(selected_deck_class)
     deck_leader_art.position = Vector2(6, 6)
-    deck_leader_art.size = Vector2(164, 154)
+    deck_leader_art.size = Vector2(164, 120)
     deck_leader_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     deck_leader_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     deck_leader_art.clip_contents = true
     deck_leader_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     deck_leader_frame.add_child(deck_leader_art)
-    label("%s DECK" % selected_deck_class.to_upper(),Vector2(20,184),Vector2(320,36),24,side).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    label("%d / 40 CARDS\n%s" % [saved_deck.size(),deck_validation_text()],Vector2(30,226),Vector2(300,78),16,side)
-    button("REMOVE LAST",Vector2(45,318),Vector2(270,42),remove_last,side)
-    button("RESET STARTER DECK",Vector2(45,370),Vector2(270,42),func(): build_starter_deck(selected_deck_class); save_profile(); show_deck_builder(),side)
+    label("%s DECK" % selected_deck_class.to_upper(),Vector2(20,146),Vector2(320,28),22,side).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    var validation_label := label("%d / 40 CARDS  •  %s" % [saved_deck.size(),deck_validation_text()],Vector2(16,176),Vector2(328,36),13,side)
+    validation_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    validation_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    validation_label.add_theme_color_override("font_color", GOLD_COLOR if saved_deck.size() == 40 and deck_validation_text().begins_with("DECK VALID") else Color(1.0,0.55,0.5))
+
+    # A scrollable list of exactly what's in this deck right now -- with a
+    # per-card remove button -- replaces the old "REMOVE LAST" button, which
+    # forced players to remove cards in the reverse order they were added
+    # instead of picking the specific card they wanted out.
+    var deck_counts: Dictionary = {}
+    var deck_order: Array = []
+    for id in saved_deck:
+        var key := str(id)
+        if not deck_counts.has(key):
+            deck_order.append(key)
+        deck_counts[key] = int(deck_counts.get(key, 0)) + 1
+    var list_panel := Panel.new()
+    list_panel.position = Vector2(14, 216)
+    list_panel.size = Vector2(332, 178)
+    list_panel.add_theme_stylebox_override("panel", style(Color(0.03,0.035,0.06,0.85), 8))
+    side.add_child(list_panel)
+    if deck_order.is_empty():
+        centered_label("No cards added yet.", Vector2(0,70), Vector2(332,28), 14, list_panel)
+    else:
+        var list_scroll := ScrollContainer.new()
+        list_scroll.position = Vector2(6,6); list_scroll.size = Vector2(320,166)
+        list_panel.add_child(list_scroll)
+        var list_box := VBoxContainer.new()
+        list_box.custom_minimum_size = Vector2(310,0)
+        list_box.add_theme_constant_override("separation", 4)
+        list_scroll.add_child(list_box)
+        for id in deck_order:
+            var cd := card_by_id(id)
+            if cd.is_empty(): continue
+            var row := HBoxContainer.new()
+            row.custom_minimum_size = Vector2(310,26)
+            var swatch := ColorRect.new()
+            swatch.color = class_color(str(cd.get("class","Neutral")))
+            swatch.custom_minimum_size = Vector2(6,22)
+            row.add_child(swatch)
+            var row_label := Label.new()
+            row_label.text = " x%d  %s" % [int(deck_counts[id]), str(cd.get("name","Card"))]
+            row_label.custom_minimum_size = Vector2(230,22)
+            row_label.add_theme_font_size_override("font_size", 13)
+            row_label.clip_text = true
+            row.add_child(row_label)
+            var remove_btn := Button.new()
+            remove_btn.text = "−"
+            remove_btn.custom_minimum_size = Vector2(28,24)
+            remove_btn.tooltip_text = "Remove one copy"
+            remove_btn.pressed.connect(remove_one_from_deck.bind(id))
+            row.add_child(remove_btn)
+            list_box.add_child(row)
+    button("RESET STARTER DECK",Vector2(45,402),Vector2(270,42),func(): build_starter_deck(selected_deck_class); save_profile(); show_deck_builder(),side)
 
 func add_card_to_deck(id: String) -> void:
     var cd := card_by_id(id)
@@ -4498,6 +4549,13 @@ func add_card_to_deck(id: String) -> void:
     saved_deck.append(id)
     save_profile()
     show_deck_builder()
+
+func remove_one_from_deck(id: String) -> void:
+    var index := saved_deck.find(id)
+    if index >= 0:
+        saved_deck.remove_at(index)
+        save_profile()
+        show_deck_builder()
 
 func craft_from_deck_builder(id: String) -> void:
     var cd := card_by_id(id)
@@ -4514,10 +4572,6 @@ func craft_from_deck_builder(id: String) -> void:
     dust_balance -= cost
     collection_owned[id] = owned + 1
     save_profile()
-    show_deck_builder()
-
-func remove_last() -> void:
-    if not saved_deck.is_empty(): saved_deck.pop_back(); save_profile()
     show_deck_builder()
 
 func count_in_deck(id: String) -> int:
