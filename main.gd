@@ -49,6 +49,8 @@ var player_health_label: Label
 var enemy_health_label: Label
 var mana_label: Label
 var turn_label: Label
+var hand_count_label: Label
+var evolution_count_label: Label
 var status_label: Label
 var end_turn_button: Button
 var overlay: ColorRect
@@ -1242,17 +1244,54 @@ func build_ui() -> void:
     player_leader.pressed.connect(func(): leader_clicked(true))
     add_child(player_leader)
 
-    # Hang each HP badge off the bottom-right corner of its own leader frame
-    # so health reads as one grouped unit instead of a loose floating number.
-    enemy_health_label = make_hp_label(Vector2(147, 158), class_accent_color(enemy_class))
-    enemy_health_label.z_index = 5
-    enemy_leader.add_child(enemy_health_label)
-    player_health_label = make_hp_label(Vector2(147, 158), class_accent_color(selected_class))
-    player_health_label.z_index = 5
-    player_leader.add_child(player_health_label)
+    # Hang each HP badge off the bottom-right corner of its own leader frame.
+    # IMPORTANT: these must NOT be children of the leader Button — make_leader()
+    # sets leader.clip_contents = true so its own portrait art doesn't bleed
+    # out, and a badge offset far enough to "hang off the corner" fell mostly
+    # outside the leader's own (195x185) rect, so it was being silently
+    # clipped away entirely. Parenting to self (unclipped) with an absolute
+    # position fixes that; z_index keeps it above board art either way.
+    enemy_health_label = make_hp_label(enemy_leader.position + Vector2(118, 142), class_accent_color(enemy_class))
+    enemy_health_label.z_index = 130
+    add_child(enemy_health_label)
+    player_health_label = make_hp_label(player_leader.position + Vector2(118, 142), class_accent_color(selected_class))
+    player_health_label.z_index = 130
+    add_child(player_health_label)
 
     build_play_point_counter()
-    turn_label = Label.new(); turn_label.position = Vector2(1048, 650); turn_label.size = Vector2(210, 30); turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; turn_label.add_theme_font_size_override("font_size", ui_font(17)); add_child(turn_label)
+    # The old turn_label was a plain unstyled Label wedged against the bottom
+    # edge of the momentum button and doubled as the hand-size counter too —
+    # easy to miss and easy to misread. Give the turn number its own bold
+    # badge up near the header where players are already looking, and keep
+    # the hand count as a separate, smaller label near the hand tray.
+    var turn_panel := Panel.new()
+    turn_panel.position = Vector2(555, 60)
+    turn_panel.size = Vector2(170, 44)
+    turn_panel.z_index = 140
+    var turn_panel_style := StyleBoxFlat.new()
+    turn_panel_style.bg_color = Color(0.03, 0.045, 0.08, 0.94)
+    turn_panel_style.border_color = Color(0.96, 0.83, 0.45, 0.9)
+    turn_panel_style.set_border_width_all(2)
+    turn_panel_style.set_corner_radius_all(20)
+    turn_panel_style.shadow_color = Color(0, 0, 0, 0.5)
+    turn_panel_style.shadow_size = 8
+    turn_panel.add_theme_stylebox_override("panel", turn_panel_style)
+    add_child(turn_panel)
+    turn_label = Label.new()
+    turn_label.position = Vector2(0, 0)
+    turn_label.size = Vector2(170, 44)
+    turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    turn_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    turn_label.add_theme_font_size_override("font_size", ui_font(19))
+    turn_label.add_theme_color_override("font_color", Color(0.99, 0.93, 0.72))
+    turn_panel.add_child(turn_label)
+
+    hand_count_label = Label.new()
+    hand_count_label.position = Vector2(150, 580)
+    hand_count_label.size = Vector2(200, 24)
+    hand_count_label.add_theme_font_size_override("font_size", ui_font(13))
+    hand_count_label.add_theme_color_override("font_color", Color(0.82, 0.88, 0.96))
+    add_child(hand_count_label)
 
     status_label = Label.new(); status_label.position = Vector2(280, 276); status_label.size = Vector2(720, 32); status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; status_label.add_theme_font_size_override("font_size", ui_font(16)); status_label.add_theme_color_override("font_color", Color(0.96, 0.91, 0.72)); add_child(status_label)
 
@@ -1510,13 +1549,25 @@ func build_evolution_panel() -> void:
 
     var label := Label.new()
     label.text = "DRAG AN EVOLUTION ORB ONTO A FOLLOWER"
-    label.position = Vector2(8, 4)
-    label.size = Vector2(236, 20)
+    label.position = Vector2(8, 2)
+    label.size = Vector2(236, 12)
     label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    label.add_theme_font_size_override("font_size", ui_font(10))
+    label.add_theme_font_size_override("font_size", ui_font(9))
     label.add_theme_color_override("font_color", Color(0.78, 0.92, 1.0))
     label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     panel.add_child(label)
+
+    # A direct "abilities used" readout — the four orbs below already show a
+    # checkmark once spent, but that only reads clearly one at a time. This
+    # gives a single at-a-glance count of how many evolutions are left.
+    evolution_count_label = Label.new()
+    evolution_count_label.position = Vector2(8, 14)
+    evolution_count_label.size = Vector2(236, 12)
+    evolution_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    evolution_count_label.add_theme_font_size_override("font_size", ui_font(10))
+    evolution_count_label.add_theme_color_override("font_color", Color(1.0, 0.83, 0.35))
+    evolution_count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    panel.add_child(evolution_count_label)
 
     evolution_buttons.clear()
     var star_counts: Array[int] = [1, 2, 3, 4]
@@ -3977,7 +4028,13 @@ func refresh_ui(animate_new: bool = false, new_index: int = -1, new_player_side:
             pip.color = Color(0.16, 0.34, 0.46, 1.0)
         else:
             pip.color = Color(0.055, 0.09, 0.12, 0.9)
-    safe_set_text(turn_label, "TURN %d   HAND %d/%d" % [turn_number, player_hand.size(), MAX_HAND])
+    safe_set_text(turn_label, "TURN %d" % turn_number)
+    safe_set_text(hand_count_label, "HAND  %d/%d" % [player_hand.size(), MAX_HAND])
+    var evolutions_left := 0
+    for used in player_evolutions_used:
+        if not used:
+            evolutions_left += 1
+    safe_set_text(evolution_count_label, "%d/%d EVOLUTIONS LEFT" % [evolutions_left, player_evolutions_used.size()])
     safe_set_text(momentum_button, "MOMENTUM\n%d CHARGE%s" % [player_momentum, "" if player_momentum == 1 else "S"])
     safe_set_disabled(momentum_button, not player_turn_active or momentum_used_this_turn or player_momentum <= 0 or busy or game_over)
     safe_set_text(momentum_label, "Opponent Momentum: %d" % enemy_momentum)
