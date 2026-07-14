@@ -1,20 +1,19 @@
 {
-  "version": "0.8.6",
-  "build": "Prebuilt Leader Art + Storm Theme",
+  "version": "0.8.7",
+  "build": "Bulk Pack Opening + Text Fit Fixes",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Prebuilt decks now use four unclipped hero-style leader panels. Home music is faster and includes prominent crashing-wave and thunder accents.",
+  "notes": "Open multiple packs at once, and card text no longer spills past its borders anywhere in the game.",
   "required": false,
-  "version_code": "0.8.6",
-  "build_name": "Prebuilt Leader Art + Storm Theme",
+  "version_code": "0.8.7",
+  "build_name": "Bulk Pack Opening + Text Fit Fixes",
   "card_count": 120,
-  "version_name": "0.8.6",
+  "version_name": "0.8.7",
   "fixes": [
-    "Added new Recovery Skill amulets for Courage (Face It Head-On) and Hope (Second Chances), and fixed Serenity's Sanctuary of Serenity so it works in real matches, not just the tutorial.",
-    "Fixed prebuilt decks that were randomly 40 or 41 cards depending on class.",
-    "Fixed several Dev/showcase decks that were silently missing cards due to name typos.",
-    "Redesigned the Evolution panel so tiers are easier to read at a glance."
+    "Added bulk pack opening: open 5, 10, 25, or all of your packs at once from the pack screen, with results shown in a sortable grid instead of one at a time.",
+    "Fixed card names and effect text overflowing past the edges of their cards and buttons across every screen, not just the store.",
+    "Fixed a crash when opening packs caused by animations not being cleaned up properly."
   ],
   "upcoming_events": [
     "More seasonal content and cards are in development — check back after future updates for details."
