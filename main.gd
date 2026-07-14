@@ -266,22 +266,22 @@ func build_class_cards(faction_name: String) -> Array:
     if faction_name == "Serenity":
         return [
             card("Quiet Observer",1,1,2,faction_name,"Bronze","freeze",1,"On Play: Exhaust the strongest enemy next turn.","road"),
-            card("Stillwater Acolyte",1,1,3,faction_name,"Bronze","calm_heal",1,"Calm: Restore 1 defense if you ended last turn without attacking.","shield"),
-            card("Deep Breath",2,2,2,faction_name,"Bronze","bounce_small",2,"On Play: Return an enemy costing 2 or less to its owner's hand.","hands"),
-            card("Patient Listener",2,1,4,faction_name,"Bronze","draw",1,"On Play: Draw a card.","hands"),
+            card("Stillwater Acolyte",1,2,3,faction_name,"Bronze","calm_heal",1,"Calm: Restore 1 defense if you ended last turn without attacking.","shield"),
+            card("Deep Breath",2,3,2,faction_name,"Bronze","bounce_small",2,"On Play: Return an enemy costing 2 or less to its owner's hand.","hands"),
+            card("Patient Listener",2,2,4,faction_name,"Bronze","draw",1,"On Play: Draw a card.","hands"),
             card("Peacekeeper",3,2,5,faction_name,"Bronze","guard",0,"Guard. Enemies must face this follower first.","shield"),
             card("Moment of Peace",3,3,3,faction_name,"Silver","freeze",1,"On Play: Exhaust the strongest enemy next turn.","road"),
             card("Reflective Pool",4,3,5,faction_name,"Silver","bounce",0,"On Play: Return the strongest enemy follower to its owner's hand.","star"),
             card("Tranquil Shieldbearer",4,3,6,faction_name,"Silver","guard",0,"Guard.","shield"),
             card("Measured Response",5,4,6,faction_name,"Gold","damage_unit",4,"On Play: Deal 4 to the strongest enemy follower.","star"),
             card("Keeper of Balance",5,4,7,faction_name,"Gold","heal_draw",2,"On Play: Restore 2 defense and draw a card.","hands"),
-            card("Tide of Acceptance",6,5,7,faction_name,"Gold","damage_all",2,"On Play: Deal 2 to every other follower.","road"),
+            card("Tide of Acceptance",6,5,7,faction_name,"Gold","damage_all",3,"On Play: Deal 3 to every other follower.","road"),
             card("Voice of Reassurance",4,3,5,faction_name,"Legendary","draw_reduce",2,"On Play: Draw 2, then reduce the highest-cost card in hand by 1.","hands"),
             card("Sanctuary Elder",7,5,10,faction_name,"Legendary","guard_heal",4,"Guard. On Play: Restore 4 defense.","shield"),
-            card("Moment of Clarity",7,4,7,faction_name,"Legendary","board_clear",0,"On Play: Send every other follower to the Relapse Zone.","star"),
-            card("Calm After the Storm",8,0,0,faction_name,"Epic","calm_after_storm",0,"Spell: Destroy all followers. Restore 5 defense. If 6 or more followers were destroyed, draw 2 cards.","star"),
-            card("Inner Peace",8,5,7,faction_name,"Platinum","serenity_platinum",0,"SIGNATURE PLATINUM — Evolve for free. Restore 5 defense and preserve the first allied follower that would be destroyed each turn.","star"),
-            card("Peace Beyond Fear",9,7,11,faction_name,"Legendary","heal_draw",5,"On Play: Restore 5 defense and draw a card.","star","jd-124")]
+            card("Moment of Clarity",7,6,8,faction_name,"Legendary","board_clear",0,"On Play: Send every other follower to the Relapse Zone.","star"),
+            card("Calm After the Storm",8,0,0,faction_name,"Epic","calm_after_storm",0,"Spell: Destroy all followers. Restore 6 defense. If 5 or more followers were destroyed, draw 2 cards.","star"),
+            card("Inner Peace",8,6,8,faction_name,"Platinum","serenity_platinum",0,"SIGNATURE PLATINUM — Evolve for free. Restore 5 defense and preserve the first allied follower that would be destroyed each turn.","star"),
+            card("Peace Beyond Fear",9,8,12,faction_name,"Legendary","heal_draw",5,"On Play: Restore 5 defense and draw a card.","star","jd-124")]
     if faction_name == "Courage":
         return [
             card("Spark Runner",1,2,1,faction_name,"Bronze","charge",0,"Charge.","flame"),
@@ -3122,10 +3122,10 @@ func resolve_spell(spell: Dictionary, player_side: bool) -> void:
         destroyed += await destroy_all_followers_on_side(player_board, true)
         destroyed += await destroy_all_followers_on_side(enemy_board, false)
         if player_side:
-            player_health = min(STARTING_HEALTH, player_health + 5)
+            player_health = min(STARTING_HEALTH, player_health + 6)
         else:
-            enemy_health = min(STARTING_HEALTH, enemy_health + 5)
-        if destroyed >= 6:
+            enemy_health = min(STARTING_HEALTH, enemy_health + 6)
+        if destroyed >= 5:
             for _i in range(2):
                 draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
         await show_vfx("CALM AFTER THE STORM — %d FOLLOWERS CLEARED" % destroyed, Vector2(640, 350), Color(0.58, 0.9, 1.0))

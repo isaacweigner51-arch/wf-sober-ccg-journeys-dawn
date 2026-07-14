@@ -335,9 +335,9 @@
     "class": "Serenity",
     "rarity": "Bronze",
     "cost": 1,
-    "attack": 1,
+    "attack": 2,
     "health": 3,
-    "effect": "Calm: Restore 1 defense after a patient turn.",
+    "effect": "Calm: Restore 1 defense if you ended last turn without attacking.",
     "max_copies": 3
   },
   {
@@ -346,7 +346,7 @@
     "class": "Serenity",
     "rarity": "Bronze",
     "cost": 2,
-    "attack": 2,
+    "attack": 3,
     "health": 2,
     "effect": "On Play: Return an enemy costing 2 or less to hand.",
     "max_copies": 3
@@ -357,7 +357,7 @@
     "class": "Serenity",
     "rarity": "Bronze",
     "cost": 2,
-    "attack": 1,
+    "attack": 2,
     "health": 4,
     "effect": "On Play: Draw a card.",
     "max_copies": 3
@@ -436,7 +436,7 @@
     "cost": 6,
     "attack": 5,
     "health": 7,
-    "effect": "On Play: Deal 2 to every other follower.",
+    "effect": "On Play: Deal 3 to every other follower.",
     "max_copies": 3
   },
   {
@@ -467,8 +467,8 @@
     "class": "Serenity",
     "rarity": "Legendary",
     "cost": 7,
-    "attack": 4,
-    "health": 7,
+    "attack": 6,
+    "health": 8,
     "effect": "On Play: Send every other follower to the Relapse Zone.",
     "max_copies": 2
   },
@@ -478,8 +478,8 @@
     "class": "Serenity",
     "rarity": "Platinum",
     "cost": 8,
-    "attack": 5,
-    "health": 7,
+    "attack": 6,
+    "health": 8,
     "effect": "Signature Platinum: Evolve for free. Restore 5 defense and preserve your board through patience.",
     "max_copies": 1
   },
@@ -1331,7 +1331,7 @@
     "cost": 8,
     "attack": 0,
     "health": 0,
-    "effect": "Spell: Destroy all followers. Restore 5 defense to your leader. If 6 or more followers were destroyed, draw 2 cards.",
+    "effect": "Spell: Destroy all followers. Restore 6 defense to your leader. If 5 or more followers were destroyed, draw 2 cards.",
     "max_copies": 3,
     "is_spell": true
   }
