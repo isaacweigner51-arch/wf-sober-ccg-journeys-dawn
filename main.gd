@@ -4387,6 +4387,17 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
     flash_tween.tween_property(flash, "color:a", 0.30, 0.15)
     flash_tween.tween_property(flash, "color:a", 0.0, 0.45)
 
+    # Leaders keep their own infinite idle-bob tween running on this same
+    # "scale" property (see start_leader_idle) for as long as they're on
+    # screen, including through the end of the match. That tween is never
+    # stopped, so it keeps fighting this sequence's tweens for the same
+    # property indefinitely. `await <tween>.finished` only fires on a clean
+    # natural finish -- if this tween is ever interrupted (freed target,
+    # killed by an unrelated system, etc.) that signal never arrives and the
+    # whole coroutine hangs forever on the VICTORY banner. Awaiting a fixed
+    # timer matching each tween's own duration instead (the same fix already
+    # applied one level up in _finish_match) makes every step here
+    # unconditionally advance no matter what happens to the tween itself.
     if is_instance_valid(loser):
         var loser_start_rotation := loser.rotation
         var loser_start_scale := loser.scale
@@ -4395,7 +4406,7 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         loser_tween.tween_property(loser, "rotation", loser_start_rotation + deg_to_rad(-10.0), 0.42)
         loser_tween.tween_property(loser, "modulate", Color(0.25, 0.28, 0.36, 0.45), 0.42)
         loser_tween.tween_property(loser, "scale", loser_start_scale * 0.78, 0.42)
-        await loser_tween.finished
+        await get_tree().create_timer(0.42, true, false, true).timeout
         await show_vfx("DEFEATED", loser.global_position + Vector2(28, 35), Color(1.0, 0.34, 0.28))
 
     if is_instance_valid(winner):
@@ -4407,7 +4418,7 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         winner_tween.parallel().tween_property(winner, "rotation", original_rotation + deg_to_rad(2.5), 0.28)
         winner_tween.tween_property(winner, "scale", original_scale * 1.12, 0.22)
         winner_tween.parallel().tween_property(winner, "rotation", original_rotation, 0.22)
-        await winner_tween.finished
+        await get_tree().create_timer(0.5, true, false, true).timeout
 
         for i in range(18):
             var sparkle := Label.new()
@@ -4473,13 +4484,13 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         banner_tween.tween_property(banner, "modulate:a", 1.0, 0.24)
         banner_tween.tween_property(banner_backdrop, "scale", Vector2.ONE, 0.42)
         banner_tween.tween_property(banner_backdrop, "modulate:a", 1.0, 0.24)
-        await banner_tween.finished
-        await get_tree().create_timer(0.65).timeout
+        await get_tree().create_timer(0.42, true, false, true).timeout
+        await get_tree().create_timer(0.65, true, false, true).timeout
         var banner_out := create_tween()
         banner_out.tween_property(banner, "modulate:a", 0.0, 0.22)
         banner_out.parallel().tween_property(banner_backdrop, "modulate:a", 0.0, 0.22)
         banner_out.parallel().tween_property(scrim, "color:a", 0.0, 0.22)
-        await banner_out.finished
+        await get_tree().create_timer(0.22, true, false, true).timeout
 
     if is_instance_valid(finish_layer):
         finish_layer.queue_free()
