@@ -1,20 +1,19 @@
 {
-  "version": "0.8.10",
-  "build": "Academy End-Turn Fix & Patch Notes Overlap Fix",
+  "version": "0.8.11",
+  "build": "Academy Tutorial Content Pass",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Fixed the Academy tutorial getting permanently stuck on the End Your Turn lesson, and fixed patch-note text overlapping itself on the What's New popup.",
+  "notes": "Every Academy lesson now opens with an actual in-character line from that lesson's mentor tying the mechanic to what it means, instead of just a dry click-through instruction. The battlefield-zones lesson also explains why each zone matters, not just where it is.",
   "required": false,
-  "version_code": "0.8.10",
-  "build_name": "Academy End-Turn Fix & Patch Notes Overlap Fix",
+  "version_code": "0.8.11",
+  "build_name": "Academy Tutorial Content Pass",
   "card_count": 120,
-  "version_name": "0.8.10",
-  "fixes": [
-    "Fixed the Academy tutorial's End Your Turn lesson getting permanently stuck: the CONTINUE button never appeared after clicking END TURN, blocking all progress through the tutorial.",
-    "Fixed patch-note text overlapping itself on the What's New popup for longer entries; the list now sizes and scrolls correctly no matter how long an entry is."
+  "version_name": "0.8.11",
+  "fixes": [],
+  "features": [
+    "Added a mentor voice line to every Academy lesson, and real 'why it matters' explanations to the battlefield-zones lesson, so the tutorial teaches the reasoning behind each mechanic instead of only the click sequence."
   ],
-  "features": [],
   "upcoming_events": [
     "More seasonal content and cards are in development — check back after future updates for details."
   ]

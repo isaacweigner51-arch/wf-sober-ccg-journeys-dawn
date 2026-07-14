@@ -1812,7 +1812,31 @@ func show_academy_lesson() -> void:
     board.add_child(glow)
     board.move_child(glow, 0)
 
-    var instruction := centered_label("", Vector2(70, 24), Vector2(950, 78), 21, board)
+    # Every lesson previously showed the mentor's name and portrait but never
+    # actually gave them a voice -- the "teaching" was just a dry mechanical
+    # instruction line ("Click X, then click Y") with nothing tying it back
+    # to who's supposedly teaching it or why it matters. A short in-character
+    # line from that lesson's mentor, shown above the mechanical objective,
+    # gives every lesson an actual point beyond "click the highlighted thing."
+    var mentor_lines := [
+        "Everyone gets do-overs. Just remember every one you take hands your opponent an opening — choose what you throw away with your eyes open.",
+        "Know the ground you're standing on before you're in the middle of a fight. That's how you stay steady when things get hard.",
+        "You don't get through this alone. Every follower you bring onto this board is somebody showing up for you.",
+        "Courage isn't reckless. Clear what's actually in your way first, then go for what matters.",
+        "Getting through one more day makes you stronger for the next one. That's what ending your turn really means.",
+        "Some relief is immediate. Real progress is the kind that keeps paying off, turn after turn.",
+        "Every leader here has one card that says exactly who they are. Find yours.",
+        "The words on a card matter. Learn what they actually mean and you'll never misread one again.",
+        "A setback isn't the end of the story. What matters is what you do the day after.",
+        "Nobody makes it through this by themselves. A sponsor takes the hit so you don't have to.",
+        "Before you walk out that door, know your program. The rules are what keep you honest with yourself.",
+    ]
+    var mentor_line := centered_label(mentor_lines[academy_step] if academy_step < mentor_lines.size() else "", Vector2(70, 8), Vector2(950, 40), 15, board)
+    mentor_line.add_theme_color_override("font_color", accent.lightened(0.35))
+    var mentor_name_tag := centered_label("— %s" % mentors[academy_step], Vector2(70, 40), Vector2(950, 18), 11, board)
+    mentor_name_tag.modulate = Color(0.7, 0.72, 0.78)
+
+    var instruction := centered_label("", Vector2(70, 60), Vector2(950, 40), 19, board)
     instruction.add_theme_color_override("font_color", Color(0.96,0.93,0.82))
 
     var feedback_chip := Panel.new()
@@ -1948,6 +1972,18 @@ func lesson_complete() -> void:
         show_academy_lesson()
 
 func build_zone_lesson(board: Control) -> void:
+    # Each zone used to just report "identified" when clicked -- true, but it
+    # never said why that zone matters, so the lesson taught where things are
+    # without ever teaching what they're for. A one-line "why" per zone (shown
+    # in the feedback chip on click) turns it from a five-item scavenger hunt
+    # into an actual orientation to the board.
+    var why := {
+        "leader": "This is what you're protecting. The match ends the moment it hits 0.",
+        "hand": "Your options for this turn. Anything not played by End Turn just waits for next turn.",
+        "deck": "Run out of deck and you can't draw — every card you spend now is one less later.",
+        "relapse": "Where your fallen followers go. It isn't the end for them — Recovery can bring them back.",
+        "points": "What you spend to play cards. It goes up by 1 every turn, so your options grow with it.",
+    }
     var selected := {"leader":false, "hand":false, "deck":false, "relapse":false, "points":false}
     var counter := [0]
     var make_zone := func(text_value: String, pos: Vector2, key: String):
@@ -1959,7 +1995,7 @@ func build_zone_lesson(board: Control) -> void:
             if is_instance_valid(b):
                 b.disabled = true
                 b.text += "  ✓"
-            academy_feedback_text("%s identified. %d of 5 zones found." % [text_value, counter[0]])
+            academy_feedback_text("%s — %d of 5 zones found." % [str(why.get(key, "")), counter[0]])
             if counter[0] == 5: lesson_complete()
         , board)
     make_zone.call("YOUR LEADER\n20 DEFENSE", Vector2(90, 130), "leader")
