@@ -1,17 +1,17 @@
 {
-  "version": "0.8.13",
-  "build": "Collection Card Type Labels",
+  "version": "0.8.14",
+  "build": "Revival Strips Evolution",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Every card in the Collection and Deck Builder now shows its type (Follower, Spell, or Amulet) alongside its cost and rarity, instead of spells showing a misleading 0/0 attack-health line.",
+  "notes": "A follower brought back from the Relapse Zone (Second Chance, Phoenix Rising, Promise of Tomorrow, Never Forgotten, Back on Track, One Day at a Time, Recovery Call) now correctly returns as its base, non-evolved self instead of keeping its evolved bonus stats and badge.",
   "required": false,
-  "version_code": "0.8.13",
-  "build_name": "Collection Card Type Labels",
+  "version_code": "0.8.14",
+  "build_name": "Revival Strips Evolution",
   "card_count": 120,
-  "version_name": "0.8.13",
+  "version_name": "0.8.14",
   "fixes": [
-    "Collection and Deck Builder card tiles now clearly label every card as FOLLOWER, SPELL, or AMULET next to its rarity. Spells previously showed a leftover 0/0 attack-health line with no indication they were spells."
+    "Followers revived from the Relapse Zone no longer keep their evolved bonus stats/badge -- reviving a follower now correctly returns it to its base, non-evolved form."
   ],
   "features": [],
   "upcoming_events": [

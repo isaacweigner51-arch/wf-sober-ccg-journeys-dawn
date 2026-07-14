@@ -4670,11 +4670,53 @@ func reduce_hand_cost(hand: Array, amount: int, all_cards: bool) -> void:
         if int(hand[i].get("cost", 0)) > int(hand[idx].get("cost", 0)): idx = i
     hand[idx]["cost"] = maxi(0, int(hand[idx].get("cost", 0)) - amount)
 
+func _fresh_base_card(name: String, faction_hint: String) -> Dictionary:
+    # Looks up a card's original, pre-evolution definition by name so a
+    # revived follower can be reverted to its base stats instead of keeping
+    # whatever evolution bonus it had when it died.
+    if name == "":
+        return {}
+    var found := _find_card_by_name(build_universal_cards(), name)
+    if not found.is_empty():
+        return found
+    var faction_classes := ["Hope", "Courage", "Serenity", "Purpose"]
+    if faction_hint in faction_classes:
+        found = _find_card_by_name(build_class_cards(faction_hint), name)
+        if not found.is_empty():
+            return found
+    for faction_class in faction_classes:
+        found = _find_card_by_name(build_class_cards(faction_class), name)
+        if not found.is_empty():
+            return found
+    return {}
+
+func _strip_evolution_for_revival(follower: Dictionary) -> Dictionary:
+    # Evolution is a one-time battlefield power spike, not a permanent
+    # upgrade to the card -- a follower coming back from the Relapse Zone
+    # returns as its base, non-evolved self, the same as a fresh copy of
+    # that card would be.
+    var base := _fresh_base_card(str(follower.get("name", "")), str(follower.get("faction", "")))
+    if base.is_empty():
+        # No definition found (e.g. a one-off Training/story card) -- there's
+        # nothing to revert numbers to, so just clear the evolved flag/badge
+        # rather than losing the card or guessing at its base stats.
+        follower["evolved"] = false
+        follower["evolved_this_turn"] = false
+        return follower
+    follower["attack"] = int(base.get("attack", follower.get("attack", 0)))
+    follower["health"] = int(base.get("health", follower.get("health", 0)))
+    follower["max_health"] = int(base.get("health", follower.get("max_health", follower.get("health", 0))))
+    follower["evolved"] = false
+    follower["evolved_this_turn"] = false
+    return follower
+
 func recover_from_relapse(player_side: bool, mode: String, amount: int) -> void:
     var relapse: Array = player_relapse if player_side else enemy_relapse
     if relapse.is_empty():
         await show_vfx("RELAPSE ZONE EMPTY", area_center(player_side), Color(0.72, 0.72, 0.85)); return
     var recovered: Dictionary = relapse.pop_back()
+    if bool(recovered.get("evolved", false)) and not bool(recovered.get("is_amulet", false)) and not bool(recovered.get("is_spell", false)):
+        recovered = _strip_evolution_for_revival(recovered)
     recovered["health"] = int(recovered.get("max_health", recovered.get("health", 1)))
     recovered["can_attack"] = mode == "revive_charge"
     training_on_recovered(player_side)
