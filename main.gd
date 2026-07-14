@@ -1556,7 +1556,7 @@ func leader_emote(leader: Control, symbol: String, color: Color) -> void:
 # fighting over the same "scale" property.
 func start_leader_idle(portrait: TextureRect) -> void:
     portrait.pivot_offset = portrait.size * 0.5
-    var idle := create_tween().set_loops()
+    var idle := create_tween().set_loops().bind_node(portrait)
     idle.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
     idle.tween_property(portrait, "scale", Vector2(1.035, 1.035), 1.5)
     idle.tween_property(portrait, "scale", Vector2(1.0, 1.0), 1.5)
@@ -2127,7 +2127,7 @@ func build_evolution_panel() -> void:
 # also dimmed per-frame in refresh_ui via modulate, so the pulse checks
 # `disabled` on every step and snaps back to rest scale instead of animating.
 func _start_evolution_orb_pulse(orb: Button) -> void:
-    var pulse := create_tween().set_loops()
+    var pulse := create_tween().set_loops().bind_node(orb)
     pulse.tween_method(_apply_evolution_pulse.bind(orb), 0.0, 1.0, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
     pulse.tween_method(_apply_evolution_pulse.bind(orb), 1.0, 0.0, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
@@ -2620,7 +2620,7 @@ func play_legendary_evolution_animation(index: int, cost: int, player_side: bool
         beam.rotation = TAU * float(i) / 8.0
         beam.mouse_filter = Control.MOUSE_FILTER_IGNORE
         beam_root.add_child(beam)
-    var spin := create_tween().set_loops()
+    var spin := create_tween().set_loops().bind_node(beam_root)
     spin.tween_property(beam_root, "rotation", TAU, 6.0).set_trans(Tween.TRANS_LINEAR)
 
     var hero_portrait := build_art_medallion(resolve_card_full_art(follower), screen_center - Vector2(150, 230), Vector2(300, 380), Color(1.0, 0.84, 0.30), 22)
@@ -2771,7 +2771,7 @@ func play_platinum_evolution_animation(index: int, cost: int, player_side: bool)
         beam.rotation = TAU * float(i) / 10.0
         beam.mouse_filter = Control.MOUSE_FILTER_IGNORE
         beam_root.add_child(beam)
-    var spin := create_tween().set_loops()
+    var spin := create_tween().set_loops().bind_node(beam_root)
     spin.tween_property(beam_root, "rotation", TAU, 8.0).set_trans(Tween.TRANS_LINEAR)
 
     var ring_outer := ColorRect.new()

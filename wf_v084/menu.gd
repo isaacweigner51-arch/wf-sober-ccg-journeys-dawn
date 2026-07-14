@@ -3613,7 +3613,12 @@ func build_pack_visual(pos: Vector2, size_value: Vector2, parent: Control = root
     shimmer.rotation = -0.35
     shimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pack.add_child(shimmer)
-    var shimmer_tween := create_tween().set_loops()
+    # bind_node() ties this infinite loop to shimmer's lifetime -- without it
+    # the tween keeps running against the SceneTree after the pack (and its
+    # shimmer child) is freed on the next screen change, and the very next
+    # loop iteration throws "Invalid assignment of property... on a base
+    # object of type Nil" trying to set .position on the freed node.
+    var shimmer_tween := create_tween().set_loops().bind_node(shimmer)
     shimmer_tween.tween_callback(func(): shimmer.position = Vector2(-size_value.x * 0.5, -size_value.y * 0.3); shimmer.color = Color(1, 1, 1, 0.0))
     shimmer_tween.tween_property(shimmer, "color", Color(1, 1, 1, 0.16), 0.25)
     shimmer_tween.parallel().tween_property(shimmer, "position:x", size_value.x * 1.1, 1.3).set_trans(Tween.TRANS_SINE)
