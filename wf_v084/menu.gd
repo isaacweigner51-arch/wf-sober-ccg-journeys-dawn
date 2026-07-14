@@ -219,7 +219,7 @@ func _on_launch_auth_result(success: bool, message: String) -> void:
     elif academy_complete:
         show_home()
     else:
-        show_first_day_intro()
+        begin_academy()
 
 func _on_viewport_size_changed() -> void:
     # Keep the account launch screen active during rotation/resizing.
@@ -424,10 +424,10 @@ func show_home() -> void:
     var nav_items = [
         ["HOME", show_home], ["BATTLE", start_battle], ["DECK BUILDER", show_deck_builder],
         ["COLLECTION", show_collection], ["STORE", show_store], ["STORY MODE", show_story_mode],
-        ["ONLINE VS", show_online_vs_setup]
+        ["ONLINE VS", show_online_vs_setup], ["HOW TO PLAY", replay_how_to_play]
     ]
     for i in range(nav_items.size()):
-        button(str(nav_items[i][0]), Vector2(14, 145 + i * 57), Vector2(190, 46), nav_items[i][1], nav)
+        button(str(nav_items[i][0]), Vector2(14, 145 + i * 50), Vector2(190, 44), nav_items[i][1], nav)
     var reward := Panel.new()
     reward.position = Vector2(14, 558)
     reward.size = Vector2(190, 44)
@@ -781,7 +781,7 @@ func show_daily_reward_claimed(reward_index: int, reward: Dictionary) -> void:
 
 func show_first_day_intro() -> void:
     clear_screen(); add_background(0.68)
-    header("RECOVERY ACADEMY", "Choose a class, learn its growth resource, then complete a real training battle")
+    header("CLASS TRAINING", "Choose a class, learn its growth resource, then complete a real training battle")
 
     var intro := centered_label("Each class grows differently. Pick the path you want to learn first.", Vector2(170, 88), Vector2(940, 48), 20)
     intro.add_theme_color_override("font_color", Color(0.96,0.91,0.72))
@@ -851,6 +851,16 @@ func begin_academy() -> void:
     academy_action_stage = 0
     show_academy_lesson()
 
+func replay_how_to_play() -> void:
+    # Lets a graduated player revisit the core rules lessons. academy_complete
+    # is never cleared here, so if they exit mid-replay, gating elsewhere
+    # (which only checks academy_complete, not academy_step) is unaffected.
+    # Reaching the end just re-shows the graduation screen's "already
+    # claimed" branch since academy_complete stays true throughout.
+    academy_step = 0
+    academy_action_stage = 0
+    show_academy_lesson()
+
 func centered_label(text_value: String, pos: Vector2, size_value: Vector2, font_size := 18, parent: Control = root_layer) -> Label:
     var l := label(text_value, pos, size_value, font_size, parent)
     l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -872,9 +882,9 @@ func academy_feedback_text(text_value: String, positive := true) -> void:
 func show_academy_lesson() -> void:
     clear_screen(); add_background(0.68)
     academy_action_stage = 0
-    var lesson_titles := ["PROVING YOURSELF", "THE BATTLEFIELD", "PLAY A FOLLOWER", "COMBAT", "SPELLS & AMULETS", "RECOVERY & REVIVE", "SPONSOR & SPONSEE"]
-    var mentors := ["Purpose Champion", "Hope Mentor", "Courage Veteran", "Courage Veteran", "Serenity Guardian", "Hope Mentor", "Purpose Champion"]
-    header(lesson_titles[academy_step], "Lesson %d of 7 • %s" % [academy_step + 1, mentors[academy_step]])
+    var lesson_titles := ["PROVING YOURSELF", "THE BATTLEFIELD", "PLAY A FOLLOWER", "COMBAT", "SPELLS & AMULETS", "RECOVERY & REVIVE", "SPONSOR & SPONSEE", "BUILDING YOUR DECK"]
+    var mentors := ["Purpose Champion", "Hope Mentor", "Courage Veteran", "Courage Veteran", "Serenity Guardian", "Hope Mentor", "Purpose Champion", "Recovery Academy Dean"]
+    header(lesson_titles[academy_step], "Lesson %d of 8 • %s" % [academy_step + 1, mentors[academy_step]])
 
     var board := Panel.new()
     board.position = Vector2(95, 126)
@@ -908,6 +918,9 @@ func show_academy_lesson() -> void:
         6:
             instruction.text = "Play Sponsor, choose a Sponsee, and trigger the protective bond."
             build_sponsor_lesson(board)
+        7:
+            instruction.text = "Learn the rules for building a legal deck before you head to the Deck Builder."
+            build_deck_building_lesson(board)
 
 func build_second_chance_lesson(board: Control) -> void:
     var selected: Array[int] = []
@@ -985,7 +998,7 @@ func lesson_complete() -> void:
     academy_step += 1
     academy_action_stage = 0
     save_profile()
-    if academy_step >= 7:
+    if academy_step >= 8:
         show_academy_graduation()
     else:
         show_academy_lesson()
@@ -1155,6 +1168,58 @@ func build_sponsor_lesson(board: Control) -> void:
         lesson_complete()
     ,board)
 
+func build_deck_building_lesson(board: Control) -> void:
+    var copy_rules := centered_label(
+        "A legal deck is EXACTLY 40 CARDS.\nUse only cards from your class plus Universal (Neutral) cards.",
+        Vector2(60, 30), Vector2(970, 60), 20, board)
+    copy_rules.add_theme_color_override("font_color", Color(0.96, 0.93, 0.82))
+
+    var limits := ["BRONZE / SILVER / GOLD / EPIC\nup to 3 copies", "LEGENDARY\nup to 2 copies", "PLATINUM / SIGNATURE\nonly 1 copy"]
+    var limit_colors := [Color(0.75, 0.75, 0.78), Color(0.55, 0.75, 1.0), GOLD_COLOR]
+    for i in range(limits.size()):
+        var chip := Panel.new()
+        chip.position = Vector2(60 + i * 330, 110)
+        chip.size = Vector2(300, 90)
+        chip.add_theme_stylebox_override("panel", style(limit_colors[i], 12))
+        board.add_child(chip)
+        centered_label(limits[i], Vector2(10, 8), Vector2(280, 74), 16, chip)
+
+    var acquire := centered_label(
+        "GET NEW CARDS: open Packs from the Store, or CRAFT any card you're missing using Vials (Dust) earned from duplicates.",
+        Vector2(80, 225), Vector2(890, 50), 17, board)
+    acquire.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    acquire.add_theme_color_override("font_color", Color(0.80, 0.88, 1.0))
+
+    var checklist := {"count": false, "limits": false, "craft": false}
+    var controls := {"confirm": null}
+    var make_check := func(text_value: String, pos: Vector2, key: String):
+        var b: Button
+        b = button(text_value, pos, Vector2(300, 56), func():
+            if checklist[key]: return
+            checklist[key] = true
+            if is_instance_valid(b):
+                b.disabled = true
+                b.text += "  ✓"
+            var done := 0
+            for v in checklist.values():
+                if v: done += 1
+            academy_feedback_text("%d of 3 rules confirmed." % done)
+            var confirm_button = controls.get("confirm")
+            if done == 3 and is_instance_valid(confirm_button):
+                confirm_button.disabled = false
+        , board)
+    make_check.call("CONFIRM: Deck = 40 cards", Vector2(60, 300), "count")
+    make_check.call("CONFIRM: Class + Universal only", Vector2(390, 300), "limits")
+    make_check.call("CONFIRM: Craft with Vials", Vector2(720, 300), "craft")
+
+    var continue_button := button("OPEN THE DECK BUILDER LATER — CONTINUE", Vector2(300, 400), Vector2(480, 60), func():
+        var confirm_button = controls.get("confirm")
+        if is_instance_valid(confirm_button) and confirm_button.disabled: return
+        lesson_complete()
+    , board)
+    continue_button.disabled = true
+    controls["confirm"] = continue_button
+
 func show_academy_graduation() -> void:
     clear_screen(); add_background(0.58)
     var p := Panel.new(); p.position=Vector2(220,72); p.size=Vector2(840,575); p.add_theme_stylebox_override("panel",style(GOLD_COLOR,22)); root_layer.add_child(p)
@@ -1183,12 +1248,12 @@ func graduate_with_class(c: String) -> void:
     grant_starter_collection(c)
     build_starter_deck(c)
     academy_complete = true
-    academy_step = 7
+    academy_step = 8
     if not academy_reward_claimed:
         gold_balance += 500
         academy_reward_claimed = true
     save_profile()
-    show_home()
+    show_first_day_intro()
 
 func start_developer_meta_battle(c: String) -> void:
     if not AccessManager.role_at_least(AccessManager.ROLE_OWNER):
@@ -1717,7 +1782,7 @@ func class_description(c: String) -> String:
 
 func choose_class(c: String) -> void:
     if not academy_complete:
-        show_first_day_intro()
+        begin_academy()
         return
     selected_class = c; selected_deck_class = c
     grant_starter_collection(c)

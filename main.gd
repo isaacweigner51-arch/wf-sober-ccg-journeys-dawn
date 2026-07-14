@@ -2454,8 +2454,6 @@ func complete_class_training() -> void:
     cfg.load("user://journeys_dawn_profile.cfg")
     var already_complete := bool(cfg.get_value("academy", "class_%s_complete" % training_class.to_lower(), false))
     cfg.set_value("academy", "class_%s_complete" % training_class.to_lower(), true)
-    cfg.set_value("academy", "complete", true)
-    cfg.set_value("academy", "step", 7)
     cfg.set_value("profile", "class", training_class)
     cfg.set_value("deck", "class", training_class)
     if not already_complete:
