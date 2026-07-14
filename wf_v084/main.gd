@@ -987,41 +987,24 @@ func play_sponsor_evolution_animation(unit: Dictionary, player_side: bool) -> vo
     dimmer.z_index = 1200
     add_child(dimmer)
 
-    var emblem := Label.new()
-    emblem.text = "WALKING FREE"
-    emblem.position = Vector2(290, 75)
-    emblem.size = Vector2(700, 95)
-    emblem.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    emblem.add_theme_font_size_override("font_size", ui_font(58))
-    emblem.add_theme_color_override("font_color", Color(1.0, 0.83, 0.35, 0.0))
-    emblem.add_theme_color_override("font_shadow_color", Color(0.25, 0.12, 0.01, 0.85))
-    emblem.add_theme_constant_override("shadow_offset_x", 5)
-    emblem.add_theme_constant_override("shadow_offset_y", 5)
-    emblem.z_index = 1280
-    emblem.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(emblem)
-
     var sponsor_glow := ColorRect.new()
-    sponsor_glow.position = screen_center - Vector2(155, 155)
-    sponsor_glow.size = Vector2(310, 310)
+    sponsor_glow.position = screen_center - Vector2(175, 175)
+    sponsor_glow.size = Vector2(350, 350)
     sponsor_glow.color = Color(1.0, 0.72, 0.18, 0.0)
     sponsor_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    sponsor_glow.z_index = 1250
+    sponsor_glow.z_index = 1220
     add_child(sponsor_glow)
 
-    var sponsee_silhouette := Label.new()
-    sponsee_silhouette.text = "◉
-╱│╲
-╱ ╲"
-    sponsee_silhouette.position = Vector2(795, 255)
-    sponsee_silhouette.size = Vector2(170, 230)
-    sponsee_silhouette.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    sponsee_silhouette.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    sponsee_silhouette.add_theme_font_size_override("font_size", ui_font(44))
-    sponsee_silhouette.add_theme_color_override("font_color", Color(1.0, 0.88, 0.48, 0.0))
-    sponsee_silhouette.z_index = 1320
-    sponsee_silhouette.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(sponsee_silhouette)
+    # Real illustrations for both figures instead of ASCII-art silhouettes and
+    # a blocky "WALKING FREE" wordmark: the sponsor's own card art rises
+    # center-stage, and a second portrait (the sponsee's real art, resolved
+    # the same way every other card's art is) fades in beside it once the
+    # sponsor speaks — reinforcing "you are never alone" with an actual face,
+    # not a wall of text.
+    var sponsee_preview := card("Sponsee", 2, 2, 2, "Universal", "Token", "sponsee", 0, "", "hands")
+    var sponsee_portrait := build_art_medallion(resolve_card_full_art(sponsee_preview), Vector2(838, 210), Vector2(180, 250), Color(1.0, 0.86, 0.42))
+    sponsee_portrait.scale = Vector2(0.55, 0.55)
+    add_child(sponsee_portrait)
 
     var connection := ColorRect.new()
     connection.position = Vector2(690, 357)
@@ -1032,13 +1015,27 @@ func play_sponsor_evolution_animation(unit: Dictionary, player_side: bool) -> vo
     connection.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(connection)
 
+    var line_label := Label.new()
+    line_label.text = "\"YOU ARE NEVER ALONE.\""
+    line_label.position = Vector2(240, 470)
+    line_label.size = Vector2(800, 56)
+    line_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    line_label.add_theme_font_size_override("font_size", ui_font(36))
+    line_label.add_theme_color_override("font_color", Color(1.0, 0.93, 0.68))
+    line_label.add_theme_color_override("font_shadow_color", Color(0.15, 0.08, 0.0, 0.85))
+    line_label.add_theme_constant_override("shadow_offset_x", 3)
+    line_label.add_theme_constant_override("shadow_offset_y", 3)
+    line_label.modulate.a = 0.0
+    line_label.z_index = 1360
+    add_child(line_label)
+
     var title := Label.new()
     title.text = "GUIDANCE BECOMES FREEDOM"
     title.position = Vector2(290, 545)
-    title.size = Vector2(700, 60)
+    title.size = Vector2(700, 40)
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", ui_font(34))
-    title.add_theme_color_override("font_color", Color(1.0, 0.91, 0.58))
+    title.add_theme_font_size_override("font_size", ui_font(22))
+    title.add_theme_color_override("font_color", Color(1.0, 0.84, 0.42))
     title.modulate.a = 0.0
     title.z_index = 1360
     add_child(title)
@@ -1046,20 +1043,24 @@ func play_sponsor_evolution_animation(unit: Dictionary, player_side: bool) -> vo
     var rise := create_tween().set_parallel(true)
     rise.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
     rise.tween_property(dimmer, "color:a", 0.86, 0.32)
-    rise.tween_property(card_view, "position", centered_position, 0.42)
+    rise.tween_property(card_view, "position", centered_position + Vector2(-90, 0), 0.42)
     rise.tween_property(card_view, "scale", Vector2(1.9, 1.9), 0.42)
-    rise.tween_property(emblem, "theme_override_colors/font_color:a", 0.82, 0.40)
-    rise.tween_property(sponsor_glow, "color:a", 0.22, 0.35)
+    rise.tween_property(sponsor_glow, "color:a", 0.24, 0.35)
     await rise.finished
 
     await play_signature_voice("The Sponsor", player_side, false)
+    var quote_tween := create_tween().set_parallel(true)
+    quote_tween.tween_property(line_label, "modulate:a", 1.0, 0.3)
+    await quote_tween.finished
 
     var connect_tween := create_tween().set_parallel(true)
-    connect_tween.tween_property(sponsee_silhouette, "theme_override_colors/font_color:a", 0.95, 0.34)
+    connect_tween.tween_property(sponsee_portrait, "modulate:a", 1.0, 0.34)
+    connect_tween.tween_property(sponsee_portrait, "scale", Vector2(1.0, 1.0), 0.34)
     connect_tween.tween_property(connection, "color:a", 0.95, 0.28)
     connect_tween.tween_property(title, "modulate:a", 1.0, 0.28)
-    connect_tween.tween_property(sponsor_glow, "scale", Vector2(1.35, 1.35), 0.40)
+    connect_tween.tween_property(sponsor_glow, "scale", Vector2(1.3, 1.3), 0.40)
     await connect_tween.finished
+    spawn_sparkle_burst(Vector2(760, 335), 14, [Color(1.0, 0.86, 0.34), Color(1.0, 1.0, 1.0)], self, 80.0)
     await get_tree().create_timer(0.30).timeout
 
     unit["attack"] = int(unit.get("attack", 0)) + 2
@@ -1077,20 +1078,20 @@ func play_sponsor_evolution_animation(unit: Dictionary, player_side: bool) -> vo
     return_tween.tween_property(card_view, "position", original_position, 0.30)
     return_tween.tween_property(card_view, "scale", original_scale, 0.30)
     return_tween.tween_property(dimmer, "color:a", 0.0, 0.28)
-    return_tween.tween_property(emblem, "modulate:a", 0.0, 0.24)
     return_tween.tween_property(sponsor_glow, "color:a", 0.0, 0.24)
-    return_tween.tween_property(sponsee_silhouette, "modulate:a", 0.0, 0.24)
+    return_tween.tween_property(sponsee_portrait, "modulate:a", 0.0, 0.24)
     return_tween.tween_property(connection, "modulate:a", 0.0, 0.24)
     return_tween.tween_property(title, "modulate:a", 0.0, 0.24)
+    return_tween.tween_property(line_label, "modulate:a", 0.0, 0.24)
     await return_tween.finished
 
     card_view.z_index = 0
     dimmer.queue_free()
-    emblem.queue_free()
     sponsor_glow.queue_free()
-    sponsee_silhouette.queue_free()
+    sponsee_portrait.queue_free()
     connection.queue_free()
     title.queue_free()
+    line_label.queue_free()
     if is_instance_valid(music_player):
         music_player.volume_db = old_music_db
     busy = false
@@ -1877,7 +1878,26 @@ func find_card_view_for_board_index(area: Control, board_index: int) -> CardView
             return child as CardView
     return null
 
+# Dispatcher: routes to a tier-appropriate cinematic based on the evolving
+# follower's rarity. Bronze/Silver/Gold/Token/Training keep the original,
+# efficient animation — Epic/Legendary/Platinum get a progressively bigger
+# show built around the card's own real artwork instead of procedural shapes.
 func play_evolution_animation(index: int, cost: int, player_side: bool) -> void:
+    var board: Array = player_board if player_side else enemy_board
+    var rarity := "Bronze"
+    if index >= 0 and index < board.size():
+        rarity = str(board[index].get("rarity", "Bronze"))
+    match rarity:
+        "Platinum":
+            await play_platinum_evolution_animation(index, cost, player_side)
+        "Legendary":
+            await play_legendary_evolution_animation(index, cost, player_side)
+        "Epic":
+            await play_epic_evolution_animation(index, cost, player_side)
+        _:
+            await play_standard_evolution_animation(index, cost, player_side)
+
+func play_standard_evolution_animation(index: int, cost: int, player_side: bool) -> void:
     var area: Control = player_board_area if player_side else enemy_board_area
     if index < 0:
         return
@@ -1974,6 +1994,431 @@ func play_evolution_animation(index: int, cost: int, player_side: bool) -> void:
     ring.queue_free()
     title.queue_free()
     stat_text.queue_free()
+    busy = false
+
+func play_epic_evolution_animation(index: int, cost: int, player_side: bool) -> void:
+    var area: Control = player_board_area if player_side else enemy_board_area
+    if index < 0:
+        return
+    var card_view: CardView = find_card_view_for_board_index(area, index)
+    if card_view == null:
+        return
+    var board: Array = player_board if player_side else enemy_board
+    var follower: Dictionary = board[index]
+
+    busy = true
+    play_sfx("evolve_cinematic")
+    card_view.z_index = 1200
+    var original_position: Vector2 = card_view.position
+    var original_scale: Vector2 = card_view.scale
+    var screen_center := Vector2(640.0, 360.0)
+    var centered_position: Vector2 = screen_center - card_view.size * 0.5 - area.global_position
+
+    var dimmer := ColorRect.new()
+    dimmer.color = Color(0.02, 0.01, 0.05, 0.0)
+    dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    dimmer.z_index = 1100
+    add_child(dimmer)
+
+    var ring := ColorRect.new()
+    ring.position = screen_center - Vector2(130, 130)
+    ring.size = Vector2(260, 260)
+    ring.color = Color(0.72, 0.30, 1.0, 0.0)
+    ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ring.z_index = 1150
+    add_child(ring)
+
+    var medallion := build_art_medallion(resolve_card_full_art(follower), screen_center + Vector2(160, -40), Vector2(140, 196), Color(0.78, 0.38, 1.0))
+    medallion.scale = Vector2(0.4, 0.4)
+    add_child(medallion)
+
+    var title := Label.new()
+    title.text = "EPIC EVOLUTION"
+    title.position = Vector2(340, 88)
+    title.size = Vector2(600, 66)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.add_theme_font_size_override("font_size", ui_font(48))
+    title.add_theme_color_override("font_color", Color(0.86, 0.62, 1.0))
+    title.add_theme_color_override("font_shadow_color", Color.BLACK)
+    title.add_theme_constant_override("shadow_offset_x", 4)
+    title.add_theme_constant_override("shadow_offset_y", 4)
+    title.modulate.a = 0.0
+    title.z_index = 1300
+    add_child(title)
+
+    var rise := create_tween().set_parallel(true)
+    rise.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    rise.tween_property(dimmer, "color:a", 0.82, 0.20)
+    rise.tween_property(card_view, "position", centered_position, 0.34)
+    rise.tween_property(card_view, "scale", Vector2(1.8, 1.8), 0.34)
+    rise.tween_property(title, "modulate:a", 1.0, 0.22)
+    rise.tween_property(ring, "color:a", 0.24, 0.24)
+    rise.tween_property(medallion, "modulate:a", 1.0, 0.30).set_delay(0.10)
+    rise.tween_property(medallion, "scale", Vector2(1.0, 1.0), 0.30).set_delay(0.10)
+    await rise.finished
+
+    var pulse := create_tween().set_loops(2)
+    pulse.tween_property(card_view, "scale", Vector2(1.98, 1.98), 0.10)
+    pulse.tween_property(card_view, "scale", Vector2(1.8, 1.8), 0.10)
+    await pulse.finished
+    spawn_sparkle_burst(screen_center, 16, [Color(0.86, 0.62, 1.0), Color(1.0, 1.0, 1.0), Color(0.62, 0.82, 1.0)], self)
+
+    var attack_gain: int = 1 if cost < 3 else (3 if cost == 3 else 4)
+    var defense_gain: int = 0 if cost == 1 else (2 if cost == 2 else (3 if cost == 3 else 4))
+    var stat_text := Label.new()
+    stat_text.text = "+%d ATK  +%d DEF" % [attack_gain, defense_gain]
+    stat_text.position = Vector2(340, 568)
+    stat_text.size = Vector2(600, 64)
+    stat_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    stat_text.add_theme_font_size_override("font_size", ui_font(32))
+    stat_text.add_theme_color_override("font_color", Color(0.90, 0.72, 1.0))
+    stat_text.add_theme_color_override("font_shadow_color", Color.BLACK)
+    stat_text.add_theme_constant_override("shadow_offset_x", 3)
+    stat_text.add_theme_constant_override("shadow_offset_y", 3)
+    stat_text.modulate.a = 0.0
+    stat_text.z_index = 1300
+    add_child(stat_text)
+
+    var reveal := create_tween().set_parallel(true)
+    reveal.tween_property(stat_text, "modulate:a", 1.0, 0.18)
+    reveal.tween_property(ring, "scale", Vector2(1.4, 1.4), 0.32)
+    reveal.tween_property(ring, "color:a", 0.0, 0.32)
+    await reveal.finished
+    await get_tree().create_timer(0.26).timeout
+
+    var return_tween := create_tween().set_parallel(true)
+    return_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+    return_tween.tween_property(card_view, "position", original_position, 0.28)
+    return_tween.tween_property(card_view, "scale", original_scale, 0.28)
+    return_tween.tween_property(dimmer, "color:a", 0.0, 0.24)
+    return_tween.tween_property(title, "modulate:a", 0.0, 0.20)
+    return_tween.tween_property(stat_text, "modulate:a", 0.0, 0.20)
+    return_tween.tween_property(medallion, "modulate:a", 0.0, 0.20)
+    await return_tween.finished
+
+    card_view.z_index = 0
+    dimmer.queue_free()
+    ring.queue_free()
+    medallion.queue_free()
+    title.queue_free()
+    stat_text.queue_free()
+    busy = false
+
+func play_legendary_evolution_animation(index: int, cost: int, player_side: bool) -> void:
+    var area: Control = player_board_area if player_side else enemy_board_area
+    if index < 0:
+        return
+    var card_view: CardView = find_card_view_for_board_index(area, index)
+    if card_view == null:
+        return
+    var board: Array = player_board if player_side else enemy_board
+    var follower: Dictionary = board[index]
+
+    busy = true
+    play_sfx("evolve_cinematic")
+    card_view.z_index = 1200
+    var original_position: Vector2 = card_view.position
+    var original_scale: Vector2 = card_view.scale
+    var screen_center := Vector2(640.0, 360.0)
+    var centered_position: Vector2 = screen_center - card_view.size * 0.5 - area.global_position
+
+    var dimmer := ColorRect.new()
+    dimmer.color = Color(0.01, 0.015, 0.03, 0.0)
+    dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    dimmer.z_index = 1100
+    add_child(dimmer)
+
+    # A slowly spinning ring of gold light beams behind the card — the
+    # "legendary aura" that separates this tier from the standard ring flash.
+    var beam_root := Control.new()
+    beam_root.position = screen_center
+    beam_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    beam_root.z_index = 1120
+    beam_root.modulate.a = 0.0
+    add_child(beam_root)
+    for i in range(8):
+        var beam := ColorRect.new()
+        beam.color = Color(1.0, 0.84, 0.32, 0.55)
+        beam.size = Vector2(6, 260)
+        beam.position = Vector2(-3, -130)
+        beam.pivot_offset = Vector2(3, 130)
+        beam.rotation = TAU * float(i) / 8.0
+        beam.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        beam_root.add_child(beam)
+    var spin := create_tween().set_loops()
+    spin.tween_property(beam_root, "rotation", TAU, 6.0).set_trans(Tween.TRANS_LINEAR)
+
+    var hero_portrait := build_art_medallion(resolve_card_full_art(follower), screen_center - Vector2(150, 230), Vector2(300, 380), Color(1.0, 0.84, 0.30), 22)
+    hero_portrait.scale = Vector2(0.5, 0.5)
+    hero_portrait.z_index = 1130
+    add_child(hero_portrait)
+
+    var ring := ColorRect.new()
+    ring.position = screen_center - Vector2(120, 120)
+    ring.size = Vector2(240, 240)
+    ring.color = Color(1.0, 0.84, 0.28, 0.0)
+    ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ring.z_index = 1150
+    add_child(ring)
+
+    var title := Label.new()
+    title.text = "LEGENDARY AWAKENING"
+    title.position = Vector2(240, 78)
+    title.size = Vector2(800, 74)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.add_theme_font_size_override("font_size", ui_font(52))
+    title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.34))
+    title.add_theme_color_override("font_shadow_color", Color.BLACK)
+    title.add_theme_constant_override("shadow_offset_x", 4)
+    title.add_theme_constant_override("shadow_offset_y", 4)
+    title.modulate.a = 0.0
+    title.z_index = 1300
+    add_child(title)
+
+    var rise := create_tween().set_parallel(true)
+    rise.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    rise.tween_property(dimmer, "color:a", 0.88, 0.24)
+    rise.tween_property(beam_root, "modulate:a", 0.9, 0.5)
+    rise.tween_property(hero_portrait, "modulate:a", 1.0, 0.4)
+    rise.tween_property(hero_portrait, "scale", Vector2(1.0, 1.0), 0.4)
+    rise.tween_property(card_view, "position", centered_position + Vector2(70, 0), 0.4)
+    rise.tween_property(card_view, "scale", Vector2(1.9, 1.9), 0.4)
+    rise.tween_property(title, "modulate:a", 1.0, 0.26)
+    rise.tween_property(ring, "color:a", 0.26, 0.3)
+    await rise.finished
+
+    await get_tree().create_timer(0.15).timeout
+    var pulse := create_tween().set_loops(3)
+    pulse.tween_property(card_view, "scale", Vector2(2.05, 2.05), 0.11)
+    pulse.tween_property(card_view, "scale", Vector2(1.9, 1.9), 0.11)
+    await pulse.finished
+    spawn_sparkle_burst(screen_center, 24, [Color(1.0, 0.86, 0.34), Color(1.0, 1.0, 1.0), Color(1.0, 0.66, 0.22)], self, 115.0)
+
+    var attack_gain: int = 1 if cost < 3 else (3 if cost == 3 else 4)
+    var defense_gain: int = 0 if cost == 1 else (2 if cost == 2 else (3 if cost == 3 else 4))
+    var stat_text := Label.new()
+    stat_text.text = "+%d ATK  +%d DEF\nSPECIAL ABILITY" % [attack_gain, defense_gain]
+    stat_text.position = Vector2(240, 578)
+    stat_text.size = Vector2(800, 84)
+    stat_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    stat_text.add_theme_font_size_override("font_size", ui_font(36))
+    stat_text.add_theme_color_override("font_color", Color(1.0, 0.90, 0.42))
+    stat_text.add_theme_color_override("font_shadow_color", Color.BLACK)
+    stat_text.add_theme_constant_override("shadow_offset_x", 3)
+    stat_text.add_theme_constant_override("shadow_offset_y", 3)
+    stat_text.modulate.a = 0.0
+    stat_text.z_index = 1300
+    add_child(stat_text)
+
+    var reveal := create_tween().set_parallel(true)
+    reveal.tween_property(stat_text, "modulate:a", 1.0, 0.2)
+    reveal.tween_property(ring, "scale", Vector2(1.45, 1.45), 0.34)
+    reveal.tween_property(ring, "color:a", 0.0, 0.34)
+    await reveal.finished
+    await get_tree().create_timer(0.3).timeout
+
+    spin.kill()
+    var return_tween := create_tween().set_parallel(true)
+    return_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+    return_tween.tween_property(card_view, "position", original_position, 0.3)
+    return_tween.tween_property(card_view, "scale", original_scale, 0.3)
+    return_tween.tween_property(dimmer, "color:a", 0.0, 0.26)
+    return_tween.tween_property(beam_root, "modulate:a", 0.0, 0.22)
+    return_tween.tween_property(hero_portrait, "modulate:a", 0.0, 0.22)
+    return_tween.tween_property(title, "modulate:a", 0.0, 0.2)
+    return_tween.tween_property(stat_text, "modulate:a", 0.0, 0.2)
+    await return_tween.finished
+
+    card_view.z_index = 0
+    dimmer.queue_free()
+    beam_root.queue_free()
+    hero_portrait.queue_free()
+    ring.queue_free()
+    title.queue_free()
+    stat_text.queue_free()
+    busy = false
+
+func play_platinum_evolution_animation(index: int, cost: int, player_side: bool) -> void:
+    var area: Control = player_board_area if player_side else enemy_board_area
+    if index < 0:
+        return
+    var card_view: CardView = find_card_view_for_board_index(area, index)
+    if card_view == null:
+        return
+    var board: Array = player_board if player_side else enemy_board
+    var follower: Dictionary = board[index]
+
+    busy = true
+    var old_music_db := music_player.volume_db if is_instance_valid(music_player) else -5.0
+    if is_instance_valid(music_player):
+        var duck := create_tween()
+        duck.tween_property(music_player, "volume_db", old_music_db - 10.0, 0.3)
+    play_sfx("evolve_cinematic")
+    card_view.z_index = 1200
+    var original_position: Vector2 = card_view.position
+    var original_scale: Vector2 = card_view.scale
+    var screen_center := Vector2(640.0, 360.0)
+    var centered_position: Vector2 = screen_center - card_view.size * 0.5 - area.global_position
+
+    var dimmer := ColorRect.new()
+    dimmer.color = Color(0.0, 0.0, 0.0, 0.0)
+    dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    dimmer.z_index = 1100
+    add_child(dimmer)
+
+    # Full-bleed backdrop art behind everything, softened by the dimmer above
+    # it, so the reveal feels like the follower's own portrait taking over the
+    # whole screen rather than a small procedural flash.
+    var backdrop_art := TextureRect.new()
+    backdrop_art.texture = resolve_card_full_art(follower)
+    backdrop_art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    backdrop_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    backdrop_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    backdrop_art.clip_contents = true
+    backdrop_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    backdrop_art.modulate = Color(1, 1, 1, 0.0)
+    backdrop_art.z_index = 1090
+    add_child(backdrop_art)
+
+    var beam_root := Control.new()
+    beam_root.position = screen_center
+    beam_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    beam_root.z_index = 1120
+    beam_root.modulate.a = 0.0
+    add_child(beam_root)
+    for i in range(10):
+        var beam := ColorRect.new()
+        beam.color = Color(1.0, 0.95, 0.75, 0.5)
+        beam.size = Vector2(7, 340)
+        beam.position = Vector2(-3.5, -170)
+        beam.pivot_offset = Vector2(3.5, 170)
+        beam.rotation = TAU * float(i) / 10.0
+        beam.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        beam_root.add_child(beam)
+    var spin := create_tween().set_loops()
+    spin.tween_property(beam_root, "rotation", TAU, 8.0).set_trans(Tween.TRANS_LINEAR)
+
+    var ring_outer := ColorRect.new()
+    ring_outer.position = screen_center - Vector2(160, 160)
+    ring_outer.size = Vector2(320, 320)
+    ring_outer.color = Color(0.95, 0.90, 0.75, 0.0)
+    ring_outer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ring_outer.z_index = 1140
+    add_child(ring_outer)
+
+    var ring_inner := ColorRect.new()
+    ring_inner.position = screen_center - Vector2(110, 110)
+    ring_inner.size = Vector2(220, 220)
+    ring_inner.color = Color(1.0, 0.84, 0.30, 0.0)
+    ring_inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ring_inner.z_index = 1150
+    add_child(ring_inner)
+
+    # Cheap "chromatic sheen" title: the same text drawn twice, one copy offset
+    # a couple pixels and tinted, so premium text reads richer than a single
+    # flat-colored label without needing a shader.
+    var title_shadow_layer := Label.new()
+    title_shadow_layer.text = "PLATINUM ASCENSION"
+    title_shadow_layer.position = Vector2(158, 66)
+    title_shadow_layer.size = Vector2(970, 84)
+    title_shadow_layer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title_shadow_layer.add_theme_font_size_override("font_size", ui_font(58))
+    title_shadow_layer.add_theme_color_override("font_color", Color(0.55, 0.85, 1.0, 0.0))
+    title_shadow_layer.z_index = 1295
+    title_shadow_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(title_shadow_layer)
+
+    var title := Label.new()
+    title.text = "PLATINUM ASCENSION"
+    title.position = Vector2(160, 64)
+    title.size = Vector2(970, 84)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.add_theme_font_size_override("font_size", ui_font(58))
+    title.add_theme_color_override("font_color", Color(1.0, 0.96, 0.85, 0.0))
+    title.add_theme_color_override("font_shadow_color", Color.BLACK)
+    title.add_theme_constant_override("shadow_offset_x", 4)
+    title.add_theme_constant_override("shadow_offset_y", 4)
+    title.z_index = 1300
+    title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(title)
+
+    var rise := create_tween().set_parallel(true)
+    rise.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    rise.tween_property(dimmer, "color:a", 0.80, 0.4)
+    rise.tween_property(backdrop_art, "modulate:a", 0.30, 0.6)
+    rise.tween_property(beam_root, "modulate:a", 1.0, 0.6)
+    rise.tween_property(card_view, "position", centered_position, 0.5)
+    rise.tween_property(card_view, "scale", Vector2(2.0, 2.0), 0.5)
+    rise.tween_property(title, "theme_override_colors/font_color:a", 1.0, 0.34)
+    rise.tween_property(title_shadow_layer, "theme_override_colors/font_color:a", 0.5, 0.34)
+    rise.tween_property(ring_outer, "color:a", 0.20, 0.4)
+    rise.tween_property(ring_inner, "color:a", 0.30, 0.4)
+    await rise.finished
+
+    var sheen := create_tween().set_parallel(true)
+    sheen.tween_property(title_shadow_layer, "position:x", title_shadow_layer.position.x - 3, 0.5)
+    sheen.tween_property(title_shadow_layer, "position:x", title_shadow_layer.position.x + 3, 0.5).set_delay(0.5)
+
+    await get_tree().create_timer(0.18).timeout
+    var pulse := create_tween().set_loops(3)
+    pulse.tween_property(card_view, "scale", Vector2(2.18, 2.18), 0.12)
+    pulse.tween_property(card_view, "scale", Vector2(2.0, 2.0), 0.12)
+    await pulse.finished
+    spawn_sparkle_burst(screen_center, 32, [Color(1.0, 0.96, 0.85), Color(1.0, 0.84, 0.34), Color(0.68, 0.90, 1.0)], self, 130.0)
+
+    var attack_gain: int = 1 if cost < 3 else (3 if cost == 3 else 4)
+    var defense_gain: int = 0 if cost == 1 else (2 if cost == 2 else (3 if cost == 3 else 4))
+    var stat_text := Label.new()
+    stat_text.text = "+%d ATK  +%d DEF\nSPECIAL ABILITY" % [attack_gain, defense_gain]
+    stat_text.position = Vector2(190, 588)
+    stat_text.size = Vector2(900, 84)
+    stat_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    stat_text.add_theme_font_size_override("font_size", ui_font(38))
+    stat_text.add_theme_color_override("font_color", Color(1.0, 0.94, 0.72))
+    stat_text.add_theme_color_override("font_shadow_color", Color.BLACK)
+    stat_text.add_theme_constant_override("shadow_offset_x", 3)
+    stat_text.add_theme_constant_override("shadow_offset_y", 3)
+    stat_text.modulate.a = 0.0
+    stat_text.z_index = 1300
+    add_child(stat_text)
+
+    var reveal := create_tween().set_parallel(true)
+    reveal.tween_property(stat_text, "modulate:a", 1.0, 0.22)
+    reveal.tween_property(ring_outer, "scale", Vector2(1.5, 1.5), 0.4)
+    reveal.tween_property(ring_outer, "color:a", 0.0, 0.4)
+    reveal.tween_property(ring_inner, "scale", Vector2(1.5, 1.5), 0.4)
+    reveal.tween_property(ring_inner, "color:a", 0.0, 0.4)
+    await reveal.finished
+    await get_tree().create_timer(0.34).timeout
+
+    spin.kill()
+    var return_tween := create_tween().set_parallel(true)
+    return_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+    return_tween.tween_property(card_view, "position", original_position, 0.32)
+    return_tween.tween_property(card_view, "scale", original_scale, 0.32)
+    return_tween.tween_property(dimmer, "color:a", 0.0, 0.28)
+    return_tween.tween_property(backdrop_art, "modulate:a", 0.0, 0.26)
+    return_tween.tween_property(beam_root, "modulate:a", 0.0, 0.24)
+    return_tween.tween_property(title, "theme_override_colors/font_color:a", 0.0, 0.22)
+    return_tween.tween_property(title_shadow_layer, "theme_override_colors/font_color:a", 0.0, 0.22)
+    return_tween.tween_property(stat_text, "modulate:a", 0.0, 0.22)
+    await return_tween.finished
+
+    card_view.z_index = 0
+    dimmer.queue_free()
+    backdrop_art.queue_free()
+    beam_root.queue_free()
+    ring_outer.queue_free()
+    ring_inner.queue_free()
+    title.queue_free()
+    title_shadow_layer.queue_free()
+    stat_text.queue_free()
+    if is_instance_valid(music_player):
+        var restore := create_tween()
+        restore.tween_property(music_player, "volume_db", old_music_db, 0.3)
     busy = false
 
 func resolve_awakened_ability(follower: Dictionary, player_side: bool) -> void:
@@ -2609,6 +3054,12 @@ func second_chance_momentum(card_count: int) -> int:
     return 2
 
 func second_chance_card_art(cd: Dictionary) -> Texture2D:
+    return resolve_card_full_art(cd)
+
+# Shared by the Second Chance mulligan and every evolution cinematic: resolve
+# a card dictionary (which may or may not carry an explicit "id") to its real
+# Journey's Dawn illustration instead of falling back to placeholder shapes.
+func resolve_card_full_art(cd: Dictionary) -> Texture2D:
     var card_id: String = str(cd.get("id", "")).strip_edges().to_lower()
     if not card_id.is_empty():
         var full_path: String = "res://assets/cards/full/%s.jpg" % card_id
@@ -2618,8 +3069,8 @@ func second_chance_card_art(cd: Dictionary) -> Texture2D:
                 return full_texture
 
     # Runtime-built deck cards do not always carry their Journey's Dawn ID.
-    # Match the card name against cards.json so the mulligan can still use
-    # the full card artwork instead of displaying an empty black rectangle.
+    # Match the card name against cards.json so animations can still use the
+    # full card artwork instead of displaying an empty black rectangle.
     if FileAccess.file_exists("res://data/cards.json"):
         var file := FileAccess.open("res://data/cards.json", FileAccess.READ)
         if file != null:
@@ -2639,10 +3090,65 @@ func second_chance_card_art(cd: Dictionary) -> Texture2D:
                             break
 
     # A few generated/testing cards are not in cards.json. Give those a
-    # deterministic fallback image so every Second Chance card is visible.
+    # deterministic fallback image so the panel always shows real art.
     var seed_value: int = absi(str(cd.get("name", "card")).hash())
     var fallback_path: String = "res://assets/cards/art_%02d.png" % (seed_value % 16)
     return load(fallback_path) as Texture2D
+
+# A framed portrait panel built from real card art, used by every evolution
+# cinematic as the "hero art" instead of procedural ASCII/text shapes. Starts
+# invisible/tiny — callers tween modulate:a and scale in themselves so each
+# tier can time the reveal differently.
+func build_art_medallion(texture: Texture2D, pos: Vector2, size: Vector2, border_color: Color, corner_radius: int = 16) -> Panel:
+    var frame := Panel.new()
+    frame.position = pos
+    frame.size = size
+    frame.pivot_offset = size * 0.5
+    frame.modulate = Color(1, 1, 1, 0)
+    frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var frame_style := StyleBoxFlat.new()
+    frame_style.bg_color = Color(0.02, 0.03, 0.05, 0.98)
+    frame_style.border_color = border_color
+    frame_style.set_border_width_all(4)
+    frame_style.set_corner_radius_all(corner_radius)
+    frame_style.shadow_color = Color(0, 0, 0, 0.7)
+    frame_style.shadow_size = 18
+    frame.add_theme_stylebox_override("panel", frame_style)
+
+    var art := TextureRect.new()
+    art.texture = texture
+    art.position = Vector2(6, 6)
+    art.size = size - Vector2(12, 12)
+    art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    art.clip_contents = true
+    art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    frame.add_child(art)
+    return frame
+
+# A radial burst of small glyph particles (reused/generalized from the
+# existing victory-sequence sparkle burst) so Epic/Legendary/Platinum
+# evolutions and the Sponsor cinematic all share one particle system instead
+# of each hand-rolling its own.
+func spawn_sparkle_burst(origin: Vector2, count: int, colors: Array, layer: Node, base_distance: float = 95.0) -> void:
+    var glyphs := ["✦", "★", "•"]
+    for i in range(count):
+        var sparkle := Label.new()
+        sparkle.text = glyphs[i % glyphs.size()]
+        sparkle.add_theme_font_size_override("font_size", ui_font(16 + (i % 3) * 5))
+        sparkle.add_theme_color_override("font_color", colors[i % colors.size()])
+        sparkle.z_index = 1500
+        sparkle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        sparkle.position = origin
+        layer.add_child(sparkle)
+        var angle := TAU * float(i) / float(count) + randf_range(-0.12, 0.12)
+        var distance := base_distance + float(i % 4) * 16.0
+        var destination := sparkle.position + Vector2(cos(angle), sin(angle)) * distance
+        var sparkle_tween := create_tween().set_parallel(true)
+        sparkle_tween.tween_property(sparkle, "position", destination, 0.65)
+        sparkle_tween.tween_property(sparkle, "modulate:a", 0.0, 0.65)
+        sparkle_tween.tween_property(sparkle, "rotation", angle, 0.65)
+        sparkle_tween.finished.connect(sparkle.queue_free)
 
 func show_second_chance() -> void:
     if is_instance_valid(second_chance_overlay):
