@@ -1,22 +1,20 @@
 {
-  "version": "0.8.9",
-  "build": "Rush Fix & Rewards Screen",
+  "version": "0.8.10",
+  "build": "Academy End-Turn Fix & Patch Notes Overlap Fix",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Fixed Rush followers being unable to attack the enemy leader after their first turn, hardened the result screen against a lingering crash, and added a rewards summary to the result screen.",
+  "notes": "Fixed the Academy tutorial getting permanently stuck on the End Your Turn lesson, and fixed patch-note text overlapping itself on the What's New popup.",
   "required": false,
-  "version_code": "0.8.9",
-  "build_name": "Rush Fix & Rewards Screen",
+  "version_code": "0.8.10",
+  "build_name": "Academy End-Turn Fix & Patch Notes Overlap Fix",
   "card_count": 120,
-  "version_name": "0.8.9",
+  "version_name": "0.8.10",
   "fixes": [
-    "Fixed Rush followers being permanently blocked from attacking the enemy leader — the restriction was meant to apply only on the turn they were summoned, not for the rest of the match.",
-    "Hardened the victory/defeat result screen against a lingering crash caused by leftover damage-popup and speech-bubble effects trying to run after the match scene had already changed."
+    "Fixed the Academy tutorial's End Your Turn lesson getting permanently stuck: the CONTINUE button never appeared after clicking END TURN, blocking all progress through the tutorial.",
+    "Fixed patch-note text overlapping itself on the What's New popup for longer entries; the list now sizes and scrolls correctly no matter how long an entry is."
   ],
-  "features": [
-    "The result screen now shows a REWARDS EARNED summary (gold, packs, and any unlocks) above the PLAY AGAIN / RETURN TO MAIN MENU buttons whenever a win actually earns something."
-  ],
+  "features": [],
   "upcoming_events": [
     "More seasonal content and cards are in development — check back after future updates for details."
   ]

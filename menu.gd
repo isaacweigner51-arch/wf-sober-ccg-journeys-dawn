@@ -1356,23 +1356,56 @@ func show_whats_new_popup(version: String, fixes: Array, upcoming: Array) -> voi
     centered_label("WHAT'S NEW", Vector2(30, 20), Vector2(640, 34), 26, dialog).add_theme_color_override("font_color", GOLD_COLOR)
     centered_label("Version %s" % version, Vector2(30, 56), Vector2(640, 22), 14, dialog).modulate = Color(0.75, 0.82, 0.92)
 
-    var y := 92.0
-    if not fixes.is_empty():
-        label("BUG FIXES & IMPROVEMENTS", Vector2(30, y), Vector2(640, 22), 15, dialog).add_theme_color_override("font_color", Color(0.55, 1.0, 0.70))
-        y += 28
-        for entry in fixes:
-            var item := label("•  %s" % str(entry), Vector2(40, y), Vector2(620, 44), 14, dialog)
-            item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-            y += 44
+    # The bullet list used to be laid out with a fixed 44px slot per entry
+    # and absolute Y coordinates. Any entry whose wrapped text needed more
+    # than ~2 lines at 14pt spilled past its slot into the next entry's
+    # position, so their text rendered on top of each other -- and a long
+    # release note list could also spill past the close button. A
+    # ScrollContainer + VBoxContainer lets each label claim exactly the
+    # height its own wrapped text needs (no guessed constant) and lets the
+    # whole list scroll instead of overflowing the dialog as more entries
+    # are added release after release.
+    var scroll := ScrollContainer.new()
+    scroll.position = Vector2(30, 92)
+    scroll.size = Vector2(640, 372)
+    dialog.add_child(scroll)
+    var list := VBoxContainer.new()
+    list.custom_minimum_size = Vector2(624, 0)
+    list.add_theme_constant_override("separation", 6)
+    scroll.add_child(list)
 
-    y += 10
+    if not fixes.is_empty():
+        var fixes_header := Label.new()
+        fixes_header.text = "BUG FIXES & IMPROVEMENTS"
+        fixes_header.add_theme_font_size_override("font_size", ui_font_size(15))
+        fixes_header.add_theme_color_override("font_color", Color(0.55, 1.0, 0.70))
+        list.add_child(fixes_header)
+        for entry in fixes:
+            var item := Label.new()
+            item.text = "•  %s" % str(entry)
+            item.add_theme_font_size_override("font_size", ui_font_size(14))
+            item.add_theme_color_override("font_color", Color(0.94,0.95,1.0))
+            item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            item.custom_minimum_size = Vector2(624, 0)
+            list.add_child(item)
+
     if not upcoming.is_empty():
-        label("UPCOMING", Vector2(30, y), Vector2(640, 22), 15, dialog).add_theme_color_override("font_color", Color(1.0, 0.83, 0.35))
-        y += 28
+        var spacer := Control.new()
+        spacer.custom_minimum_size = Vector2(624, 10)
+        list.add_child(spacer)
+        var upcoming_header := Label.new()
+        upcoming_header.text = "UPCOMING"
+        upcoming_header.add_theme_font_size_override("font_size", ui_font_size(15))
+        upcoming_header.add_theme_color_override("font_color", Color(1.0, 0.83, 0.35))
+        list.add_child(upcoming_header)
         for entry in upcoming:
-            var item2 := label("•  %s" % str(entry), Vector2(40, y), Vector2(620, 44), 14, dialog)
+            var item2 := Label.new()
+            item2.text = "•  %s" % str(entry)
+            item2.add_theme_font_size_override("font_size", ui_font_size(14))
+            item2.add_theme_color_override("font_color", Color(0.94,0.95,1.0))
             item2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-            y += 44
+            item2.custom_minimum_size = Vector2(624, 0)
+            list.add_child(item2)
 
     var close_btn := button("GOT IT", Vector2(270, 480), Vector2(160, 48), func():
         last_seen_whats_new_version = version
@@ -2004,11 +2037,21 @@ func build_end_turn_lesson(board: Control) -> void:
     upkeep_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     upkeep_note.add_theme_color_override("font_color", Color(0.80,0.88,1.0))
 
-    var end_turn_btn: Button
-    var continue_btn: Button
-    end_turn_btn = button("END TURN", Vector2(430, 260), Vector2(230, 62), func():
+    # Both buttons are looked up through this shared dict instead of being
+    # closed over directly. GDScript func() literals snapshot outer locals by
+    # VALUE at the moment they're created, not by reference -- so the END TURN
+    # button's own closure (created first) would otherwise capture `continue_btn`
+    # while it was still null (assigned only after this button() call returns),
+    # and even its own `end_turn_btn` reference would be a stale null snapshot.
+    # That silently broke both is_instance_valid checks below: the CONTINUE
+    # button never actually became visible and END TURN never actually hid,
+    # soft-locking the whole lesson (and the tutorial) on this screen forever.
+    var controls := {"end_turn": null, "continue": null}
+
+    controls["end_turn"] = button("END TURN", Vector2(430, 260), Vector2(230, 62), func():
         if academy_action_stage != 0: return
         academy_action_stage = 1
+        var end_turn_btn = controls.get("end_turn")
         if is_instance_valid(end_turn_btn):
             end_turn_btn.disabled = true
             end_turn_btn.text = "ENDING TURN..."
@@ -2018,17 +2061,19 @@ func build_end_turn_lesson(board: Control) -> void:
         safe_set_text(status,
             "YOUR TURN 3\nPlay Points: 4 / 4 (max PP went up!)\nHand: 5 cards (you drew 1)\nYour follower: READY — can attack again")
         academy_feedback_text("Every End Turn: your max PP rises (until it caps), you draw a card, and all your followers ready. Click CONTINUE.")
+        end_turn_btn = controls.get("end_turn")
         if is_instance_valid(end_turn_btn):
             end_turn_btn.visible = false
+        var continue_btn = controls.get("continue")
         if is_instance_valid(continue_btn):
             continue_btn.visible = true
     , board)
 
-    continue_btn = button("CONTINUE", Vector2(430, 260), Vector2(230, 62), func():
+    controls["continue"] = button("CONTINUE", Vector2(430, 260), Vector2(230, 62), func():
         if academy_action_stage != 1: return
         lesson_complete()
     , board)
-    continue_btn.visible = false
+    controls["continue"].visible = false
 
 func build_signature_lesson(board: Control) -> void:
     # Every leader's Signature Platinum card is the closest thing this game
