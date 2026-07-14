@@ -997,7 +997,13 @@ func show_academy_lesson() -> void:
 
     var board := Panel.new()
     board.position = Vector2(95, 126)
-    board.size = Vector2(1090, 535)
+    # Was 535 tall, ending at y=661 on a 720-tall screen — the heavily
+    # darkened background (add_background(0.68)) showed through that leftover
+    # 59px strip as a near-black band, making the lesson panel look like it
+    # was floating above the bottom of the screen instead of sitting on it.
+    # Extending it to the same ~20px bottom margin every other screen's
+    # footer leaves closes that gap.
+    board.size = Vector2(1090, 574)
     board.add_theme_stylebox_override("panel", style(class_color(CLASSES[academy_step % CLASSES.size()]), 20))
     root_layer.add_child(board)
 
