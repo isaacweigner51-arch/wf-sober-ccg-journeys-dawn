@@ -60,6 +60,8 @@ var player_leader: Button
 var enemy_leader: Button
 var selected_class := "Serenity"
 var enemy_class := "Courage"
+var story_mode_battle := false
+var story_stage_id := 0
 var class_overlay: ColorRect
 var evolution_buttons: Array[Button] = []
 var evolution_drag_cost: int = 0
@@ -205,6 +207,7 @@ func load_battle_setup() -> void:
         hotseat_p2_class = str(cfg.get_value("battle", "p2_class", "Courage"))
         developer_meta_deck = bool(cfg.get_value("battle", "developer_meta", false))
         if online_mode:
+            story_mode_battle = false
             online_role = str(cfg.get_value("battle","role","join"))
             selected_class = str(cfg.get_value("battle","your_class","Hope"))
             enemy_class = str(cfg.get_value("battle","opponent_class","Courage"))
@@ -212,15 +215,21 @@ func load_battle_setup() -> void:
             player_deck_mode = str(cfg.get_value("battle","your_deck_mode","custom"))
             enemy_deck_mode = str(cfg.get_value("battle","opponent_deck_mode","custom"))
         elif mode == "training":
+            story_mode_battle = false
             training_class = str(cfg.get_value("training", "class", "Hope"))
             selected_class = training_class
             enemy_class = str(cfg.get_value("battle", "opponent_class", "Courage"))
             player_deck_mode = "prebuilt"
             enemy_deck_mode = "prebuilt"
         elif mode == "story":
+            story_mode_battle = true
+            story_stage_id = int(cfg.get_value("battle","story_stage_id",0))
             selected_class = str(cfg.get_value("battle","your_class","Hope"))
             enemy_class = str(cfg.get_value("battle","opponent_class","Courage"))
+            player_deck_mode = str(cfg.get_value("battle","your_deck_mode","custom"))
+            enemy_deck_mode = str(cfg.get_value("battle","opponent_deck_mode","prebuilt"))
         else:
+            story_mode_battle = false
             selected_class = str(cfg.get_value("battle","your_class",selected_class))
             enemy_class = str(cfg.get_value("battle","opponent_class",enemy_class))
             player_deck_mode = str(cfg.get_value("battle","your_deck_mode","custom"))
@@ -373,7 +382,47 @@ func build_class_deck(faction_name: String) -> Array:
     deck.append(class_cards[0].duplicate(true))
     return deck
 
+func build_story_opponent_deck(faction_name: String, stage_id: int) -> Array:
+    # Every AI class deck elsewhere in the game is built by build_class_deck,
+    # which is fully deterministic -- the same 40 cards, in the same counts,
+    # every single time. That's fine for a generic "prebuilt" practice match,
+    # but it means every Story Mode opponent of a given class (even distinct
+    # named characters across different stages) fielded the exact same list,
+    # which read as "it's a set deck they use" instead of a cast of distinct
+    # opponents. Seeding a shuffle on the stage id keeps each stage's
+    # opponent legal (same rarity copy limits) while giving it its own card
+    # mix, so stages don't feel interchangeable even when they share a class.
+    var pool: Array = build_class_cards(faction_name)
+    for neutral_card in build_universal_cards():
+        if str(neutral_card.get("ability", "")) != "sponsor":
+            pool.append(neutral_card)
+    var rng := RandomNumberGenerator.new()
+    rng.seed = hash("story_deck_%s_%d" % [faction_name, stage_id])
+    var shuffled: Array = pool.duplicate(true)
+    for i in range(shuffled.size() - 1, 0, -1):
+        var j := rng.randi_range(0, i)
+        var tmp = shuffled[i]
+        shuffled[i] = shuffled[j]
+        shuffled[j] = tmp
+    var deck: Array = []
+    var counts := {}
+    var idx := 0
+    var guard := 0
+    while deck.size() < 40 and guard < shuffled.size() * 8:
+        var c: Dictionary = shuffled[idx % shuffled.size()]
+        var card_name := str(c.get("name", "Card"))
+        var rarity := str(c.get("rarity", "Bronze"))
+        var limit := 1 if rarity == "Platinum" else (2 if rarity == "Legendary" else 3)
+        if int(counts.get(card_name, 0)) < limit:
+            deck.append(c.duplicate(true))
+            counts[card_name] = int(counts.get(card_name, 0)) + 1
+        idx += 1
+        guard += 1
+    return deck
+
 func build_deck_for_mode(faction_name: String, deck_mode: String) -> Array:
+    if story_mode_battle and deck_mode == "prebuilt" and faction_name == enemy_class:
+        return build_story_opponent_deck(faction_name, story_stage_id)
     match deck_mode:
         "meta":
             return build_developer_meta_deck(faction_name)
