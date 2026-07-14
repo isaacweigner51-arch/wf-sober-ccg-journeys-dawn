@@ -4,3 +4,4 @@
 - [wf-sober-ccg card art name-hydration gap](wf-sober-ccg-card-art-name-hydration.md) — battle cards render via CardView, which resolves art by id but hydrates id from data/cards.json by name-match; any hardcoded main.gd card whose name isn't in cards.json silently falls back to the old placeholder pool.
 - [GDScript lambda capture](gdscript-closure-capture.md) — `func():` closures snapshot outer locals by value at creation, not by reference; box in a Dictionary/Array for a callback to see later reassignment.
 - [Godot headless syntax check](godot-headless-check.md) — checking a single .gd file gives false autoload/class errors; use `godot4 --headless --quit --path .` and grep for SCRIPT ERROR instead.
+- [Connector stuck not_setup despite active account](connector-stuck-not-setup.md) — ElevenLabs (maybe others) can show active in workspace Integrations but ProposeIntegration keeps failing/dialog disabled; don't loop retries.
