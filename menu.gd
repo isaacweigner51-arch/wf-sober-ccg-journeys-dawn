@@ -2318,14 +2318,39 @@ func show_story_stage_intro(stage: Dictionary) -> void:
     header("STAGE %d — %s" % [int(stage["id"]), str(stage["name"])], str(stage["subtitle"]))
     currency_bar()
 
+    var stage_color := class_color(str(stage["class"]))
+
+    # Every stage names an opponent (a recurring person like Dez/Nora, or a
+    # stand-in like "Your Own Doubt"), but until now none of them had a face
+    # -- just a text line under the quote. Giving every stage a portrait,
+    # keyed off the class that actually drives its battle deck, makes each
+    # fight read as facing someone rather than reading a caption.
+    var portrait_frame := Panel.new()
+    portrait_frame.position = Vector2(90, 190)
+    portrait_frame.size = Vector2(130, 130)
+    portrait_frame.add_theme_stylebox_override("panel", style(stage_color, 26))
+    root_layer.add_child(portrait_frame)
+    var portrait := TextureRect.new()
+    portrait.texture = class_leader_texture(str(stage["class"]))
+    portrait.position = Vector2(8, 8)
+    portrait.size = Vector2(114, 114)
+    portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    portrait.clip_contents = true
+    portrait_frame.add_child(portrait)
+    var portrait_caption := label(str(stage.get("opponent_name", stage["class"])).to_upper(), Vector2(85, 326), Vector2(140, 40), 13, root_layer)
+    portrait_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    portrait_caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    portrait_caption.add_theme_color_override("font_color", stage_color)
+
     var panel := Panel.new()
     panel.position = Vector2(240, 190)
     panel.size = Vector2(800, 380)
-    panel.add_theme_stylebox_override("panel", style(class_color(str(stage["class"])), 20))
+    panel.add_theme_stylebox_override("panel", style(stage_color, 20))
     root_layer.add_child(panel)
 
     var quote_mark := label("“", Vector2(24, 8), Vector2(60, 60), 46, panel)
-    quote_mark.add_theme_color_override("font_color", class_color(str(stage["class"])))
+    quote_mark.add_theme_color_override("font_color", stage_color)
 
     var story_label := label(str(stage.get("story", "")), Vector2(70, 40), Vector2(660, 190), 20, panel)
     story_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
