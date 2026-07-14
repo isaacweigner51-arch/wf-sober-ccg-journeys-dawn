@@ -1,6 +1,9 @@
 extends Control
 
 const STARTING_HEALTH := 20
+const BATTLE_BARK_HEALTH_THRESHOLD := 7
+const BATTLE_BARK_COOLDOWN := 3.0
+const BATTLE_BARK_PLAY_CHANCE := 0.4
 const MAX_BOARD := 5
 
 func follower_count(board: Array) -> int:
@@ -78,6 +81,15 @@ var sfx_pool: Array[AudioStreamPlayer] = []
 var ambience_player: AudioStreamPlayer
 var voice_player: AudioStreamPlayer
 var signature_voice_played: Dictionary = {}
+# Battle barks: short in-character lines each leader speaks during a live
+# match (not story mode) so the table feels like two people in a room
+# together, not two silent decks. last_bark_at is a single shared cooldown
+# across both leaders so they never talk over each other; the low-health
+# flags are one-shot per match so a leader only reacts to falling below the
+# threshold once, not on every subsequent hit while already low.
+var last_bark_at: float = -999.0
+var player_low_health_barked := false
+var enemy_low_health_barked := false
 var current_music := ""
 var turn_time_left: float = TURN_TIME_SECONDS
 var player_turn_active := false
@@ -939,6 +951,118 @@ func attack_impact_sound(attacker_index: int, target_index: int, player_side: bo
         or int(defender.get("attack", 0)) >= LARGE_FOLLOWER_ATTACK_THRESHOLD \
         or int(defender.get("max_health", defender.get("health", 0))) >= LARGE_FOLLOWER_HEALTH_THRESHOLD
     return "impact_large_follower" if is_large else "impact_follower_clean"
+
+# Short in-character lines each leader can speak mid-battle. Kept purely
+# text+audio (no gameplay effect) so the table feels populated by two people
+# instead of two silent decks -- the recovery theme comes through in what
+# each leader actually says at each moment (playing a card, landing a hit,
+# running low on health, winning, or losing), not just in a rulebook.
+const BATTLE_BARKS := {
+    "Hope": {
+        "play": ["Every card here is a reason to keep going.", "Small moves add up. Watch."],
+        "attack": ["Hope doesn't hit soft.", "I'm not backing down from this."],
+        "low_health": ["I've been lower than this and still stood up.", "This isn't the end of my story."],
+        "victory": ["We made it through. Together.", "That's what hope looks like."],
+        "defeat": ["This isn't over. Hope doesn't quit.", "I'll be back on my feet tomorrow."],
+    },
+    "Courage": {
+        "play": ["Stepping up. Watch this.", "Fear doesn't get a vote here."],
+        "attack": ["Stand my ground? Not today.", "That's what courage looks like."],
+        "low_health": ["I've faced worse than this.", "Hurt, not broken."],
+        "victory": ["Courage carried the day.", "Told you I wouldn't back down."],
+        "defeat": ["I'll take the hit. I won't take the excuse.", "Down, not out."],
+    },
+    "Serenity": {
+        "play": ["Patience. Let it land.", "Steady hands win this."],
+        "attack": ["Calm doesn't mean passive.", "Quiet, then decisive."],
+        "low_health": ["I'm still breathing. I'm still here.", "Stillness isn't weakness."],
+        "victory": ["Peace, earned the hard way.", "That's the power of staying steady."],
+        "defeat": ["I'll sit with this and come back stronger.", "Not every round is won. That's fine."],
+    },
+    "Purpose": {
+        "play": ["Every move has a reason behind it.", "Building toward something. Watch."],
+        "attack": ["This is what I'm fighting for.", "Purpose doesn't flinch."],
+        "low_health": ["I know why I'm still standing.", "Too much left to build to quit now."],
+        "victory": ["That's what purpose gets you.", "Built this win, one step at a time."],
+        "defeat": ["This sets back the plan. Not the purpose.", "I'll rebuild from here."],
+    },
+}
+
+func battle_bark_voice_folder(faction: String) -> String:
+    return faction.to_lower()
+
+# Fires a leader's line for the given moment (play/attack/low_health/victory/
+# defeat): shows a speech bubble over their portrait and, if a matching
+# pre-recorded clip exists, plays it through the shared voice_player. Never
+# awaited by callers -- it runs alongside the battle instead of pausing it,
+# the same way a quip should never block the game waiting for it to finish.
+func play_battle_bark(leader: Control, faction: String, category: String, player_side: bool, force: bool = false) -> void:
+    if not is_instance_valid(leader) or not BATTLE_BARKS.has(faction):
+        return
+    var lines: Array = BATTLE_BARKS[faction].get(category, [])
+    if lines.is_empty():
+        return
+    var now := Time.get_ticks_msec() / 1000.0
+    if not force and now - last_bark_at < BATTLE_BARK_COOLDOWN:
+        return
+    if category == "play" and randf() > BATTLE_BARK_PLAY_CHANCE:
+        return
+    last_bark_at = now
+    var variant := randi() % lines.size()
+    var line := str(lines[variant])
+    var accent := class_accent_color(faction)
+    leader_speech_bubble(leader, line, accent)
+    var path := "res://assets/audio/voices/battle/%s/%s_%d.wav" % [battle_bark_voice_folder(faction), category, variant + 1]
+    if ResourceLoader.exists(path) and is_instance_valid(voice_player) and not voice_player.playing:
+        voice_player.stream = load(path)
+        voice_player.play()
+
+# A wider, word-wrapped cousin of leader_emote() for actual spoken lines
+# instead of single glyphs -- same pop-in/drift-up/fade choreography so it
+# reads as part of the same visual language, just sized for a sentence.
+func leader_speech_bubble(leader: Control, text: String, accent: Color) -> void:
+    if not is_instance_valid(leader):
+        return
+    var bubble_width := 220.0
+    var bubble_height := 64.0
+    var bubble := Panel.new()
+    bubble.size = Vector2(bubble_width, bubble_height)
+    var bubble_style := StyleBoxFlat.new()
+    bubble_style.bg_color = Color(0.03, 0.045, 0.08, 0.94)
+    bubble_style.border_color = accent
+    bubble_style.set_border_width_all(2)
+    bubble_style.set_corner_radius_all(12)
+    bubble_style.shadow_color = Color(0, 0, 0, 0.5)
+    bubble_style.shadow_size = 6
+    bubble.add_theme_stylebox_override("panel", bubble_style)
+    bubble.z_index = 400
+    bubble.pivot_offset = Vector2(bubble_width * 0.5, bubble_height * 0.5)
+    bubble.scale = Vector2(0.3, 0.3)
+    bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    bubble.position = leader.global_position + Vector2(leader.size.x * 0.5 - bubble_width * 0.5, -bubble_height - 10)
+    add_child(bubble)
+    var line := Label.new()
+    line.text = text
+    line.position = Vector2(10, 6)
+    line.size = Vector2(bubble_width - 20, bubble_height - 12)
+    line.add_theme_font_size_override("font_size", ui_font(13))
+    line.add_theme_color_override("font_color", Color(0.95, 0.96, 0.98))
+    line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    line.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    bubble.add_child(line)
+    var pop := create_tween()
+    pop.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    pop.tween_property(bubble, "scale", Vector2(1.05, 1.05), 0.16)
+    pop.tween_property(bubble, "scale", Vector2(1.0, 1.0), 0.10)
+    await get_tree().create_timer(2.6).timeout
+    if not is_instance_valid(bubble):
+        return
+    var fade := create_tween()
+    fade.tween_property(bubble, "modulate:a", 0.0, 0.35)
+    await fade.finished
+    if is_instance_valid(bubble):
+        bubble.queue_free()
 
 func signature_voice_key(card_name: String, attack_line: bool = false) -> String:
     var base := card_name.to_lower().replace(" ", "_")
@@ -3065,6 +3189,9 @@ func start_game() -> void:
     refresh_battlefield_theme()
     refresh_leader_hp_badge_colors()
     signature_voice_played.clear()
+    last_bark_at = -999.0
+    player_low_health_barked = false
+    enemy_low_health_barked = false
     player_walking_free_active = false
     enemy_walking_free_active = false
     game_over = false; busy = false; selected_attacker = -1; selected_evolution_cost = 0
@@ -3644,6 +3771,7 @@ func enemy_turn() -> void:
                 unit["determination_from_rise"] = true
         enemy_board.append(unit)
         refresh_ui(true, enemy_board.size() - 1, false)
+        play_battle_bark(enemy_leader, enemy_class, "play", false)
         await get_tree().create_timer(0.38).timeout
         await resolve_on_play(unit, false)
     await enemy_use_evolution()
@@ -3726,7 +3854,9 @@ func play_card(index: int) -> void:
         chosen["rush_from_walking_free"] = true
     player_board.append(chosen); status_label.text = "%s enters the field!" % chosen["name"]
     play_sfx("platinum" if str(chosen.get("rarity", "")) == "Platinum" else "play")
-    refresh_ui(true, player_board.size() - 1, true); await get_tree().create_timer(0.34).timeout; await resolve_on_play(chosen, true)
+    refresh_ui(true, player_board.size() - 1, true)
+    play_battle_bark(player_leader, selected_class, "play", true)
+    await get_tree().create_timer(0.34).timeout; await resolve_on_play(chosen, true)
     training_on_card_played(chosen)
     busy = false; refresh_ui(); send_online_snapshot()
 
@@ -4264,6 +4394,7 @@ func resolve_combat(attacker_index: int, target_index: int, player_side: bool) -
         if player_side: enemy_health -= int(attacker["attack"])
         else: player_health -= int(attacker["attack"])
         leader_feedback(enemy_leader if player_side else player_leader, int(attacker["attack"]), false)
+        play_battle_bark(player_leader if player_side else enemy_leader, selected_class if player_side else enemy_class, "attack", player_side)
         await show_vfx("-%d" % attacker["attack"], enemy_leader.global_position if player_side else player_leader.global_position, Color(1.0, 0.25, 0.2))
         if player_side and training_mode:
             training_attacked_this_turn = true
@@ -4347,12 +4478,16 @@ func check_winner() -> void:
         busy = true
         award_pending_challenge()
         record_recovery_challenge_win(selected_class)
+        play_battle_bark(player_leader, selected_class, "victory", true, true)
+        play_battle_bark(enemy_leader, enemy_class, "defeat", false, true)
         call_deferred("_finish_match", true)
     elif player_health <= 0:
         player_health = 0
         game_over = true
         player_turn_active = false
         busy = true
+        play_battle_bark(enemy_leader, enemy_class, "victory", false, true)
+        play_battle_bark(player_leader, selected_class, "defeat", true, true)
         call_deferred("_finish_match", false)
 
 func _finish_match(player_won: bool) -> void:
@@ -4692,6 +4827,13 @@ func show_vfx(text_value: String, world_pos: Vector2, color: Color) -> void:
     var tween := create_tween().set_parallel(true); tween.tween_property(label, "position:y", world_pos.y - 55, 0.55); tween.tween_property(label, "modulate:a", 0.0, 0.55); await tween.finished; label.queue_free()
 
 func refresh_ui(animate_new: bool = false, new_index: int = -1, new_player_side: bool = true) -> void:
+    if not game_over:
+        if not player_low_health_barked and player_health > 0 and player_health <= BATTLE_BARK_HEALTH_THRESHOLD:
+            player_low_health_barked = true
+            play_battle_bark(player_leader, selected_class, "low_health", true, true)
+        if not enemy_low_health_barked and enemy_health > 0 and enemy_health <= BATTLE_BARK_HEALTH_THRESHOLD:
+            enemy_low_health_barked = true
+            play_battle_bark(enemy_leader, enemy_class, "low_health", false, true)
     safe_set_text(player_health_label, "♥ %d" % player_health); safe_set_text(enemy_health_label, "♥ %d" % enemy_health)
     safe_set_text(mana_label, "%d / %d" % [player_mana, player_max_mana])
     for i in range(pp_pips.size()):
