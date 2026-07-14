@@ -4691,7 +4691,12 @@ func leader_clicked(player_side: bool) -> void:
     if selected_attacker >= player_board.size(): return
     var attacker: Dictionary = player_board[selected_attacker]
     var effect_text := (str(attacker.get("text", "")) + " " + str(attacker.get("display_text", "")) + " " + str(attacker.get("ability", ""))).to_lower()
-    if bool(attacker.get("evolved_this_turn", false)) and not ("breakthrough" in effect_text or "storm" in effect_text):
+    # Evolving only blocks a leader attack when the follower ALSO has summoning
+    # sickness (i.e. it was played this same turn) and lacks Storm/Breakthrough.
+    # A follower that has been on the field since an earlier turn keeps its
+    # right to attack the leader when it evolves, storm or not.
+    var summoned_this_turn := int(attacker.get("summoned_turn", -1)) == turn_number
+    if bool(attacker.get("evolved_this_turn", false)) and summoned_this_turn and not ("breakthrough" in effect_text or "storm" in effect_text):
         status_label.text = "A follower that evolved this turn can attack followers, not the enemy leader."
         return
     await perform_player_attack(-1)
@@ -5133,6 +5138,14 @@ func award_pending_trial() -> void:
 
 func show_game_over(title_text: String, subtitle: String, player_won: bool) -> void:
     player_turn_active = false
+    # _play_victory_sequence (the VICTORY/DEFEAT banner + sparkles + scrim) runs
+    # on its own fixed timers and can still be mid-animation when this fires --
+    # its bright banner and sparkles were competing for attention with the
+    # freshly-faded-in result buttons underneath, which is exactly why the
+    # buttons were hard to spot/click ("behind the victory screen"). Cut it off
+    # immediately so the result screen is the only thing left on screen.
+    if is_instance_valid(finish_layer):
+        finish_layer.queue_free()
     # The result screen used to be shown on the shared `overlay` node, which
     # is also reused by mid-match modals (pass-device handoff, the strategic
     # collapse spell choice, etc). If one of those modals was ever left
@@ -5150,6 +5163,23 @@ func show_game_over(title_text: String, subtitle: String, player_won: bool) -> v
     game_over_layer.z_index = 10000
     game_over_layer.modulate = Color(1, 1, 1, 0)
     add_child(game_over_layer)
+
+    # A solid, high-contrast card behind the badge/title/buttons -- instead of
+    # buttons floating directly on the translucent full-screen dim -- so the
+    # result panel reads as one clear focal point instead of controls that
+    # look stranded/half-hidden against whatever was on the board underneath.
+    var card_panel := Panel.new()
+    card_panel.position = Vector2(340, 170)
+    card_panel.size = Vector2(600, 400)
+    var card_style := StyleBoxFlat.new()
+    card_style.bg_color = Color(0.035, 0.05, 0.09, 0.97)
+    card_style.border_color = Color(1.0, 0.86, 0.32) if player_won else Color(0.6, 0.74, 1.0)
+    card_style.set_border_width_all(3)
+    card_style.set_corner_radius_all(20)
+    card_style.shadow_color = Color(0, 0, 0, 0.6)
+    card_style.shadow_size = 24
+    card_panel.add_theme_stylebox_override("panel", card_style)
+    game_over_layer.add_child(card_panel)
 
     var box := VBoxContainer.new()
     box.position = Vector2(350, 190)
@@ -5179,17 +5209,41 @@ func show_game_over(title_text: String, subtitle: String, player_won: bool) -> v
     sub.add_theme_font_size_override("font_size", ui_font(20))
     box.add_child(sub)
 
+    # Both buttons get explicit high-contrast styling. Every other button in
+    # this UI is hand-styled with a StyleBoxFlat -- leaving these two on the
+    # bare engine default made them look flat/washed out against the custom
+    # dark theme everywhere else, which is what made them so easy to miss.
     var button := Button.new()
     button.text = "PLAY AGAIN"
-    button.custom_minimum_size = Vector2(250, 58)
+    button.custom_minimum_size = Vector2(280, 58)
     button.focus_mode = Control.FOCUS_NONE
+    button.add_theme_font_size_override("font_size", ui_font(19))
+    var primary_style := StyleBoxFlat.new()
+    primary_style.bg_color = Color(1.0, 0.86, 0.32)
+    primary_style.set_corner_radius_all(12)
+    button.add_theme_stylebox_override("normal", primary_style)
+    button.add_theme_stylebox_override("hover", primary_style)
+    button.add_theme_stylebox_override("pressed", primary_style)
+    button.add_theme_color_override("font_color", Color(0.04, 0.06, 0.10))
+    button.add_theme_color_override("font_hover_color", Color(0.04, 0.06, 0.10))
+    button.add_theme_color_override("font_pressed_color", Color(0.04, 0.06, 0.10))
     button.pressed.connect(_restart_after_match)
     box.add_child(button)
 
     var home := Button.new()
     home.text = "RETURN TO MAIN MENU"
-    home.custom_minimum_size = Vector2(250, 58)
+    home.custom_minimum_size = Vector2(280, 58)
     home.focus_mode = Control.FOCUS_NONE
+    home.add_theme_font_size_override("font_size", ui_font(17))
+    var secondary_style := StyleBoxFlat.new()
+    secondary_style.bg_color = Color(0.12, 0.16, 0.26, 0.95)
+    secondary_style.border_color = Color(0.6, 0.74, 1.0)
+    secondary_style.set_border_width_all(2)
+    secondary_style.set_corner_radius_all(12)
+    home.add_theme_stylebox_override("normal", secondary_style)
+    home.add_theme_stylebox_override("hover", secondary_style)
+    home.add_theme_stylebox_override("pressed", secondary_style)
+    home.add_theme_color_override("font_color", Color(0.86, 0.92, 1.0))
     home.pressed.connect(_return_to_main_menu)
     box.add_child(home)
 
