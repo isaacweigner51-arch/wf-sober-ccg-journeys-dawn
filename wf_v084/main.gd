@@ -1938,7 +1938,13 @@ func make_leader(label_text: String, pos: Vector2, player_side: bool) -> Button:
     portrait.size = Vector2(164, 126)
     portrait.texture = load("res://assets/leaders/player.png" if player_side else "res://assets/leaders/enemy.png") as Texture2D
     portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    # COVERED instead of CENTERED: the source art is a square 512x512 portrait
+    # but this frame is a wide 164x126 box. CENTERED preserves the whole image
+    # and pads the sides with empty dark bars, which reads as an unfinished/
+    # broken portrait. COVERED fills the frame completely (cropping slightly
+    # top/bottom) so the leader's face and torso are always fully visible.
+    portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    portrait.clip_contents = true
     portrait.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
     portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
     leader.add_child(portrait)
@@ -3630,6 +3636,7 @@ func check_winner() -> void:
         player_turn_active = false
         busy = true
         award_pending_challenge()
+        record_recovery_challenge_win(selected_class)
         call_deferred("_finish_match", true)
     elif player_health <= 0:
         player_health = 0
@@ -3659,6 +3666,15 @@ func _finish_match(player_won: bool) -> void:
     # open when the match ends it can make the result screen look broken or
     # unreachable, so always clear it before the result sequence starts.
     close_card_details()
+    # class_overlay (z 2000) and second_chance_overlay (z 4000) both capture
+    # every click while visible. Either one left alive across a match end sits
+    # above the victory/defeat screen and silently eats input on PLAY AGAIN /
+    # RETURN TO MAIN MENU, which is exactly what "stuck on the result screen"
+    # looks like from the player's side. Force them closed unconditionally.
+    if is_instance_valid(class_overlay):
+        class_overlay.queue_free()
+    if is_instance_valid(second_chance_overlay):
+        second_chance_overlay.queue_free()
 
     var training_completed_here := false
     if player_won and training_mode:
@@ -3823,6 +3839,28 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         finish_layer.queue_free()
     await get_tree().create_timer(0.18).timeout
 
+func record_recovery_challenge_win(winning_class: String) -> void:
+    # Tracks the home screen's "Win 3 matches with <class>" Recovery
+    # Challenge. Progress is stored directly in the shared profile file
+    # (main.gd and menu.gd are separate scenes) and read back by the menu
+    # the next time it loads or rebuilds the home screen.
+    if winning_class == "":
+        return
+    var cfg := ConfigFile.new()
+    cfg.load("user://journeys_dawn_profile.cfg") # Missing file is fine; defaults apply below.
+    var progress: Dictionary = cfg.get_value("challenge", "recovery_progress", {})
+    var count := int(progress.get(winning_class, 0)) + 1
+    if count >= 3:
+        var gold := int(cfg.get_value("economy", "gold", 0))
+        var packs := int(cfg.get_value("economy", "packs", 0))
+        cfg.set_value("economy", "gold", gold + 75)
+        cfg.set_value("economy", "packs", packs + 1)
+        progress[winning_class] = 0
+    else:
+        progress[winning_class] = count
+    cfg.set_value("challenge", "recovery_progress", progress)
+    cfg.save("user://journeys_dawn_profile.cfg")
+
 func award_pending_challenge() -> void:
     var cfg := ConfigFile.new()
     if cfg.load("user://journeys_dawn_profile.cfg") != OK:
@@ -3854,6 +3892,12 @@ func show_game_over(title_text: String, subtitle: String, player_won: bool) -> v
     player_turn_active = false
     if not is_instance_valid(overlay):
         return
+    # Belt-and-suspenders: whatever else might still be alive in the scene
+    # (class_overlay z2000, second_chance_overlay z4000, card_detail_panel
+    # z5000), the result screen must always win the input fight. _finish_match
+    # already force-clears the known culprits, but push this above all of
+    # them regardless so a future overlay can't reintroduce the same freeze.
+    overlay.z_index = 6000
     overlay.visible = true
     overlay.modulate = Color(1, 1, 1, 0)
     for child in overlay.get_children():

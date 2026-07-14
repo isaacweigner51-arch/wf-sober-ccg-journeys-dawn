@@ -46,6 +46,7 @@ var collection_owned: Dictionary = {}
 var _menu_art_cache: Dictionary = {}
 var saved_deck: Array = []
 var saved_decks: Dictionary = {}
+var recovery_challenge_progress: Dictionary = {}
 var selected_deck_class := "Hope"
 var battle_select_class := "Hope"
 var battle_select_mode := "custom"
@@ -237,6 +238,7 @@ func load_profile() -> void:
         academy_reward_claimed = bool(cfg.get_value("academy", "reward_claimed", false))
         daily_reward_day = int(cfg.get_value("daily", "reward_day", 0))
         daily_last_claim_day = int(cfg.get_value("daily", "last_claim_day", -1))
+        recovery_challenge_progress = cfg.get_value("challenge", "recovery_progress", {})
         # Existing players from earlier builds should not lose access.
         if selected_class != "" and not cfg.has_section_key("academy", "complete"):
             academy_complete = true
@@ -291,6 +293,7 @@ func save_profile() -> void:
     cfg.set_value("academy", "reward_claimed", academy_reward_claimed)
     cfg.set_value("daily", "reward_day", daily_reward_day)
     cfg.set_value("daily", "last_claim_day", daily_last_claim_day)
+    cfg.set_value("challenge", "recovery_progress", recovery_challenge_progress)
     cfg.save(SAVE_PATH)
 
 func clear_screen() -> void:
@@ -479,7 +482,10 @@ func show_home() -> void:
     art.size = art_frame.size
     art.custom_minimum_size = Vector2.ZERO
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    # COVERED, not CENTERED: this frame (532x344) is much wider than the
+    # square 512x512 source art. CENTERED left large empty bars down both
+    # sides; COVERED fills the whole frame with the portrait.
+    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     art.clip_contents = true
     art_frame.add_child(art)
@@ -499,6 +505,8 @@ func show_home() -> void:
     leader_name.add_theme_color_override("font_color", class_color(active_class))
     var desc := label(class_description(active_class), Vector2(202, 7), Vector2(214, 48), 12, info_strip)
     desc.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    var preview_button := button("PREVIEW", Vector2(326, 9), Vector2(94, 46), show_deck_preview, info_strip)
+    preview_button.add_theme_font_size_override("font_size", ui_font_size(13))
     var decks_button := button("DECKS", Vector2(426, 9), Vector2(94, 46), show_deck_builder, info_strip)
     decks_button.add_theme_font_size_override("font_size", ui_font_size(15))
 
@@ -510,9 +518,10 @@ func show_home() -> void:
     main.add_child(right)
     label("RECOVERY CHALLENGE", Vector2(20, 18), Vector2(362, 32), 20, right).add_theme_color_override("font_color", GOLD_COLOR)
     label("Win 3 matches with " + active_class + ".", Vector2(20, 58), Vector2(362, 30), 15, right)
+    var challenge_progress := int(recovery_challenge_progress.get(active_class, 0))
     var progress_bg := ColorRect.new(); progress_bg.position = Vector2(20, 98); progress_bg.size = Vector2(362, 12); progress_bg.color = Color(0.05,0.06,0.09); right.add_child(progress_bg)
-    var progress := ColorRect.new(); progress.position = Vector2(20, 98); progress.size = Vector2(120, 12); progress.color = class_color(active_class); right.add_child(progress)
-    label("1 / 3", Vector2(20, 116), Vector2(362, 24), 13, right).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    var progress := ColorRect.new(); progress.position = Vector2(20, 98); progress.size = Vector2(362.0 * (float(challenge_progress) / 3.0), 12); progress.color = class_color(active_class); right.add_child(progress)
+    label("%d / 3" % challenge_progress, Vector2(20, 116), Vector2(362, 24), 13, right).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     label("DAILY REFLECTION", Vector2(20, 160), Vector2(362, 30), 18, right).add_theme_color_override("font_color", GOLD_COLOR)
     var reflection := label("Progress begins with one honest choice. Keep moving forward.", Vector2(20, 198), Vector2(362, 76), 15, right)
     reflection.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -1978,7 +1987,27 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
     frame_style.corner_radius_top_right = 12
     frame_style.corner_radius_bottom_left = 12
     frame_style.corner_radius_bottom_right = 12
+    frame_style.shadow_color = Color(0, 0, 0, 0.55)
+    frame_style.shadow_size = 6
     p.add_theme_stylebox_override("panel", frame_style)
+
+    # A slim inset highlight line reads as a stamped metal card edge instead
+    # of a flat rectangle photo pasted on a background — the same two-tone
+    # frame trick used by physical trading cards.
+    var inner_frame := Panel.new()
+    inner_frame.position = Vector2(4, 4)
+    inner_frame.size = size_value - Vector2(8, 8)
+    inner_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var inner_style := StyleBoxFlat.new()
+    inner_style.bg_color = Color(0, 0, 0, 0)
+    inner_style.border_color = Color(border.r, border.g, border.b, 0.55).lightened(0.3)
+    inner_style.set_border_width_all(1)
+    inner_style.corner_radius_top_left = 9
+    inner_style.corner_radius_top_right = 9
+    inner_style.corner_radius_bottom_left = 9
+    inner_style.corner_radius_bottom_right = 9
+    inner_frame.add_theme_stylebox_override("panel", inner_style)
+    p.add_child(inner_frame)
 
     var compact_panel := size_value.y < 230.0
     var outer_pad := 7.0
@@ -1992,6 +2021,22 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
     art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     p.add_child(art)
+
+    # Diagonal glass sheen across the art — a cheap, standard trick that makes
+    # a flat photo read as a coated/printed card instead of a pasted image.
+    var sheen := GradientTexture2D.new()
+    var sheen_gradient := Gradient.new()
+    sheen_gradient.colors = PackedColorArray([Color(1,1,1,0.16), Color(1,1,1,0.0)])
+    sheen_gradient.offsets = PackedFloat32Array([0.0, 1.0])
+    sheen.gradient = sheen_gradient
+    sheen.fill_from = Vector2(0.05, 0.0)
+    sheen.fill_to = Vector2(0.6, 0.75)
+    var sheen_rect := TextureRect.new()
+    sheen_rect.texture = sheen
+    sheen_rect.position = art.position
+    sheen_rect.size = art.size
+    sheen_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    p.add_child(sheen_rect)
 
     # Dark fade keeps the card name readable without hiding the art.
     var fade := GradientTexture2D.new()
@@ -2093,11 +2138,14 @@ func show_card_preview(cd: Dictionary) -> void:
     big_card.z_index = 901
     scrim.add_child(big_card)
 
-    var caption := label("%s  •  %s" % [str(cd.get("class", "Neutral")).to_upper(), rarity.to_upper()], Vector2(390, 520), Vector2(500, 30), 16)
+    # Parent directly to scrim instead of the label()/centered_label() default
+    # of root_layer — calling add_child() on a node that already has a parent
+    # is a no-op error in Godot, which was silently leaving this caption
+    # detached from the popup (and, depending on draw order, invisible).
+    var caption := label("%s  •  %s" % [str(cd.get("class", "Neutral")).to_upper(), rarity.to_upper()], Vector2(390, 520), Vector2(500, 30), 16, scrim)
     caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     caption.add_theme_color_override("font_color", border)
     caption.z_index = 901
-    scrim.add_child(caption)
 
     var close_btn := button("CLOSE", Vector2(560, 570), Vector2(160, 48), scrim.queue_free, scrim)
     close_btn.z_index = 901
@@ -2213,6 +2261,56 @@ func switch_deck_class(c: String) -> void:
     saved_deck = Array(saved_decks.get(c, []))
     save_profile()
     show_deck_builder()
+
+func show_deck_preview() -> void:
+    # Read-only view of the currently active class's saved deck, reachable
+    # straight from the home screen without entering the full deck builder.
+    # Tapping any card still opens the same full-detail inspector.
+    clear_screen(); add_background(0.82)
+    var active_class := selected_class if selected_class != "" else "Hope"
+    header("DECK PREVIEW — " + active_class.to_upper(), "Tap any card to inspect it • Go to DECKS to add or remove cards")
+    var deck: Array = Array(saved_decks.get(active_class, []))
+    if deck.is_empty():
+        centered_label("This deck is empty.", Vector2(340, 260), Vector2(600, 40), 22).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        centered_label("Visit DECKS from the home screen to add cards.", Vector2(340, 310), Vector2(600, 30), 15)
+        button("BACK", Vector2(540, 400), Vector2(200, 54), show_home)
+        return
+    var counts: Dictionary = {}
+    for id in deck:
+        counts[str(id)] = int(counts.get(str(id), 0)) + 1
+    var binder := Panel.new()
+    binder.position = Vector2(28, 176); binder.size = Vector2(1224, 470)
+    var binder_style := StyleBoxFlat.new()
+    binder_style.bg_color = Color(0.01, 0.02, 0.045, 0.78)
+    binder_style.border_color = GOLD_COLOR
+    binder_style.set_border_width_all(2)
+    binder_style.set_corner_radius_all(14)
+    binder.add_theme_stylebox_override("panel", binder_style)
+    root_layer.add_child(binder)
+    var scroll := ScrollContainer.new(); scroll.position = Vector2(12, 12); scroll.size = Vector2(1200, 446); binder.add_child(scroll)
+    var grid := GridContainer.new(); grid.columns = 7
+    grid.add_theme_constant_override("h_separation", 14); grid.add_theme_constant_override("v_separation", 16)
+    scroll.add_child(grid)
+    var seen: Dictionary = {}
+    for id in deck:
+        var sid := str(id)
+        if seen.has(sid):
+            continue
+        seen[sid] = true
+        var cd := card_by_id(sid)
+        if cd.is_empty():
+            continue
+        var wrap := VBoxContainer.new(); wrap.custom_minimum_size = Vector2(156, 245)
+        var cp := card_panel(cd, Vector2.ZERO, Vector2(150, 214))
+        wrap.add_child(cp)
+        var count_label := Label.new()
+        count_label.text = "Copies: %d" % int(counts.get(sid, 1))
+        count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        count_label.add_theme_font_size_override("font_size", 12)
+        wrap.add_child(count_label)
+        grid.add_child(wrap)
+    button("BACK TO HOME", Vector2(28, 656), Vector2(220, 48), show_home)
+    button("EDIT THIS DECK", Vector2(264, 656), Vector2(220, 48), show_deck_builder)
 
 func show_deck_builder() -> void:
     clear_screen(); add_background(0.82); header("DECK BUILDER","Separate saved deck for every class • Exactly 40 cards • Class plus Neutral"); currency_bar()
