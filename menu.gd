@@ -19,11 +19,31 @@ const DAILY_REWARDS := [
 ]
 
 const STORY_STAGES := [
-    {"id":1, "name":"The First Step", "class":"Hope", "gold":0, "packs":1, "subtitle":"Learn to stay in the fight."},
-    {"id":2, "name":"Finding Strength", "class":"Courage", "gold":150, "packs":0, "subtitle":"Face pressure without backing down."},
-    {"id":3, "name":"Quieting the Noise", "class":"Serenity", "gold":0, "packs":1, "subtitle":"Patience can control the battlefield."},
-    {"id":4, "name":"A Reason to Continue", "class":"Purpose", "gold":250, "packs":0, "subtitle":"Build toward something greater."},
-    {"id":5, "name":"Community Test", "class":"Courage", "gold":300, "packs":2, "subtitle":"Use everything you have learned."}
+    {
+        "id":1, "name":"The First Step", "class":"Hope", "gold":0, "packs":1,
+        "subtitle":"Learn to stay in the fight.",
+        "story":"The hardest battle is the one where you finally admit you need to fight at all. Today isn't about winning — it's about showing up and staying in the fight one more round than you thought you could."
+    },
+    {
+        "id":2, "name":"Finding Strength", "class":"Courage", "gold":150, "packs":0,
+        "subtitle":"Face pressure without backing down.",
+        "story":"An old trigger finds you when you least expect it. You don't have to be fearless to face it — you just have to be willing to stand your ground long enough to remember you can."
+    },
+    {
+        "id":3, "name":"Quieting the Noise", "class":"Serenity", "gold":0, "packs":1,
+        "subtitle":"Patience can control the battlefield.",
+        "story":"The cravings are loud tonight, but loud isn't the same as strong. You've learned to sit with the noise instead of running from it — and in that stillness, you find you're steadier than it is."
+    },
+    {
+        "id":4, "name":"A Reason to Continue", "class":"Purpose", "gold":250, "packs":0,
+        "subtitle":"Build toward something greater.",
+        "story":"Somewhere along the way, recovery stopped being about what you were running from and became about what you're building toward. Today you fight for that reason, not away from the old one."
+    },
+    {
+        "id":5, "name":"Community Test", "class":"Courage", "gold":300, "packs":2,
+        "subtitle":"Use everything you have learned.",
+        "story":"You're not walking this road alone anymore — and now it's your turn to prove that everything you've learned holds up when someone else is counting on you. Everything you've built comes together here."
+    }
 ]
 
 const CHALLENGES := [
@@ -1771,28 +1791,140 @@ func build_starter_deck(c: String) -> void:
         push_error("Starter deck %s has %d cards instead of 40." % [c, saved_deck.size()])
 
 func show_story_mode() -> void:
-    clear_screen(); add_background(0.66); header("STORY MODE — CHAPTER 1", "Every victory moves the journey forward"); currency_bar()
+    clear_screen(); add_background(0.66)
+    header("STORY MODE — CHAPTER 1", "Every victory moves the journey forward")
+    currency_bar()
     var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
     var unlocked := int(cfg.get_value("story", "unlocked_stage", 1))
+
+    # A connecting road behind the stage cards so the chapter reads as one
+    # continuous journey instead of five disconnected panels — cleared and
+    # unlocked stretches light up, the rest of the road stays dim.
+    var road := ColorRect.new()
+    road.color = Color(0.9, 0.82, 0.5, 0.35)
+    road.position = Vector2(95, 218)
+    road.size = Vector2(1090, 4)
+    root_layer.add_child(road)
+    for i in range(STORY_STAGES.size() - 1):
+        var stage_id := int(STORY_STAGES[i]["id"])
+        var lit := stage_id < unlocked or bool(cfg.get_value("story", "cleared_%d" % stage_id, false))
+        var seg := ColorRect.new()
+        seg.color = GOLD_COLOR if lit else Color(0.35, 0.37, 0.42, 0.4)
+        seg.position = Vector2(95 + i * 234 + 5, 216)
+        seg.size = Vector2(224, 8)
+        root_layer.add_child(seg)
+
     for i in range(STORY_STAGES.size()):
         var stage: Dictionary = STORY_STAGES[i]
         var stage_id := int(stage["id"])
         var cleared := bool(cfg.get_value("story", "cleared_%d" % stage_id, false))
         var available := stage_id <= unlocked
-        var panel := Panel.new(); panel.position=Vector2(35+i*246,170); panel.size=Vector2(225,390)
-        panel.add_theme_stylebox_override("panel",style(class_color(str(stage["class"])) if available else Color(0.18,0.20,0.24),16)); root_layer.add_child(panel)
-        var badge := "COMPLETE" if cleared else ("UNLOCKED" if available else "LOCKED")
-        var st := label("STAGE %d\n%s" % [stage_id,badge],Vector2(18,18),Vector2(189,58),17,panel); st.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-        var nm := label(str(stage["name"]),Vector2(18,92),Vector2(189,62),21,panel); nm.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-        var desc := label(str(stage["subtitle"]),Vector2(20,164),Vector2(185,72),15,panel); desc.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+        var pos := Vector2(60 + i * 234, 168)
+        var size_value := Vector2(210, 400)
+
+        # A round waypoint marker sitting on the road above each card — filled
+        # gold when cleared, outlined when it's the current stage, dim/locked
+        # otherwise — so progress reads at a glance before you even look at
+        # the cards themselves.
+        var marker := Panel.new()
+        marker.position = Vector2(pos.x + size_value.x / 2.0 - 16, 200)
+        marker.size = Vector2(32, 32)
+        var marker_style := StyleBoxFlat.new()
+        marker_style.set_corner_radius_all(16)
+        marker_style.border_color = Color(0.05, 0.06, 0.09)
+        marker_style.set_border_width_all(2)
+        if cleared:
+            marker_style.bg_color = GOLD_COLOR
+        elif available:
+            marker_style.bg_color = class_color(str(stage["class"]))
+        else:
+            marker_style.bg_color = Color(0.22, 0.24, 0.28)
+        marker.add_theme_stylebox_override("panel", marker_style)
+        root_layer.add_child(marker)
+        var marker_label := label("✓" if cleared else str(stage_id), Vector2(0, 4), Vector2(32, 24), 14, marker)
+        marker_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+        var panel := Panel.new(); panel.position = pos; panel.size = size_value
+        panel.clip_contents = false
+        panel.add_theme_stylebox_override("panel", style(class_color(str(stage["class"])) if available else Color(0.18, 0.20, 0.24), 16))
+        root_layer.add_child(panel)
+
+        var badge_text := "COMPLETE" if cleared else ("NEXT UP" if available and stage_id == unlocked else ("UNLOCKED" if available else "LOCKED"))
+        var badge_color := GOLD_COLOR if cleared else (Color(0.82, 0.92, 1.0) if available else Color(0.55, 0.57, 0.62))
+        var st := label("STAGE %d — %s" % [stage_id, badge_text], Vector2(14, 16), Vector2(182, 20), 13, panel)
+        st.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        st.add_theme_color_override("font_color", badge_color)
+
+        var nm := label(str(stage["name"]), Vector2(12, 42), Vector2(186, 56), 19, panel)
+        nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+        var desc := label(str(stage["subtitle"]), Vector2(16, 102), Vector2(178, 46), 13, panel)
+        desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        desc.add_theme_color_override("font_color", Color(0.78, 0.84, 0.92))
+
+        if available:
+            var opponent := label("OPPONENT\n%s" % str(stage["class"]).to_upper(), Vector2(16, 156), Vector2(178, 40), 12, panel)
+            opponent.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            opponent.add_theme_color_override("font_color", class_color(str(stage["class"])))
+        else:
+            var lock_notice := label("🔒\nCLEAR THE PREVIOUS STAGE", Vector2(16, 150), Vector2(178, 55), 13, panel)
+            lock_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            lock_notice.add_theme_color_override("font_color", Color(0.6, 0.62, 0.68))
+
         var reward_parts: Array[String] = []
         if int(stage["gold"]) > 0: reward_parts.append("%d GOLD" % int(stage["gold"]))
         if int(stage["packs"]) > 0: reward_parts.append("%d PACK%s" % [int(stage["packs"]), "" if int(stage["packs"]) == 1 else "S"])
-        var rw := label("REWARD\n%s" % " + ".join(reward_parts),Vector2(20,245),Vector2(185,62),17,panel); rw.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; rw.add_theme_color_override("font_color",GOLD_COLOR)
-        var play := button("REPLAY" if cleared else "BATTLE",Vector2(35,325),Vector2(155,48),func(): begin_story_stage(stage),panel)
+        var rw := label("REWARD\n%s" % (" + ".join(reward_parts) if not reward_parts.is_empty() else "—"), Vector2(16, 260), Vector2(178, 46), 14, panel)
+        rw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        rw.add_theme_color_override("font_color", GOLD_COLOR)
+
+        var play := button("REPLAY" if cleared else "BATTLE", Vector2(20, 336), Vector2(170, 46), func(): show_story_stage_intro(stage), panel)
         play.disabled = not available
-    button("REPLAY TRAINING",Vector2(430,600),Vector2(220,50),show_first_day_intro)
-    button("HOME",Vector2(40,645),Vector2(160,48),show_home)
+
+    var footer := Panel.new()
+    footer.position = Vector2(0, 615)
+    footer.size = Vector2(1280, 90)
+    footer.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+    root_layer.add_child(footer)
+    button("HOME", Vector2(40, 645), Vector2(180, 48), show_home)
+    button("REPLAY TRAINING", Vector2(1060, 645), Vector2(180, 48), show_first_day_intro)
+
+func show_story_stage_intro(stage: Dictionary) -> void:
+    # A short narrative beat before the fight itself, so a story stage reads
+    # as a chapter of a story rather than just another entry on a battle
+    # select list.
+    clear_screen(); add_background(0.82)
+    header("STAGE %d — %s" % [int(stage["id"]), str(stage["name"])], str(stage["subtitle"]))
+    currency_bar()
+
+    var panel := Panel.new()
+    panel.position = Vector2(240, 190)
+    panel.size = Vector2(800, 380)
+    panel.add_theme_stylebox_override("panel", style(class_color(str(stage["class"])), 20))
+    root_layer.add_child(panel)
+
+    var quote_mark := label("“", Vector2(24, 8), Vector2(60, 60), 46, panel)
+    quote_mark.add_theme_color_override("font_color", class_color(str(stage["class"])))
+
+    var story_label := label(str(stage.get("story", "")), Vector2(70, 40), Vector2(660, 190), 20, panel)
+    story_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    story_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+    var opponent := label("YOUR OPPONENT: %s" % str(stage["class"]).to_upper(), Vector2(40, 250), Vector2(720, 30), 16, panel)
+    opponent.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    opponent.add_theme_color_override("font_color", class_color(str(stage["class"])))
+
+    var reward_parts: Array[String] = []
+    if int(stage["gold"]) > 0: reward_parts.append("%d GOLD" % int(stage["gold"]))
+    if int(stage["packs"]) > 0: reward_parts.append("%d PACK%s" % [int(stage["packs"]), "" if int(stage["packs"]) == 1 else "S"])
+    var rw := label("REWARD: %s" % (" + ".join(reward_parts) if not reward_parts.is_empty() else "—"), Vector2(40, 285), Vector2(720, 30), 16, panel)
+    rw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    rw.add_theme_color_override("font_color", GOLD_COLOR)
+
+    button("BEGIN BATTLE", Vector2(490, 335), Vector2(280, 56), func(): begin_story_stage(stage), panel)
+    button("BACK", Vector2(40, 335), Vector2(140, 56), show_story_mode, panel)
 
 func begin_story_stage(stage: Dictionary) -> void:
     var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
