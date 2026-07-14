@@ -4975,7 +4975,18 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         loser_tween.tween_property(loser, "modulate", Color(0.25, 0.28, 0.36, 0.45), 0.42)
         loser_tween.tween_property(loser, "scale", loser_start_scale * 0.78, 0.42)
         await get_tree().create_timer(0.42, true, false, true).timeout
+        # show_game_over runs on its own fixed timer in _finish_match and can
+        # free finish_layer out from under this still-running sequence (it's
+        # deliberately fire-and-forget, see the comment there). Every await
+        # below is a point where that can happen, so re-check before touching
+        # finish_layer again -- otherwise the next finish_layer.add_child call
+        # crashes with "Cannot call method 'add_child' on a previously freed
+        # instance" instead of just quietly skipping the rest of the flourish.
+        if not is_instance_valid(finish_layer):
+            return
         await show_vfx("DEFEATED", loser.global_position + Vector2(28, 35), Color(1.0, 0.34, 0.28))
+        if not is_instance_valid(finish_layer):
+            return
 
     if is_instance_valid(winner):
         var original_scale := winner.scale
@@ -4987,6 +4998,8 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         winner_tween.tween_property(winner, "scale", original_scale * 1.12, 0.22)
         winner_tween.parallel().tween_property(winner, "rotation", original_rotation, 0.22)
         await get_tree().create_timer(0.5, true, false, true).timeout
+        if not is_instance_valid(finish_layer):
+            return
 
         for i in range(18):
             var sparkle := Label.new()
@@ -5053,7 +5066,11 @@ func _play_victory_sequence(winner: Control, loser: Control) -> void:
         banner_tween.tween_property(banner_backdrop, "scale", Vector2.ONE, 0.42)
         banner_tween.tween_property(banner_backdrop, "modulate:a", 1.0, 0.24)
         await get_tree().create_timer(0.42, true, false, true).timeout
+        if not is_instance_valid(finish_layer):
+            return
         await get_tree().create_timer(0.65, true, false, true).timeout
+        if not is_instance_valid(finish_layer):
+            return
         var banner_out := create_tween()
         banner_out.tween_property(banner, "modulate:a", 0.0, 0.22)
         banner_out.parallel().tween_property(banner_backdrop, "modulate:a", 0.0, 0.22)

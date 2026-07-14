@@ -1,19 +1,17 @@
 {
-  "version": "0.8.7",
-  "build": "Bulk Pack Opening + Text Fit Fixes",
+  "version": "0.8.8",
+  "build": "Practice Match Crash Fix",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Open multiple packs at once, and card text no longer spills past its borders anywhere in the game.",
+  "notes": "Fixed a crash that could happen right as a practice match ended.",
   "required": false,
-  "version_code": "0.8.7",
-  "build_name": "Bulk Pack Opening + Text Fit Fixes",
+  "version_code": "0.8.8",
+  "build_name": "Practice Match Crash Fix",
   "card_count": 120,
-  "version_name": "0.8.7",
+  "version_name": "0.8.8",
   "fixes": [
-    "Added bulk pack opening: open 5, 10, 25, or all of your packs at once from the pack screen, with results shown in a sortable grid instead of one at a time.",
-    "Fixed card names and effect text overflowing past the edges of their cards and buttons across every screen, not just the store.",
-    "Fixed a crash when opening packs caused by animations not being cleaned up properly."
+    "Fixed a crash at the end of a match (most noticeable in practice matches) caused by the victory/defeat animation trying to keep running after the result screen had already taken over."
   ],
   "upcoming_events": [
     "More seasonal content and cards are in development — check back after future updates for details."
