@@ -1,19 +1,21 @@
 {
-  "version": "0.8.21",
-  "build": "Drag-to-Play Hand Cards",
+  "version": "0.8.22",
+  "build": "Recovery Academy Overhaul",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "You can now drag a follower straight from your hand onto the battlefield to play it, with the card visibly following your finger/cursor and snapping back if you let go somewhere that isn't a valid drop. This also fixes the underlying issue that made playing a card sometimes take two taps instead of one.",
+  "notes": "The Recovery Academy tutorial got a full personality pass: every mentor now has a name and voice, each lesson opens and closes with an in-character line, finishing a lesson triggers a small gold celebration instead of just moving on, and lessons now fade smoothly into one another instead of cutting instantly. Also gave Renewed Faith its own dedicated card art instead of a placeholder.",
   "required": false,
-  "version_code": "0.8.21",
-  "build_name": "Drag-to-Play Hand Cards",
-  "card_count": 122,
-  "version_name": "0.8.21",
+  "version_code": "0.8.22",
+  "build_name": "Recovery Academy Overhaul",
+  "card_count": 123,
+  "version_name": "0.8.22",
   "fixes": [
-    "Playing a follower from hand could sometimes need two taps instead of one. Dragging a hand card used to be swallowed by the same gesture system used for reordering your hand, so a drag toward the battlefield often did nothing on the first try. Dragging is now handled consistently end-to-end: drag a card onto the field (or onto your Recovery Skills area) to play it, drag it onto another card in hand to reorder it, and the card now visibly follows your finger/cursor the whole way and snaps back to your hand if released somewhere invalid."
+    "Renewed Faith (JD-012) was missing dedicated card art and was silently falling back to a generic placeholder image everywhere it appeared. It now has its own artwork matching the rest of the Hope class."
   ],
-  "features": [],
+  "features": [
+    "The Recovery Academy tutorial's 11 lessons now have named mentors (Dawn, Marcus, Priya, Theo, and Dean Alvarez) with a consistent voice and running through-line, an in-character opening and closing line for every lesson, a small gold celebration beat when you complete a lesson, and a smooth fade between lessons instead of an instant cut."
+  ],
   "upcoming_events": [
     "More seasonal content and cards are in development — check back after future updates for details."
   ]
