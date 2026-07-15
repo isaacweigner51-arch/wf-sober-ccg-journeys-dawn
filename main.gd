@@ -443,13 +443,13 @@ func build_class_cards(faction_name: String) -> Array:
         card("Dreamward Keeper",4,3,6,"Hope","Silver","guard",0,"Guard.","shield"),
         card("Returned Wanderer",4,4,4,"Hope","Silver","final_draw",2,"Final Breath: Draw 2 cards.","road"),
         card("Promise of Tomorrow",5,4,6,"Hope","Gold","revive",0,"On Play: Recover the most recent allied follower from the Relapse Zone.","star"),
-        card("Second Chances",2,0,0,"Hope","Gold","second_chances",1,"Amulet — stays on the board and has no Attack or Defense. It cannot be attacked or damaged, and can only be removed by effects that specifically target an Amulet. Whenever you recover a card from the Relapse Zone, gain Progress. At 3 Progress, restore 3 Defense and permanently buff an ally; at 6 transform into Renewed Hope.","star"),
+        card("The Comeback Trail",2,0,0,"Hope","Gold","second_chances",1,"Amulet — stays on the board and has no Attack or Defense. It cannot be attacked or damaged, and can only be removed by effects that specifically target an Amulet. Whenever you recover a card from the Relapse Zone, gain Progress. At 3 Progress, restore 3 Defense and permanently buff an ally; at 6 transform into Renewed Hope.","star"),
         card("Light Beyond Night",5,5,5,"Hope","Gold","heal_all",2,"On Play: Restore 2 defense to your leader and all allies.","star"),
         card("Guardian Angel",6,4,8,"Hope","Gold","guard_protect",0,"Guard. The first allied follower destroyed is saved at 1 defense.","shield"),
-        card("Second Chance",4,3,5,"Hope","Legendary","revive_buff",2,"On Play: Recover a follower; it gains +2/+2.","star"),
+        card("Renewed Faith",4,3,5,"Hope","Legendary","revive_buff",2,"On Play: Recover a follower; it gains +2/+2.","star"),
         card("Never Forgotten",7,6,9,"Hope","Legendary","revive",0,"On Play: Recover your most recent allied follower.","hands"),
         card("New Beginning",7,5,8,"Hope","Legendary","board_clear_heal",4,"On Play: Clear every other follower, then restore 4 defense.","star"),
-        card("Second Chance",7,0,0,"Hope","Epic","second_chance",0,"Spell: Transform the 3 enemy followers with the highest Attack into Newcomers (1/1). Restore 3 defense.","hands"),
+        card("Clean Slate",7,0,0,"Hope","Epic","second_chance",0,"Spell: Transform the 3 enemy followers with the highest Attack into Newcomers (1/1). Restore 3 defense.","hands"),
         card("Beacon of Hope",8,5,7,"Hope","Platinum","hope_platinum",0,"SIGNATURE PLATINUM — Evolve for free. Summon two Inspired Volunteers and empower the first ally that enters play each turn.","star"),
         card("Hope Unending",9,7,11,"Hope","Legendary","heal_draw",6,"On Play: Restore 6 defense and draw a card.","star","jd-130")]
 
@@ -464,7 +464,7 @@ func build_universal_cards() -> Array:
         card("Service Work",4,3,5,"Universal","Gold","buff_all",1,"On Play: Give all other allies +1/+1.","hands"),
         card("Recovery Meeting",4,3,6,"Universal","Gold","heal_draw",2,"On Play: Restore 2 defense and draw a card.","hands"),
         card("Fresh Perspective",5,4,6,"Universal","Gold","bounce",0,"On Play: Return the strongest enemy follower to its owner's hand.","star"),
-        card("Second Chance",6,5,6,"Universal","Legendary","revive_buff",2,"On Play: Recover a follower; it gains +2/+2.","star"),
+        card("Renewed Resolve",6,5,6,"Universal","Legendary","revive_buff",2,"On Play: Recover a follower; it gains +2/+2.","star"),
         card("Rock Bottom",7,4,7,"Universal","Legendary","board_clear_draw",0,"On Play: Send every other follower to the Relapse Zone. Both players draw 2.","flame"),
         card("The Sponsor",8,5,9,"Universal","Platinum","sponsor",0,"SIGNATURE PLATINUM — Create a Sponsee on Arrival and at the end of each of your turns. Sponsees inherit your class path.","star")]
 
@@ -743,7 +743,7 @@ func build_developer_meta_deck(faction_name: String) -> Array:
             ])
         "Hope":
             _append_named_cards(deck, pool, [
-                "Beacon of Hope", "Second Chance",
+                "Beacon of Hope", "Renewed Faith",
                 "Dawnwing Messenger", "Dawnwing Messenger", "Dawnwing Messenger",
                 "Kindled Promise", "Kindled Promise", "Kindled Promise",
                 "Helping Hand", "Helping Hand", "Helping Hand",
@@ -755,7 +755,7 @@ func build_developer_meta_deck(faction_name: String) -> Array:
                 "Never Forgotten", "Never Forgotten",
                 "Open Horizon", "Open Horizon", "Open Horizon",
                 "Returned Wanderer", "Returned Wanderer", "Returned Wanderer",
-                "Second Chances", "Second Chances", "Second Chances"
+                "The Comeback Trail", "The Comeback Trail", "The Comeback Trail"
             ])
         "Serenity":
             _append_named_cards(deck, pool, [
@@ -3543,7 +3543,7 @@ func prepare_training_hand() -> void:
             add_training_card_to_hand(card("Training Rookie", 1, 2, 3, "Courage", "Training", "none", 0, "A sturdy follower for learning Resolve.", "flame", "jd-132"))
             add_training_card_to_hand(card("Stand Your Ground", 2, 2, 4, "Courage", "Training", "guard", 0, "Protector. Survive combat to build Resolve.", "shield", "jd-133"))
         "Hope":
-            add_training_card_to_hand(_find_card_by_name(build_class_cards("Hope"), "Second Chances"))
+            add_training_card_to_hand(_find_card_by_name(build_class_cards("Hope"), "The Comeback Trail"))
             add_training_card_to_hand(card("Guiding Light", 1, 1, 2, "Hope", "Training", "heal_leader", 3, "Arrival: Restore 3 Defense.", "hands", "jd-134"))
             add_training_card_to_hand(card("Recovery Call", 3, 2, 3, "Hope", "Training", "revive", 0, "Arrival: Recover the most recent follower from your Relapse Zone.", "star", "jd-135"))
         "Serenity":
