@@ -3705,7 +3705,7 @@ func _ensure_pack_sfx_pool() -> void:
     # that survives that -- so stale/freed references must be dropped here,
     # not just skipped on an empty check, or callers can hand back a freed node.
     _pack_sfx_pool = _pack_sfx_pool.filter(func(p): return is_instance_valid(p))
-    while _pack_sfx_pool.size() < 4:
+    while _pack_sfx_pool.size() < 6:
         var player := AudioStreamPlayer.new()
         player.bus = "Master"
         add_child(player)
@@ -3917,15 +3917,26 @@ func _begin_pack_open(pack_visual: Panel, tap_catcher: Button) -> void:
         return
     tap_catcher.disabled = true
     play_pack_sfx("play")
+    play_pack_sfx("pack_rumble", -4.0)
     var origin_rotation := pack_visual.rotation
     var origin_position := pack_visual.position
+    var origin_scale := pack_visual.scale
+
+    # Escalating shake: starts small and speeds up/intensifies toward the
+    # tear, plus a subtle squash-and-stretch on top of the rotation wobble,
+    # so the buildup reads as mounting pressure rather than a flat wiggle
+    # played at one constant amplitude.
     var shake := create_tween()
-    shake.tween_property(pack_visual, "rotation", origin_rotation - 0.05, 0.06)
-    shake.tween_property(pack_visual, "rotation", origin_rotation + 0.06, 0.07)
-    shake.tween_property(pack_visual, "rotation", origin_rotation - 0.05, 0.07)
-    shake.tween_property(pack_visual, "rotation", origin_rotation + 0.04, 0.06)
+    shake.tween_property(pack_visual, "rotation", origin_rotation - 0.035, 0.07)
+    shake.tween_property(pack_visual, "rotation", origin_rotation + 0.04, 0.07)
+    shake.tween_property(pack_visual, "rotation", origin_rotation - 0.05, 0.065)
+    shake.tween_property(pack_visual, "rotation", origin_rotation + 0.065, 0.06)
+    shake.tween_property(pack_visual, "rotation", origin_rotation - 0.07, 0.055)
+    shake.tween_property(pack_visual, "rotation", origin_rotation + 0.05, 0.05)
     shake.tween_property(pack_visual, "rotation", origin_rotation, 0.05)
-    shake.parallel().tween_property(pack_visual, "position", origin_position + Vector2(0, -6), 0.31).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    shake.parallel().tween_property(pack_visual, "position", origin_position + Vector2(0, -8), 0.415).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    shake.parallel().tween_property(pack_visual, "scale", origin_scale * Vector2(1.015, 0.985), 0.19).set_trans(Tween.TRANS_SINE)
+    shake.chain().tween_property(pack_visual, "scale", origin_scale, 0.09).set_trans(Tween.TRANS_SINE)
     await shake.finished
 
     var flash := ColorRect.new()
@@ -3934,14 +3945,39 @@ func _begin_pack_open(pack_visual: Panel, tap_catcher: Button) -> void:
     flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
     flash.z_index = 500
     root_layer.add_child(flash)
-    play_pack_sfx("draw")
+    play_pack_sfx("pack_tear")
+    play_pack_sfx("draw", -6.0)
+    # A generic gold energy burst at the tear point itself -- the actual
+    # pull rarity isn't rolled until open_pack() runs after this animation,
+    # so this is deliberately not rarity-colored, just a dramatic accent
+    # that any tear gets.
+    var tear_burst := ColorRect.new()
+    tear_burst.color = Color(1.0, 0.85, 0.4, 0.6)
+    tear_burst.size = Vector2(90, 90)
+    tear_burst.position = pack_visual.position + pack_visual.size / 2.0 - tear_burst.size / 2.0
+    tear_burst.pivot_offset = tear_burst.size / 2.0
+    tear_burst.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    tear_burst.z_index = 40
+    root_layer.add_child(tear_burst)
+    tear_burst.scale = Vector2(0.2, 0.2)
+    var tear_burst_tween := create_tween().set_parallel(true)
+    tear_burst_tween.tween_property(tear_burst, "scale", Vector2(2.0, 2.0), 0.32).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    tear_burst_tween.tween_property(tear_burst, "color:a", 0.0, 0.36)
+    tear_burst_tween.chain().tween_callback(tear_burst.queue_free)
+    # The tear itself now overshoots wider before the flash cuts to white
+    # (was a flat 1.15 scale-up) so the pack visibly rips open instead of
+    # just puffing up in place.
     var tear := create_tween().set_parallel(true)
-    tear.tween_property(pack_visual, "scale", Vector2(1.15, 1.15), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-    tear.tween_property(flash, "color:a", 0.85, 0.14)
+    tear.tween_property(pack_visual, "scale", origin_scale * 1.22, 0.17).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    tear.tween_property(pack_visual, "rotation", origin_rotation + 0.03, 0.17)
+    tear.tween_property(flash, "color:a", 0.9, 0.15)
     await tear.finished
-    flash.color.a = 0.85
+    flash.color.a = 0.9
+    # A short held beat on full white before it clears -- the instant cut
+    # from tear to fade felt like a glitch rather than a deliberate flash.
+    await get_tree().create_timer(0.08).timeout
     var settle := create_tween()
-    settle.tween_property(flash, "color:a", 0.0, 0.22)
+    settle.tween_property(flash, "color:a", 0.0, 0.24)
     await settle.finished
     flash.queue_free()
 
@@ -4112,12 +4148,40 @@ func show_bulk_pack_results(pulled: Array, pack_count: int, platinum_count: int)
         var wrap := VBoxContainer.new()
         wrap.custom_minimum_size = Vector2(160, 246)
         var cp := card_panel(cd, Vector2.ZERO, Vector2(160, 236))
+        cp.modulate.a = 0.0
         wrap.add_child(cp)
         grid.add_child(wrap)
 
     button("OPEN ANOTHER (%d)" % pack_inventory, Vector2(405, 580), Vector2(230, 55), show_pack_opening)
     button("COLLECTION", Vector2(645, 580), Vector2(180, 55), show_collection)
     button("DECK BUILDER", Vector2(835, 580), Vector2(200, 55), show_deck_builder)
+
+    # Bulk-open trades the per-card flip/spotlight sequence for speed, but it
+    # shouldn't feel silent or instant either -- one rarity-appropriate sound
+    # (biggest pull wins) plus a fast staggered fade-in still sells "a lot of
+    # cards just landed" without making the player wait through dozens of
+    # individual animations.
+    var best_rarity := "Bronze"
+    for cd in sorted_pulled:
+        if BULK_RARITY_ORDER.find(str(cd.get("rarity", "Bronze"))) < BULK_RARITY_ORDER.find(best_rarity):
+            best_rarity = str(cd.get("rarity", "Bronze"))
+    if platinum_count > 0:
+        play_pack_sfx("platinum_fanfare")
+    elif best_rarity == "Legendary":
+        play_pack_sfx("legendary_fanfare", -2.0)
+    else:
+        play_pack_sfx(str(PACK_REVEAL_SFX.get(best_rarity, "draw")))
+    _stagger_fade_in_grid(grid)
+
+func _stagger_fade_in_grid(grid: GridContainer) -> void:
+    for i in range(grid.get_child_count()):
+        var wrap: Node = grid.get_child(i)
+        if wrap.get_child_count() == 0:
+            continue
+        var cp: Control = wrap.get_child(0)
+        var fade := create_tween().bind_node(cp)
+        fade.tween_interval(min(float(i) * 0.012, 0.5))
+        fade.tween_property(cp, "modulate:a", 1.0, 0.18)
 
 # sfx grows with rarity so a bronze pull stays quick/quiet and a
 # legendary/platinum pull actually announces itself.
@@ -4132,8 +4196,18 @@ func _animate_pack_reveal(pulled: Array, backs: Array, platinum_hit: bool) -> vo
         var back: Panel = backs[i]
         var pos := back.position
         var size_value := back.size
-        var flip_out := create_tween()
-        flip_out.tween_property(back, "scale:x", 0.0, 0.13).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+        # A small anticipatory dip/tilt before the flip itself -- a card
+        # that snaps straight to zero width reads as a UI wipe, not a card
+        # physically turning over.
+        var pre_flip := create_tween().set_parallel(true)
+        pre_flip.tween_property(back, "scale:y", 1.05, 0.05).set_trans(Tween.TRANS_SINE)
+        pre_flip.tween_property(back, "rotation", 0.03, 0.05)
+        await pre_flip.finished
+        play_pack_sfx("card_flip_whoosh", -3.0)
+        var flip_out := create_tween().set_parallel(true)
+        flip_out.tween_property(back, "scale:x", 0.0, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+        flip_out.tween_property(back, "scale:y", 0.94, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+        flip_out.tween_property(back, "rotation", 0.0, 0.14)
         await flip_out.finished
         if not is_instance_valid(back):
             continue
@@ -4149,8 +4223,13 @@ func _animate_pack_reveal(pulled: Array, backs: Array, platinum_hit: bool) -> vo
         real.pivot_offset = size_value / 2.0
         real.scale.x = 0.0
         parent.add_child(real)
+        # A quick squash-on-landing after the flip settles -- selling actual
+        # card weight instead of the flip stopping dead the instant it hits
+        # full width.
         var flip_in := create_tween()
         flip_in.tween_property(real, "scale:x", 1.0, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        flip_in.tween_property(real, "scale", Vector2(1.05, 0.95), 0.07).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+        flip_in.tween_property(real, "scale", Vector2(1.0, 1.0), 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
         if rarity in ["Epic", "Legendary", "Platinum"]:
             await flip_in.finished
             if not is_instance_valid(real):
@@ -4179,6 +4258,35 @@ func _spotlight_reveal(real: Panel, rarity: String) -> void:
 
     real.z_index = 320
     var glow_color := card_rarity_color(rarity)
+
+    # Rotating light rays behind the card for the top two tiers -- the
+    # dimmer + sparkles alone still read as "a card got bigger"; a slowly
+    # spinning starburst gives Legendary/Platinum an actual radiant-altar
+    # backdrop instead of just empty dimmed space.
+    var rays: TextureRect = null
+    if rarity in ["Legendary", "Platinum"]:
+        var ray_gradient := Gradient.new()
+        ray_gradient.colors = PackedColorArray([Color(glow_color.r, glow_color.g, glow_color.b, 0.0), Color(glow_color.r, glow_color.g, glow_color.b, 0.5), Color(glow_color.r, glow_color.g, glow_color.b, 0.0)])
+        ray_gradient.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+        var ray_tex := GradientTexture2D.new()
+        ray_tex.gradient = ray_gradient
+        ray_tex.fill = GradientTexture2D.FILL_RADIAL
+        ray_tex.fill_from = Vector2(0.5, 0.5)
+        ray_tex.fill_to = Vector2(1.0, 0.5)
+        ray_tex.width = 640
+        ray_tex.height = 640
+        rays = TextureRect.new()
+        rays.texture = ray_tex
+        rays.position = screen_center - Vector2(320, 320)
+        rays.size = Vector2(640, 640)
+        rays.pivot_offset = Vector2(320, 320)
+        rays.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        rays.modulate.a = 0.0
+        rays.z_index = 305
+        root_layer.add_child(rays)
+        var ray_spin := create_tween().set_loops().bind_node(rays)
+        ray_spin.tween_property(rays, "rotation", TAU, 6.0 if rarity == "Legendary" else 4.5).as_relative().set_trans(Tween.TRANS_LINEAR)
+
     var title := Label.new()
     title.text = str(PACK_REVEAL_TITLE.get(rarity, "RARE PULL!"))
     title.position = Vector2(190, 90)
@@ -4193,6 +4301,20 @@ func _spotlight_reveal(real: Panel, rarity: String) -> void:
     title.z_index = 330
     root_layer.add_child(title)
 
+    # Sound design here is layered, not a single swapped cue: the base
+    # rarity sound already played back in _animate_pack_reveal, and the top
+    # two tiers get a distinct orchestral fanfare stacked on top of it right
+    # as the card rises, so a Legendary/Platinum pull is audibly bigger than
+    # just "a louder version of the same blip".
+    if rarity == "Legendary":
+        play_pack_sfx("legendary_fanfare", -2.0)
+    elif rarity == "Platinum":
+        play_pack_sfx("platinum_fanfare")
+
+    if rays != null:
+        var rays_fade_in := create_tween()
+        rays_fade_in.tween_property(rays, "modulate:a", 1.0, 0.28)
+
     var rise := create_tween().set_parallel(true)
     rise.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     rise.tween_property(dimmer, "color:a", 0.82, 0.22)
@@ -4201,8 +4323,26 @@ func _spotlight_reveal(real: Panel, rarity: String) -> void:
     rise.tween_property(title, "modulate:a", 1.0, 0.24)
     await rise.finished
 
+    # A brief camera-shake punch, Platinum only -- the rarest possible pull
+    # is the one moment worth shaking the whole screen for; doing this for
+    # every rarity would make it feel routine instead of special.
+    if rarity == "Platinum":
+        var shake_origin := root_layer.position
+        var cam_shake := create_tween()
+        cam_shake.tween_property(root_layer, "position", shake_origin + Vector2(6, 4), 0.035)
+        cam_shake.tween_property(root_layer, "position", shake_origin + Vector2(-7, -3), 0.035)
+        cam_shake.tween_property(root_layer, "position", shake_origin + Vector2(5, -4), 0.035)
+        cam_shake.tween_property(root_layer, "position", shake_origin + Vector2(-3, 3), 0.035)
+        cam_shake.tween_property(root_layer, "position", shake_origin, 0.035)
+
     var sparkle_count := 24 if rarity == "Platinum" else (18 if rarity == "Legendary" else 12)
     spawn_reward_sparkles(screen_center, sparkle_count, [glow_color, Color(1, 1, 1)], 100.0)
+    if rarity == "Platinum":
+        # A second, wider sparkle wave a beat later so the platinum moment
+        # doesn't peak and fade in one single burst.
+        await get_tree().create_timer(0.18).timeout
+        if is_instance_valid(real):
+            spawn_reward_sparkles(screen_center, 16, [Color(1, 1, 1), glow_color], 150.0)
 
     var pop := create_tween()
     pop.tween_property(real, "scale", target_scale * 1.07, 0.11).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -4220,11 +4360,15 @@ func _spotlight_reveal(real: Panel, rarity: String) -> void:
     settle.tween_property(real, "scale", origin_scale, 0.26)
     settle.tween_property(dimmer, "color:a", 0.0, 0.22)
     settle.tween_property(title, "modulate:a", 0.0, 0.18)
+    if rays != null:
+        settle.tween_property(rays, "modulate:a", 0.0, 0.22)
     await settle.finished
     if is_instance_valid(real):
         real.z_index = 0
     dimmer.queue_free()
     title.queue_free()
+    if rays != null and is_instance_valid(rays):
+        rays.queue_free()
 
 func _load_menu_art_path(path: String) -> Texture2D:
     if _menu_art_cache.has(path):
