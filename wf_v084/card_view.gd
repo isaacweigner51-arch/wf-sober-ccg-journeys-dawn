@@ -2,7 +2,6 @@ class_name CardView
 extends Button
 
 signal card_chosen(card_index: int)
-signal reorder_requested(from_index: int, to_index: int)
 signal inspect_requested(card_data: Dictionary)
 
 static var _catalog_by_name: Dictionary = {}
@@ -37,11 +36,12 @@ var tap_to_inspect := false
 var touch_holding := false
 var touch_hold_time := 0.0
 var touch_hold_fired := false
-var gesture_press_position := Vector2.ZERO
+var drag_press_global := Vector2.ZERO
+var drag_origin_position := Vector2.ZERO
 var gesture_dragging := false
 var suppress_next_press := false
 const LONG_PRESS_SECONDS := 0.45
-const DRAG_THRESHOLD := 12.0
+const DRAG_THRESHOLD := 16.0
 
 func is_mobile_device() -> bool:
     return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
@@ -87,74 +87,91 @@ func _add_inspect_button() -> void:
 func set_inspect_controls_visible(_value: bool) -> void:
     return
 
-func _get_drag_data(_at_position: Vector2) -> Variant:
-    if not allow_reorder or hidden_card:
-        return null
-    var preview := CardView.new()
-    preview.setup(data.duplicate(true), card_index, true, false)
-    preview.scale = Vector2(0.85, 0.85)
-    preview.modulate = Color(1.0, 1.0, 1.0, 0.88)
-    set_drag_preview(preview)
-    return {"type": "hand_card", "from_index": card_index}
-
-func _can_drop_data(_at_position: Vector2, drag_data: Variant) -> bool:
-    return allow_reorder and typeof(drag_data) == TYPE_DICTIONARY and str(drag_data.get("type", "")) == "hand_card"
-
-func _drop_data(_at_position: Vector2, drag_data: Variant) -> void:
-    if not _can_drop_data(_at_position, drag_data):
-        return
-    reorder_requested.emit(int(drag_data.get("from_index", -1)), card_index)
-
 func _gui_input(event: InputEvent) -> void:
     if hidden_card:
+        return
+    # On mobile, Project Settings emulates a synthetic mouse event for every
+    # touch event (pointing/emulate_mouse_from_touch). Handling both streams
+    # here would process one physical tap/drag twice — resetting/overwriting
+    # this gesture state machine mid-gesture — which is what made a single
+    # tap intermittently fail to play a card (it silently "ate" the first
+    # tap and only a clean second tap got through). Touch devices are fully
+    # covered by the InputEventScreenTouch/ScreenDrag branches below, so
+    # ignore their emulated mouse counterparts entirely.
+    if is_mobile_device() and (event is InputEventMouseButton or event is InputEventMouseMotion):
         return
     var context := str(data.get("_ui_context", ""))
     if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
         if event.pressed:
-            gesture_press_position = event.position
-            gesture_dragging = false
-            touch_holding = tap_to_inspect
-            touch_hold_time = 0.0
-            touch_hold_fired = false
+            _gesture_press(context)
         else:
-            touch_holding = false
-            if touch_hold_fired:
-                suppress_next_press = true
-                accept_event()
-            elif gesture_dragging and context in ["hand", "player_board"]:
-                suppress_next_press = true
-                drag_action_requested.emit(card_index, context, get_global_mouse_position())
-                accept_event()
-            gesture_dragging = false
+            _gesture_release(context, get_global_mouse_position())
             mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-        if event.position.distance_to(gesture_press_position) >= DRAG_THRESHOLD:
-            gesture_dragging = true
-            touch_holding = false
+        _gesture_motion(context)
+        if gesture_dragging:
             mouse_default_cursor_shape = Control.CURSOR_DRAG
-            accept_event()
     elif event is InputEventScreenTouch:
         if event.pressed:
-            gesture_press_position = event.position
-            gesture_dragging = false
-            touch_holding = tap_to_inspect
-            touch_hold_time = 0.0
-            touch_hold_fired = false
+            _gesture_press(context)
         else:
-            touch_holding = false
-            if touch_hold_fired:
-                suppress_next_press = true
-                accept_event()
-            elif gesture_dragging and context in ["hand", "player_board"]:
-                suppress_next_press = true
-                drag_action_requested.emit(card_index, context, event.position)
-                accept_event()
-            gesture_dragging = false
+            _gesture_release(context, event.position)
     elif event is InputEventScreenDrag:
-        if event.position.distance_to(gesture_press_position) >= DRAG_THRESHOLD:
-            gesture_dragging = true
-            touch_holding = false
-            accept_event()
+        _gesture_motion(context)
+
+func _gesture_press(_context: String) -> void:
+    drag_press_global = get_global_mouse_position()
+    drag_origin_position = position
+    gesture_dragging = false
+    touch_holding = tap_to_inspect
+    touch_hold_time = 0.0
+    touch_hold_fired = false
+
+func _gesture_motion(context: String) -> void:
+    if touch_hold_fired:
+        return
+    # Track the pointer in global/screen space rather than this control's
+    # own local coordinates. Local-space comparisons break here because (a)
+    # hovering already animates this node's own `position` (the hand "lift"
+    # on touch-down) independently of pointer motion, and (b) this node's
+    # `scale` changes during hover/drag, which rescales any local-space
+    # delta relative to the true finger movement. Global position is
+    # unaffected by either, so it stays accurate throughout the gesture.
+    var current_global := get_global_mouse_position()
+    var delta := current_global - drag_press_global
+    if not gesture_dragging and delta.length() >= DRAG_THRESHOLD and context in ["hand", "player_board"]:
+        gesture_dragging = true
+        touch_holding = false
+        z_index = 500
+        var lift_tween := create_tween()
+        lift_tween.tween_property(self, "scale", Vector2(1.16, 1.16) if not compact else Vector2(1.1, 1.1), 0.08)
+        accept_event()
+    if gesture_dragging:
+        position = drag_origin_position + delta
+        accept_event()
+
+func _gesture_release(context: String, release_global: Vector2) -> void:
+    touch_holding = false
+    var was_dragging := gesture_dragging
+    gesture_dragging = false
+    if touch_hold_fired:
+        suppress_next_press = true
+        accept_event()
+    elif was_dragging and context in ["hand", "player_board"]:
+        suppress_next_press = true
+        drag_action_requested.emit(card_index, context, release_global)
+        accept_event()
+    if was_dragging:
+        _snap_back()
+
+func _snap_back() -> void:
+    if not is_instance_valid(self):
+        return
+    z_index = 100 if hovering else 0
+    var tween := create_tween().set_parallel(true)
+    tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tween.tween_property(self, "position", base_position, 0.18)
+    tween.tween_property(self, "scale", Vector2.ONE, 0.18)
 
 
 func _keyword_definitions() -> Array:
