@@ -712,6 +712,11 @@ var collection_filter_class := "All"
 var collection_filter_rarity := "All"
 var collection_search_query := ""
 var _collection_focus_search_next := false
+# When true, the collection/crafting binder only shows cards the player
+# doesn't yet own at their copy limit -- the direct answer to "which card do
+# I craft with these Vials I just earned?" without scrolling past cards
+# already owned.
+var collection_missing_only := false
 var battle_select_class := "Hope"
 var battle_select_mode := "custom"
 var battle_opponent_class := "Courage"
@@ -4156,9 +4161,10 @@ func show_pack_results(pulled: Array, platinum_hit: bool) -> void:
         var back := pack_card_back(pos, Vector2(220, 340))
         root_layer.add_child(back)
         backs.append(back)
-    button("OPEN ANOTHER (%d)" % pack_inventory,Vector2(405,550),Vector2(230,55),show_pack_opening)
-    button("COLLECTION",Vector2(645,550),Vector2(180,55),show_collection)
-    button("DECK BUILDER",Vector2(835,550),Vector2(200,55),show_deck_builder)
+    button("OPEN ANOTHER (%d)" % pack_inventory,Vector2(255,550),Vector2(230,55),show_pack_opening)
+    button("CRAFT CARDS",Vector2(495,550),Vector2(190,55),show_craft_screen)
+    button("COLLECTION",Vector2(695,550),Vector2(180,55),show_collection)
+    button("DECK BUILDER",Vector2(885,550),Vector2(200,55),show_deck_builder)
     # Fire-and-forget: the reveal animation must never gate the buttons above
     # from appearing (a stuck tween here should never be able to strand the
     # player on this screen with no way forward).
@@ -4222,9 +4228,10 @@ func show_bulk_pack_results(pulled: Array, pack_count: int, platinum_count: int)
         wrap.add_child(cp)
         grid.add_child(wrap)
 
-    button("OPEN ANOTHER (%d)" % pack_inventory, Vector2(405, 580), Vector2(230, 55), show_pack_opening)
-    button("COLLECTION", Vector2(645, 580), Vector2(180, 55), show_collection)
-    button("DECK BUILDER", Vector2(835, 580), Vector2(200, 55), show_deck_builder)
+    button("OPEN ANOTHER (%d)" % pack_inventory, Vector2(255, 580), Vector2(230, 55), show_pack_opening)
+    button("CRAFT CARDS", Vector2(495, 580), Vector2(190, 55), show_craft_screen)
+    button("COLLECTION", Vector2(695, 580), Vector2(180, 55), show_collection)
+    button("DECK BUILDER", Vector2(885, 580), Vector2(200, 55), show_deck_builder)
 
     # Bulk-open trades the per-card flip/spotlight sequence for speed, but it
     # shouldn't feel silent or instant either -- one rarity-appropriate sound
@@ -4821,6 +4828,21 @@ func _collection_set_rarity_filter(r: String) -> void:
     collection_filter_rarity = r
     show_collection()
 
+func _collection_set_missing_only(v: bool) -> void:
+    collection_missing_only = v
+    show_collection()
+
+func show_craft_screen() -> void:
+    # Direct shortcut from pack results ("I just got Vials, now what?") into
+    # a collection view pre-filtered to what those Vials can actually buy --
+    # clearing class/rarity/search filters so a missing card never hides
+    # behind whatever filter was left set from a previous visit.
+    collection_filter_class = "All"
+    collection_filter_rarity = "All"
+    collection_search_query = ""
+    collection_missing_only = true
+    show_collection()
+
 func _collection_set_search(text: String) -> void:
     collection_search_query = text
     _collection_focus_search_next = true
@@ -4833,7 +4855,9 @@ func show_collection() -> void:
     # (class, then rarity, then cost, then name) turn it into something you
     # can actually navigate, and an owned-count summary up top replaces
     # having to scroll the whole binder just to gauge collection progress.
-    clear_screen(); add_background(0.82); header("COLLECTION & CRAFTING","Craft any card from any class • Deck class only matters when building"); currency_bar()
+    clear_screen(); add_background(0.82)
+    header("COLLECTION & CRAFTING", "Showing cards you're missing" if collection_missing_only else "Craft any card from any class • Deck class only matters when building")
+    currency_bar()
     var guide := label("CREATE: Bronze 50  •  Silver 150  •  Gold 500  •  Epic 900  •  Legendary 2,000  •  Platinum 4,500",Vector2(90,118),Vector2(1100,26),15)
     guide.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     guide.add_theme_color_override("font_color", Color(0.78,0.90,1.0))
@@ -4865,6 +4889,18 @@ func show_collection() -> void:
         search_box.grab_focus()
         search_box.caret_column = search_box.text.length()
         _collection_focus_search_next = false
+
+    var missing_toggle := button(
+        "✓ MISSING ONLY" if collection_missing_only else "MISSING ONLY",
+        Vector2(858, 172), Vector2(180, 28),
+        _collection_set_missing_only.bind(not collection_missing_only)
+    )
+    missing_toggle.add_theme_font_size_override("font_size", 12)
+    if collection_missing_only:
+        missing_toggle.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 6))
+        missing_toggle.add_theme_stylebox_override("hover", solid_style(GOLD_COLOR.lightened(0.15), 6))
+        missing_toggle.add_theme_color_override("font_color", Color(0.08, 0.06, 0.02))
+        missing_toggle.add_theme_color_override("font_hover_color", Color(0.08, 0.06, 0.02))
 
     var class_tabs := ["All"] + CLASSES + ["Neutral"]
     var tab_w: float = 1224.0 / float(class_tabs.size())
@@ -4989,6 +5025,11 @@ func _collection_filtered_sorted_cards() -> Array:
             continue
         if collection_filter_rarity != "All" and str(cd.get("rarity", "")) != collection_filter_rarity:
             continue
+        if collection_missing_only:
+            var owned_count := int(collection_owned.get(str(cd["id"]), 0))
+            var copy_limit := int(COPY_LIMITS.get(str(cd.get("rarity", "Bronze")), 1))
+            if owned_count >= copy_limit:
+                continue
         if not query.is_empty():
             var name_match := str(cd.get("name", "")).to_lower().contains(query)
             var effect_match := str(cd.get("effect", "")).to_lower().contains(query)
