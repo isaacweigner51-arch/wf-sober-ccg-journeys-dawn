@@ -1,17 +1,17 @@
 {
-  "version": "0.8.24",
+  "version": "0.8.25",
   "build": "Shiny Horizons",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Every card now has unique class-appropriate art. Shiny holographic variants can now appear when opening packs.",
+  "notes": "Collection, Pack Opening, and Deck Builder now show each card's unique illustrated art.",
   "required": false,
-  "version_code": "0.8.24",
+  "version_code": "0.8.25",
   "build_name": "Shiny Horizons",
   "card_count": 123,
-  "version_name": "0.8.24",
+  "version_name": "0.8.25",
   "fixes": [
-    "Card art no longer shows generic atmospheric placeholder images regardless of which class or card is displayed."
+    "Collection, Pack Opening, and Deck Builder now display each card's unique illustrated art instead of placeholder images. All screens share a single art loader so battle, menus, and pack reveals always show the same illustration for every card."
   ],
   "features": [
     "All 123 cards now have unique AI-generated art matched to each card's name, class, and rarity. Hope cards glow with warm purple and gold dawn light; Courage burns with crimson and amber; Serenity flows in soft teal and blue; Purpose is grounded in warm gold and earth tones; Neutral shows community and fellowship scenes.",
