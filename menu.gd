@@ -4172,9 +4172,19 @@ func show_bulk_pack_results(pulled: Array, pack_count: int, platinum_count: int)
     # first, so a big bulk-open still reads as "here's everything you got"
     # instead of forcing a long wait through repeated small animations.
     clear_screen(); add_background(0.80)
+    # Per-card "DUPLICATE +N VIALS" badges tell the story of one card; players
+    # opening dozens of packs at once also want the single number "how much
+    # did I just get overall", which no individual badge answers on its own.
+    var total_dup_vials := 0
+    for cd in pulled:
+        var dup_info: Dictionary = cd.get("_dup_info", {})
+        if dup_info.get("is_duplicate", false):
+            total_dup_vials += int(dup_info.get("vials", 0))
     var subtitle := "%d packs opened" % pack_count
     if platinum_count > 0:
         subtitle += "  •  %d SIGNATURE PLATINUM!" % platinum_count
+    if total_dup_vials > 0:
+        subtitle += "  •  +%d VIALS FROM DUPLICATES" % total_dup_vials
     header("PACKS OPENED", subtitle); currency_bar()
 
     var sorted_pulled: Array = pulled.duplicate()
