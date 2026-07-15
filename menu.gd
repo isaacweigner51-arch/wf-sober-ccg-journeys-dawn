@@ -3,6 +3,25 @@ extends Control
 const GOLD_COLOR := Color(0.95, 0.78, 0.34)
 const PANEL := Color(0.025, 0.045, 0.08, 0.97)
 const SAVE_PATH := "user://journeys_dawn_profile.cfg"
+
+# Several call sites (begin_story_stage, begin_challenge, launch_trial_battle)
+# only set a handful of "pending reward" keys on the shared profile file
+# before saving it straight back. ConfigFile.save() serializes only what's
+# currently loaded in memory, so if load() fails on a file that actually
+# exists -- corrupted or partially written, most often from the app being
+# killed mid-save on mobile -- saving anyway would silently erase every
+# other saved field, including academy.complete, and send the player back
+# into the tutorial on every future match with no way out. Use this instead
+# of "ConfigFile.new(); cfg.load(SAVE_PATH)" at any such partial-write site.
+# Returns null when it's unsafe to save; a genuinely missing file (first run,
+# before any profile has ever been saved) is still fine to proceed with
+# defaults.
+func _load_profile_cfg_for_partial_write() -> ConfigFile:
+    var cfg := ConfigFile.new()
+    var err := cfg.load(SAVE_PATH)
+    if err != OK and FileAccess.file_exists(SAVE_PATH):
+        return null
+    return cfg
 const APP_VERSION := "0.5.7"
 const BUILD_NAME := "v0.8.4 • AUDIO & CARD ART RECOVERY"
 const CLASSES := ["Hope", "Courage", "Serenity", "Purpose"]
@@ -3427,16 +3446,17 @@ func begin_story_stage(stage: Dictionary) -> void:
     # start_battle()/show_match_deck_selection() would let the player pick a
     # *different* opponent than the one the story is actually about, so this
     # jumps straight to the battle intro instead of that freeform screen.
-    var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
     var stage_id := int(stage["id"])
     var your_class := selected_class if selected_class != "" else "Hope"
-    var already_cleared := bool(cfg.get_value("story", "cleared_%s_%d" % [your_class, stage_id], false))
-    cfg.set_value("challenge","pending_reward",0 if already_cleared else int(stage["gold"]))
-    cfg.set_value("challenge","pending_packs",0 if already_cleared else int(stage["packs"]))
-    cfg.set_value("challenge","name",str(stage["name"]))
-    cfg.set_value("challenge","story_stage",stage_id)
-    cfg.set_value("challenge","story_stage_leader",your_class)
-    cfg.save(SAVE_PATH)
+    var cfg := _load_profile_cfg_for_partial_write()
+    if cfg != null:
+        var already_cleared := bool(cfg.get_value("story", "cleared_%s_%d" % [your_class, stage_id], false))
+        cfg.set_value("challenge","pending_reward",0 if already_cleared else int(stage["gold"]))
+        cfg.set_value("challenge","pending_packs",0 if already_cleared else int(stage["packs"]))
+        cfg.set_value("challenge","name",str(stage["name"]))
+        cfg.set_value("challenge","story_stage",stage_id)
+        cfg.set_value("challenge","story_stage_leader",your_class)
+        cfg.save(SAVE_PATH)
     var opponent_class := str(stage["class"])
     var battle_cfg := ConfigFile.new()
     battle_cfg.set_value("battle","mode","story")
@@ -3465,10 +3485,11 @@ func show_recovery_road() -> void:
     status_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 
 func begin_challenge(ch: Dictionary) -> void:
-    var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
-    cfg.set_value("challenge","pending_reward",int(ch["reward"]))
-    cfg.set_value("challenge","name",str(ch["name"]))
-    cfg.save(SAVE_PATH)
+    var cfg := _load_profile_cfg_for_partial_write()
+    if cfg != null:
+        cfg.set_value("challenge","pending_reward",int(ch["reward"]))
+        cfg.set_value("challenge","name",str(ch["name"]))
+        cfg.save(SAVE_PATH)
     start_battle()
 
 func show_trials() -> void:
@@ -3543,10 +3564,11 @@ func show_trials() -> void:
 
 func launch_trial_battle(opponent_class: String, tier: int) -> void:
     var your_class := selected_class if selected_class != "" else "Hope"
-    var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
-    cfg.set_value("trials", "pending_opponent", opponent_class)
-    cfg.set_value("trials", "pending_tier", tier)
-    cfg.save(SAVE_PATH)
+    var cfg := _load_profile_cfg_for_partial_write()
+    if cfg != null:
+        cfg.set_value("trials", "pending_opponent", opponent_class)
+        cfg.set_value("trials", "pending_tier", tier)
+        cfg.save(SAVE_PATH)
     var battle_cfg := ConfigFile.new()
     battle_cfg.set_value("battle", "mode", "trial")
     battle_cfg.set_value("battle", "your_class", your_class)

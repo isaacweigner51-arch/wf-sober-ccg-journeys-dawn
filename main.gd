@@ -3457,11 +3457,31 @@ func training_on_end_turn() -> void:
     training_attacked_this_turn = false
     update_training_panel()
 
+# main.gd and menu.gd share one profile file (user://journeys_dawn_profile.cfg).
+# Several functions here only set a handful of keys before saving it straight
+# back (match rewards, class-training completion). ConfigFile.save() writes
+# out only what's currently loaded in memory, so if load() fails on a file
+# that actually exists -- corrupted or partially written, most often from the
+# app being killed mid-save on mobile -- saving anyway would silently erase
+# every other saved field, including academy.complete, and send the player
+# back into the tutorial on every future match with no way out. Use this
+# instead of "ConfigFile.new(); cfg.load(...)" at any such partial-write site.
+# Returns null when it's unsafe to save; a genuinely missing file (first run,
+# before any profile has ever been saved) is still fine to proceed with
+# defaults.
+func _load_shared_profile_cfg_for_partial_write() -> ConfigFile:
+    var cfg := ConfigFile.new()
+    var err := cfg.load("user://journeys_dawn_profile.cfg")
+    if err != OK and FileAccess.file_exists("user://journeys_dawn_profile.cfg"):
+        return null
+    return cfg
+
 func complete_class_training() -> void:
     if not training_mode:
         return
-    var cfg := ConfigFile.new()
-    cfg.load("user://journeys_dawn_profile.cfg")
+    var cfg := _load_shared_profile_cfg_for_partial_write()
+    if cfg == null:
+        return
     var already_complete := bool(cfg.get_value("academy", "class_%s_complete" % training_class.to_lower(), false))
     cfg.set_value("academy", "class_%s_complete" % training_class.to_lower(), true)
     cfg.set_value("profile", "class", training_class)
@@ -5187,8 +5207,9 @@ func record_recovery_challenge_win(winning_class: String) -> Dictionary:
     # the next time it loads or rebuilds the home screen.
     if winning_class == "":
         return {}
-    var cfg := ConfigFile.new()
-    cfg.load("user://journeys_dawn_profile.cfg") # Missing file is fine; defaults apply below.
+    var cfg := _load_shared_profile_cfg_for_partial_write()
+    if cfg == null:
+        return {}
     var progress: Dictionary = cfg.get_value("challenge", "recovery_progress", {})
     var count := int(progress.get(winning_class, 0)) + 1
     var result := {}
