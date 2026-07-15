@@ -1,21 +1,22 @@
 {
-  "version": "0.8.23",
-  "build": "Duplicate Pull Clarity",
+  "version": "0.8.24",
+  "build": "Shiny Horizons",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Pack openings now tell you when a pull was a duplicate instead of looking like a brand-new card. Also gave Renewed Faith its own dedicated card art instead of a placeholder, and the Recovery Academy tutorial got a full personality pass.",
+  "notes": "Every card now has unique class-appropriate art. Shiny holographic variants can now appear when opening packs.",
   "required": false,
-  "version_code": "0.8.23",
-  "build_name": "Duplicate Pull Clarity",
+  "version_code": "0.8.24",
+  "build_name": "Shiny Horizons",
   "card_count": 123,
-  "version_name": "0.8.23",
+  "version_name": "0.8.24",
   "fixes": [
-    "A pulled card that you already owned at its copy limit was silently converted to Vials, but the pack reveal and bulk-open results showed it exactly like a brand-new card. Both screens now stamp a \"DUPLICATE +N VIALS\" badge on any pull that got converted to currency instead.",
-    "Renewed Faith (JD-012) was missing dedicated card art and was silently falling back to a generic placeholder image everywhere it appeared. It now has its own artwork matching the rest of the Hope class."
+    "Card art no longer shows generic atmospheric placeholder images regardless of which class or card is displayed."
   ],
   "features": [
-    "The Recovery Academy tutorial's 11 lessons now have named mentors (Dawn, Marcus, Priya, Theo, and Dean Alvarez) with a consistent voice and running through-line, an in-character opening and closing line for every lesson, a small gold celebration beat when you complete a lesson, and a smooth fade between lessons instead of an instant cut."
+    "All 123 cards now have unique AI-generated art matched to each card's name, class, and rarity. Hope cards glow with warm purple and gold dawn light; Courage burns with crimson and amber; Serenity flows in soft teal and blue; Purpose is grounded in warm gold and earth tones; Neutral shows community and fellowship scenes.",
+    "Shiny holographic card variants are now in the game. Every card drawn from a pack has a 0.5% independent chance to be a shiny — they render with a slow rainbow foil color cycle and sparkle particle bursts, get their own spotlight reveal sequence, and are tracked separately from your regular collection copies. Shinies can only be drawn, never crafted.",
+    "The Pull Odds screen now discloses the 0.5% shiny chance per card drawn, keeping the loot-box disclosure accurate."
   ],
   "upcoming_events": [
     "More seasonal content and cards are in development — check back after future updates for details."
