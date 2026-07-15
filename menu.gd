@@ -691,10 +691,8 @@ var platinum_pity := 0
 var selected_class := ""
 var collection_owned: Dictionary = {}
 var collection_shiny_owned: Dictionary = {}  # card_id -> shiny copy count (draw-only, no crafting)
-# Card art for menus uses CardView's shared static cache and catalog so that
-# collection, pack opening, and battle all show the exact same texture for
-# every card — no separate cache that can drift out of sync.
-# (_menu_art_cache removed; CardView._art_cache is used directly below.)
+# Card art is resolved by the CardArt autoload (card_art.gd) — one shared
+# function for every screen.  No local art cache or loader lives here.
 var saved_deck: Array = []
 var saved_decks: Dictionary = {}
 var recovery_challenge_progress: Dictionary = {}
@@ -4499,51 +4497,7 @@ func _spotlight_reveal(real: Panel, rarity: String) -> void:
     if rays != null and is_instance_valid(rays):
         rays.queue_free()
 
-func _ensure_shared_catalog() -> void:
-    # Populates CardView's static catalog (shared with battle) if not yet loaded.
-    if CardView._catalog_loaded:
-        return
-    CardView._catalog_loaded = true
-    CardView._catalog_by_name.clear()
-    if not FileAccess.file_exists("res://data/cards.json"):
-        return
-    var file := FileAccess.open("res://data/cards.json", FileAccess.READ)
-    if file == null:
-        return
-    var parsed: Variant = JSON.parse_string(file.get_as_text())
-    if parsed is Array:
-        for entry_variant in parsed:
-            if entry_variant is Dictionary:
-                var entry: Dictionary = entry_variant
-                var key := str(entry.get("name", "")).strip_edges().to_lower()
-                if not key.is_empty():
-                    CardView._catalog_by_name[key] = entry.duplicate(true)
-
-func card_art_texture(cd: Dictionary) -> Texture2D:
-    # Mirrors resolve_card_full_art() in main.gd exactly so collection,
-    # pack opening, and battle all hit the same Godot import cache (.ctex).
-    # Step 1 — id direct hit (cards from cards.json already carry "JD-001").
-    var card_id: String = str(cd.get("id", "")).strip_edges().to_lower()
-    if not card_id.is_empty():
-        var direct_path := "res://assets/cards/full/%s.jpg" % card_id
-        if ResourceLoader.exists(direct_path):
-            var t := load(direct_path) as Texture2D
-            if t != null:
-                return t
-    # Step 2 — name → catalog id lookup (deck cards carry numeric story ids).
-    _ensure_shared_catalog()
-    var card_name: String = str(cd.get("name", "")).strip_edges().to_lower()
-    if not card_name.is_empty() and CardView._catalog_by_name.has(card_name):
-        var catalog_id: String = str(CardView._catalog_by_name[card_name].get("id", "")).strip_edges().to_lower()
-        if not catalog_id.is_empty():
-            var matched_path := "res://assets/cards/full/%s.jpg" % catalog_id
-            if ResourceLoader.exists(matched_path):
-                var t := load(matched_path) as Texture2D
-                if t != null:
-                    return t
-    # Step 3 — deterministic placeholder (same as resolve_card_full_art fallback).
-    var seed_value: int = absi(str(cd.get("name", "card")).hash())
-    return load("res://assets/cards/art_%02d.png" % (seed_value % 16)) as Texture2D
+# card_art_texture() removed — all callers now use CardArt.resolve(cd) directly.
 
 func card_rarity_color(rarity: String) -> Color:
     if rarity == "Shiny":
@@ -4680,7 +4634,7 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
     p.add_child(art_frame)
 
     var art := TextureRect.new()
-    art.texture = card_art_texture(cd)
+    art.texture = CardArt.resolve(cd)
     art.position = Vector2(2, 2)
     art.size = art_frame.size - Vector2(4, 4)
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
