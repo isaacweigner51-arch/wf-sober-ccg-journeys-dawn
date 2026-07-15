@@ -50,3 +50,4 @@ Thumbs.db
 
 # Godot editor import cache (regenerated automatically from .import sidecar files)
 .godot/
+attached_assets/
