@@ -4,7 +4,7 @@ signal update_available(version: String, notes: String, required: bool)
 signal update_check_finished(has_update: bool)
 
 const LOCAL_MANIFEST := "res://data/version_manifest.json"
-var current_version := "0.8.19"
+var current_version := "0.8.20"
 var remote_manifest_url := ""
 # "What's new" content for the currently installed build — bundled locally
 # (not fetched over the network) so the popup always has something to show
