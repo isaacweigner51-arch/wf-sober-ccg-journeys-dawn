@@ -83,7 +83,7 @@ func resolve(cd: Dictionary) -> Texture2D:
 	# Step 3 — file genuinely missing or card has no JD-### id at all.
 	# Log clearly so a missing art file is immediately visible in Output.
 	if card_id.begins_with("jd-") or (not card_name.is_empty() and _name_to_id.has(card_name)):
-		var missing_id := card_id if card_id.begins_with("jd-") else _name_to_id.get(card_name, "?")
+		var missing_id: String = card_id if card_id.begins_with("jd-") else str(_name_to_id.get(card_name, "?"))
 		push_error("[CardArt] file not found  id=%s  path=res://assets/cards/full/%s.jpg" % [missing_id, missing_id])
 		print("[CardArt] file not found  id=%s  path=res://assets/cards/full/%s.jpg" % [missing_id, missing_id])
 
