@@ -1,17 +1,18 @@
 {
-  "version": "0.8.14",
-  "build": "Revival Strips Evolution",
+  "version": "0.8.15",
+  "build": "Hope Amulet Restored",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "A follower brought back from the Relapse Zone (Second Chance, Phoenix Rising, Promise of Tomorrow, Never Forgotten, Back on Track, One Day at a Time, Recovery Call) now correctly returns as its base, non-evolved self instead of keeping its evolved bonus stats and badge.",
+  "notes": "Fixed Hope's missing class amulet, Second Chances -- it was defined in the game's battle logic but never added to the actual card catalog, so it could never be owned, opened from packs, or drafted into a deck. It's now a real, obtainable card and is included in Hope's starter deck, matching every other class.",
   "required": false,
-  "version_code": "0.8.14",
-  "build_name": "Revival Strips Evolution",
-  "card_count": 120,
-  "version_name": "0.8.14",
+  "version_code": "0.8.15",
+  "build_name": "Hope Amulet Restored",
+  "card_count": 122,
+  "version_name": "0.8.15",
   "fixes": [
-    "Followers revived from the Relapse Zone no longer keep their evolved bonus stats/badge -- reviving a follower now correctly returns it to its base, non-evolved form."
+    "Hope's class amulet, Second Chances, is now a real obtainable card (it existed in battle logic but was missing from the card catalog, so it could never be collected or drafted). It's now included in Hope's starter deck, matching Courage, Serenity, and Purpose, each of which already had their own amulet available.",
+    "Added the missing Legendary follower Second Chance to the card catalog -- Hope's starter deck recipe already referenced it, but its card data was never defined, leaving a broken reference."
   ],
   "features": [],
   "upcoming_events": [
