@@ -4614,19 +4614,19 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
     p.add_child(art_frame)
 
     var art := TextureRect.new()
-    var _art_resolved := CardArt.resolve(cd)
-    print("[menu.card_panel] cd.id=%s  cd.name=%s  resolved=%s" % [cd.get("id","?"), cd.get("name","?"), _art_resolved])
-    art.texture = _art_resolved
-    print("[menu.card_panel] art.texture after assign = %s" % art.texture)
-    art.position = Vector2(2, 2)
-    art.size = art_frame.size - Vector2(4, 4)
+    art.texture = CardArt.resolve(cd)
+    # Anchor to fill art_frame so layout resolves the size — no manual size calc.
+    art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    art.offset_left   = 2
+    art.offset_top    = 2
+    art.offset_right  = -2
+    art.offset_bottom = -2
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     art_frame.add_child(art)
 
-    # Diagonal glass sheen across the art — a cheap, standard trick that makes
-    # a flat photo read as a coated/printed card instead of a pasted image.
+    # Diagonal glass sheen — anchored to match the art rect exactly.
     var sheen := GradientTexture2D.new()
     var sheen_gradient := Gradient.new()
     sheen_gradient.colors = PackedColorArray([Color(1,1,1,0.18), Color(1,1,1,0.0)])
@@ -4636,8 +4636,11 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
     sheen.fill_to = Vector2(0.6, 0.75)
     var sheen_rect := TextureRect.new()
     sheen_rect.texture = sheen
-    sheen_rect.position = art.position
-    sheen_rect.size = art.size
+    sheen_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    sheen_rect.offset_left   = 2
+    sheen_rect.offset_top    = 2
+    sheen_rect.offset_right  = -2
+    sheen_rect.offset_bottom = -2
     sheen_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
     art_frame.add_child(sheen_rect)
 
