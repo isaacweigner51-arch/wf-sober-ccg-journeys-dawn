@@ -637,14 +637,11 @@ func _hydrate_card_data(source: Dictionary) -> Dictionary:
 func _load_card_art_path(path: String) -> Texture2D:
     if _art_cache.has(path):
         return _art_cache[path] as Texture2D
-    # load() resolves Godot-imported JPG/PNG resources in both editor and export.
-    # The old ResourceLoader.exists() guard incorrectly rejected valid card art
-    # in some project copies, so the renderer fell back to generated placeholders.
-    var imported: Texture2D = load(path) as Texture2D
-    if imported != null:
-        _art_cache[path] = imported
-        return imported
-    # Editor/source fallback for images that have not been imported yet.
+    # Always try reading raw file bytes first.  This bypasses Godot's import
+    # cache (.godot/imported/) entirely so the game always shows the latest
+    # source image — even if the local .ctex cache is stale from a previous
+    # version of the art.  Works in both the editor and when running from the
+    # project directory.
     if FileAccess.file_exists(path):
         var bytes: PackedByteArray = FileAccess.get_file_as_bytes(path)
         var image := Image.new()
@@ -657,6 +654,13 @@ func _load_card_art_path(path: String) -> Texture2D:
             var texture := ImageTexture.create_from_image(image)
             _art_cache[path] = texture
             return texture
+    # Exported PCK fallback: raw .jpg files are not packed into the APK/PCK —
+    # only their compiled .ctex counterparts are.  load() reads from the PCK
+    # and is the correct path for shipped Android/desktop exports.
+    var imported: Texture2D = load(path) as Texture2D
+    if imported != null:
+        _art_cache[path] = imported
+        return imported
     return null
 
 func _art_texture() -> Texture2D:
