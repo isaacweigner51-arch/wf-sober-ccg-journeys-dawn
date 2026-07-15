@@ -5346,7 +5346,16 @@ func show_game_over(title_text: String, subtitle: String, player_won: bool, rewa
     game_over_layer.color = Color(0, 0, 0, 0.68)
     game_over_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     game_over_layer.mouse_filter = Control.MOUSE_FILTER_STOP
-    game_over_layer.z_index = 10000
+    # Was 10000 -- Godot's CanvasItem z_index is capped at 4096 (see
+    # CANVAS_ITEM_Z_MAX). Setting it out of range doesn't clamp, it fails the
+    # engine's validation and prints "Tried to set Z index to an invalid
+    # value" while silently leaving z_index at its previous/default value
+    # (0). That's the real reason the result screen kept rendering *behind*
+    # ordinary board UI (hand cards, amulet panels, popups) instead of on top
+    # of everything -- it never actually got a high z_index at all, every
+    # single time this ran. 4096 is the actual maximum, still higher than
+    # every other layer in the game so it always wins.
+    game_over_layer.z_index = 4096
     game_over_layer.modulate = Color(1, 1, 1, 0)
     if not safe_add_child(self, game_over_layer):
         return
@@ -5619,7 +5628,9 @@ func show_card_details(card_data: Dictionary) -> void:
     card_detail_panel = Panel.new()
     card_detail_panel.position = Vector2(get_viewport_rect().size.x - 390.0, 92.0)
     card_detail_panel.size = Vector2(360.0, 500.0)
-    card_detail_panel.z_index = 5000
+    # Was 5000 -- over Godot's CanvasItem z_index cap of 4096, which silently
+    # fails to apply (see the game_over_layer fix for the full explanation).
+    card_detail_panel.z_index = 4090
     card_detail_panel.mouse_filter = Control.MOUSE_FILTER_STOP
     var panel_style := StyleBoxFlat.new()
     panel_style.bg_color = Color(0.018, 0.032, 0.060, 0.985)
