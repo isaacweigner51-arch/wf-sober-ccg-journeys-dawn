@@ -1,10 +1,9 @@
 extends Node
 # CardArt — single shared art resolver for every screen in the game.
 #
-# Uses FileAccess raw-byte decoding (the same path that already works in
-# CardView._load_card_art_path).  This bypasses Godot's import cache entirely
-# so the game always shows the actual source image whether running in the
-# editor, from an APK, or a desktop export.
+# Uses ResourceLoader.exists() + load() so the path works identically in the
+# editor, exported PCK, and Android APK (where raw FileAccess on res:// paths
+# is unreliable because images are remapped to their imported .ctex forms).
 
 var _cache: Dictionary = {}       # lowercase res:// path -> Texture2D
 var _name_to_id: Dictionary = {}  # lowercase card name -> lowercase "jd-###"
@@ -29,33 +28,18 @@ func _ensure_catalog() -> void:
 			if not key.is_empty() and not val.is_empty():
 				_name_to_id[key] = val
 
-# ── loader (byte-read first, PCK fallback) ────────────────────────────────────
+# ── loader ────────────────────────────────────────────────────────────────────
 
 func _load_path(path: String) -> Texture2D:
-	var key := path.to_lower()
-	if _cache.has(key):
-		return _cache[key] as Texture2D
-
-	# Primary: read raw bytes so the game shows the source file directly,
-	# identical to CardView._load_card_art_path which is the proven working path.
-	if FileAccess.file_exists(path):
-		var bytes: PackedByteArray = FileAccess.get_file_as_bytes(path)
-		var image := Image.new()
-		var err: Error = ERR_FILE_UNRECOGNIZED
-		var lp := path.to_lower()
-		if lp.ends_with(".jpg") or lp.ends_with(".jpeg"):
-			err = image.load_jpg_from_buffer(bytes)
-		elif lp.ends_with(".png"):
-			err = image.load_png_from_buffer(bytes)
-		if err == OK and not image.is_empty():
-			var t := ImageTexture.create_from_image(image)
-			_cache[key] = t
-			return t
-
-	# Fallback: compiled .ctex from a shipped PCK / exported APK.
+	if _cache.has(path):
+		return _cache[path] as Texture2D
+	var exists: bool = ResourceLoader.exists(path, "Texture2D")
+	print("[CardArt] path=%s  ResourceLoader.exists=%s" % [path, exists])
+	if not exists:
+		return null
 	var t := load(path) as Texture2D
 	if t != null:
-		_cache[key] = t
+		_cache[path] = t
 	return t
 
 # ── public API ────────────────────────────────────────────────────────────────
@@ -66,7 +50,8 @@ func resolve(cd: Dictionary) -> Texture2D:
 	# Step 1 — "id" field is already a JD-### catalog string.
 	var card_id: String = str(cd.get("id", "")).strip_edges().to_lower()
 	if card_id.begins_with("jd-"):
-		var t := _load_path("res://assets/cards/full/%s.jpg" % card_id)
+		var path := "res://assets/cards/full/%s.jpg" % card_id
+		var t := _load_path(path)
 		if t != null:
 			return t
 
@@ -76,17 +61,15 @@ func resolve(cd: Dictionary) -> Texture2D:
 	var card_name: String = str(cd.get("name", "")).strip_edges().to_lower()
 	if not card_name.is_empty() and _name_to_id.has(card_name):
 		var catalog_id: String = _name_to_id[card_name]
-		var t := _load_path("res://assets/cards/full/%s.jpg" % catalog_id)
+		var path := "res://assets/cards/full/%s.jpg" % catalog_id
+		var t := _load_path(path)
 		if t != null:
 			return t
 
-	# Step 3 — file genuinely missing or card has no JD-### id at all.
-	# Log clearly so a missing art file is immediately visible in Output.
-	if card_id.begins_with("jd-") or (not card_name.is_empty() and _name_to_id.has(card_name)):
-		var missing_id: String = card_id if card_id.begins_with("jd-") else str(_name_to_id.get(card_name, "?"))
-		push_error("[CardArt] file not found  id=%s  path=res://assets/cards/full/%s.jpg" % [missing_id, missing_id])
-		print("[CardArt] file not found  id=%s  path=res://assets/cards/full/%s.jpg" % [missing_id, missing_id])
-
-	# Deterministic placeholder — only reached when no JD-### id exists anywhere.
+	# Step 3 — genuinely missing. Log and return placeholder.
+	var missing_id: String = card_id if card_id.begins_with("jd-") else \
+		str(_name_to_id.get(card_name, "?") if not card_name.is_empty() else "?")
+	push_error("[CardArt] MISSING  id=%s" % missing_id)
+	print("[CardArt] MISSING  id=%s" % missing_id)
 	var seed_value: int = absi(str(cd.get("name", "card")).hash())
-	return _load_path("res://assets/cards/art_%02d.png" % (seed_value % 16))
+	return load("res://assets/cards/art_%02d.png" % (seed_value % 16)) as Texture2D
