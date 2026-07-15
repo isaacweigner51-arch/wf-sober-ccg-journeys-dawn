@@ -1369,7 +1369,7 @@ func play_sponsor_evolution_animation(unit: Dictionary, player_side: bool) -> vo
     # sponsor speaks — reinforcing "you are never alone" with an actual face,
     # not a wall of text.
     var sponsee_preview := card("Sponsee", 2, 2, 2, "Universal", "Token", "sponsee", 0, "", "hands")
-    var sponsee_portrait := build_art_medallion(resolve_card_full_art(sponsee_preview), Vector2(838, 210), Vector2(180, 250), Color(1.0, 0.86, 0.42))
+    var sponsee_portrait := build_art_medallion(CardArt.resolve(sponsee_preview), Vector2(838, 210), Vector2(180, 250), Color(1.0, 0.86, 0.42))
     sponsee_portrait.scale = Vector2(0.55, 0.55)
     add_child(sponsee_portrait)
 
@@ -2535,7 +2535,7 @@ func play_epic_evolution_animation(index: int, cost: int, player_side: bool) -> 
     ring.z_index = 1150
     add_child(ring)
 
-    var medallion := build_art_medallion(resolve_card_full_art(follower), screen_center + Vector2(160, -40), Vector2(140, 196), Color(0.78, 0.38, 1.0))
+    var medallion := build_art_medallion(CardArt.resolve(follower), screen_center + Vector2(160, -40), Vector2(140, 196), Color(0.78, 0.38, 1.0))
     medallion.scale = Vector2(0.4, 0.4)
     add_child(medallion)
 
@@ -2656,7 +2656,7 @@ func play_legendary_evolution_animation(index: int, cost: int, player_side: bool
     var spin := create_tween().set_loops().bind_node(beam_root)
     spin.tween_property(beam_root, "rotation", TAU, 6.0).set_trans(Tween.TRANS_LINEAR)
 
-    var hero_portrait := build_art_medallion(resolve_card_full_art(follower), screen_center - Vector2(150, 230), Vector2(300, 380), Color(1.0, 0.84, 0.30), 22)
+    var hero_portrait := build_art_medallion(CardArt.resolve(follower), screen_center - Vector2(150, 230), Vector2(300, 380), Color(1.0, 0.84, 0.30), 22)
     hero_portrait.scale = Vector2(0.5, 0.5)
     hero_portrait.z_index = 1130
     add_child(hero_portrait)
@@ -2779,7 +2779,7 @@ func play_platinum_evolution_animation(index: int, cost: int, player_side: bool)
     # it, so the reveal feels like the follower's own portrait taking over the
     # whole screen rather than a small procedural flash.
     var backdrop_art := TextureRect.new()
-    backdrop_art.texture = resolve_card_full_art(follower)
+    backdrop_art.texture = CardArt.resolve(follower)
     backdrop_art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     backdrop_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     backdrop_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -3580,47 +3580,8 @@ func second_chance_momentum(card_count: int) -> int:
         return 1
     return 2
 
-func second_chance_card_art(cd: Dictionary) -> Texture2D:
-    return resolve_card_full_art(cd)
-
-# Shared by the Second Chance mulligan and every evolution cinematic: resolve
-# a card dictionary (which may or may not carry an explicit "id") to its real
-# Journey's Dawn illustration instead of falling back to placeholder shapes.
-func resolve_card_full_art(cd: Dictionary) -> Texture2D:
-    var card_id: String = str(cd.get("id", "")).strip_edges().to_lower()
-    if not card_id.is_empty():
-        var full_path: String = "res://assets/cards/full/%s.jpg" % card_id
-        if ResourceLoader.exists(full_path):
-            var full_texture: Texture2D = load(full_path) as Texture2D
-            if full_texture != null:
-                return full_texture
-
-    # Runtime-built deck cards do not always carry their Journey's Dawn ID.
-    # Match the card name against cards.json so animations can still use the
-    # full card artwork instead of displaying an empty black rectangle.
-    if FileAccess.file_exists("res://data/cards.json"):
-        var file := FileAccess.open("res://data/cards.json", FileAccess.READ)
-        if file != null:
-            var parsed: Variant = JSON.parse_string(file.get_as_text())
-            if parsed is Array:
-                var wanted_name: String = str(cd.get("name", "")).strip_edges().to_lower()
-                for entry_variant in parsed:
-                    if entry_variant is Dictionary:
-                        var entry: Dictionary = entry_variant
-                        if str(entry.get("name", "")).strip_edges().to_lower() == wanted_name:
-                            var matched_id: String = str(entry.get("id", "")).strip_edges().to_lower()
-                            var matched_path: String = "res://assets/cards/full/%s.jpg" % matched_id
-                            if ResourceLoader.exists(matched_path):
-                                var matched_texture: Texture2D = load(matched_path) as Texture2D
-                                if matched_texture != null:
-                                    return matched_texture
-                            break
-
-    # A few generated/testing cards are not in cards.json. Give those a
-    # deterministic fallback image so the panel always shows real art.
-    var seed_value: int = absi(str(cd.get("name", "card")).hash())
-    var fallback_path: String = "res://assets/cards/art_%02d.png" % (seed_value % 16)
-    return load(fallback_path) as Texture2D
+# resolve_card_full_art() and second_chance_card_art() removed.
+# All art resolution goes through CardArt.resolve(cd) — the shared autoload.
 
 # A framed portrait panel built from real card art, used by every evolution
 # cinematic as the "hero art" instead of procedural ASCII/text shapes. Starts
