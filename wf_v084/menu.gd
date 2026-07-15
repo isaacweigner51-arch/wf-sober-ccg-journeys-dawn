@@ -986,6 +986,25 @@ func style(border := GOLD_COLOR, radius := 12) -> StyleBoxFlat:
     s.shadow_size = 8
     return s
 
+# A handful of call sites want an actual solid highlight chip (a filled CTA
+# button or a "this filter is active" tab) paired with dark text for
+# contrast -- style() always keeps bg_color = PANEL (near-black) regardless
+# of the border color passed in, so those call sites were pairing dark text
+# with a dark background: the fill color only ever showed up as a thin
+# border, and the text became nearly invisible against the panel behind it.
+# The net effect read as a highlighted outline with no legible label inside
+# -- an "empty bubble". This variant actually fills with the highlight
+# color so dark text on top is readable.
+func solid_style(fill := GOLD_COLOR, radius := 12) -> StyleBoxFlat:
+    var s := StyleBoxFlat.new()
+    s.bg_color = fill
+    s.border_color = fill.darkened(0.25)
+    s.set_border_width_all(2)
+    s.set_corner_radius_all(radius)
+    s.shadow_color = Color(0,0,0,0.5)
+    s.shadow_size = 6
+    return s
+
 func class_color(name: String) -> Color:
     match name:
         "Hope": return Color(0.52,0.42,0.94)
@@ -1097,8 +1116,8 @@ func show_home() -> void:
     var nav_button := func(text_value: String, callback: Callable, primary: bool):
         var b := button(text_value, Vector2(14, nav_state.y), Vector2(190, 40), callback, nav)
         if primary:
-            b.add_theme_stylebox_override("normal", style(GOLD_COLOR, 9))
-            b.add_theme_stylebox_override("hover", style(GOLD_COLOR.lightened(0.15), 9))
+            b.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 9))
+            b.add_theme_stylebox_override("hover", solid_style(GOLD_COLOR.lightened(0.15), 9))
             b.add_theme_color_override("font_color", Color(0.10, 0.07, 0.02))
             b.add_theme_color_override("font_hover_color", Color(0.10, 0.07, 0.02))
         nav_state.y += 42.0
@@ -1244,7 +1263,7 @@ func show_home() -> void:
     reflection.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     var enter := button("ENTER BATTLE", Vector2(20, 300), Vector2(362, 64), start_battle, right)
     enter.add_theme_font_size_override("font_size", ui_font_size(22))
-    enter.add_theme_stylebox_override("normal", style(GOLD_COLOR, 14))
+    enter.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 14))
     enter.add_theme_color_override("font_color", Color(0.04, 0.06, 0.10))
     var trials_cta := button("THE TRIALS", Vector2(20, 372), Vector2(362, 50), show_trials, right)
     trials_cta.add_theme_font_size_override("font_size", ui_font_size(18))
@@ -1745,8 +1764,21 @@ func academy_feedback_text(text_value: String, positive := true) -> void:
 func show_academy_lesson() -> void:
     clear_screen(); add_background(0.68)
     academy_action_stage = 0
-    var lesson_titles := ["PROVING YOURSELF", "THE BATTLEFIELD", "PLAY A FOLLOWER", "COMBAT", "END YOUR TURN", "SPELLS & AMULETS", "LEADER SIGNATURE CARDS", "CARD EFFECTS & KEYWORDS", "RECOVERY & REVIVE", "SPONSOR & SPONSEE", "BUILDING YOUR DECK"]
-    var mentors := ["Purpose Champion", "Hope Mentor", "Courage Veteran", "Courage Veteran", "Courage Veteran", "Serenity Guardian", "Recovery Academy Dean", "Purpose Champion", "Hope Mentor", "Purpose Champion", "Recovery Academy Dean"]
+    # Lesson order used to open with "Proving Yourself" (Second Chance +
+    # Momentum) -- a discard-for-value trade-off with real cost math -- as
+    # the very first thing a brand-new player saw, before they'd learned
+    # what a zone, a follower, or even a turn was. That's the single
+    # biggest source of "the tutorial is confusing": it led with an
+    # advanced, high-complexity mechanic instead of orientation. Order is
+    # now: get your bearings (battlefield) -> take the most basic action
+    # (play a follower) -> combat -> end turn -> the other card types
+    # (spells/amulets, keywords) -> Recovery & Revive (introduces the
+    # Relapse Zone and revival, which Proving Yourself now builds on
+    # instead of preceding) -> Proving Yourself -> the higher-strategy
+    # lessons (signature cards, sponsor) -> deck building last, as the
+    # capstone right before a player would actually go build one.
+    var lesson_titles := ["THE BATTLEFIELD", "PLAY A FOLLOWER", "COMBAT", "END YOUR TURN", "SPELLS & AMULETS", "CARD EFFECTS & KEYWORDS", "RECOVERY & REVIVE", "PROVING YOURSELF", "LEADER SIGNATURE CARDS", "SPONSOR & SPONSEE", "BUILDING YOUR DECK"]
+    var mentors := ["Hope Mentor", "Courage Veteran", "Courage Veteran", "Courage Veteran", "Serenity Guardian", "Purpose Champion", "Hope Mentor", "Purpose Champion", "Recovery Academy Dean", "Purpose Champion", "Recovery Academy Dean"]
     var lesson_class: String = CLASSES[academy_step % CLASSES.size()]
     var accent := class_color(lesson_class)
     header(lesson_titles[academy_step], "Lesson %d of %d • %s" % [academy_step + 1, ACADEMY_LESSON_COUNT, mentors[academy_step]])
@@ -1819,15 +1851,15 @@ func show_academy_lesson() -> void:
     # line from that lesson's mentor, shown above the mechanical objective,
     # gives every lesson an actual point beyond "click the highlighted thing."
     var mentor_lines := [
-        "Everyone gets do-overs. Just remember every one you take hands your opponent an opening — choose what you throw away with your eyes open.",
         "Know the ground you're standing on before you're in the middle of a fight. That's how you stay steady when things get hard.",
         "You don't get through this alone. Every follower you bring onto this board is somebody showing up for you.",
         "Courage isn't reckless. Clear what's actually in your way first, then go for what matters.",
         "Getting through one more day makes you stronger for the next one. That's what ending your turn really means.",
         "Some relief is immediate. Real progress is the kind that keeps paying off, turn after turn.",
-        "Every leader here has one card that says exactly who they are. Find yours.",
         "The words on a card matter. Learn what they actually mean and you'll never misread one again.",
         "A setback isn't the end of the story. What matters is what you do the day after.",
+        "Everyone gets do-overs. Just remember every one you take hands your opponent an opening — choose what you throw away with your eyes open.",
+        "Every leader here has one card that says exactly who they are. Find yours.",
         "Nobody makes it through this by themselves. A sponsor takes the hit so you don't have to.",
         "Before you walk out that door, know your program. The rules are what keep you honest with yourself.",
     ]
@@ -1848,32 +1880,32 @@ func show_academy_lesson() -> void:
 
     match academy_step:
         0:
-            instruction.text = "Use Second Chance, understand its cost, then spend Momentum yourself."
-            build_second_chance_lesson(board)
-        1:
             instruction.text = "Learn the battlefield by selecting each important zone."
             build_zone_lesson(board)
-        2:
+        1:
             instruction.text = "Spend Play Points to place a follower onto the battlefield."
             build_play_follower_lesson(board)
-        3:
+        2:
             instruction.text = "Attack an enemy follower, then finish by striking the enemy leader."
             build_combat_lesson(board)
-        4:
+        3:
             instruction.text = "End your turn and see exactly what changes for both players."
             build_end_turn_lesson(board)
-        5:
+        4:
             instruction.text = "Cast a spell for an immediate effect, then play Purpose's real Amulet for ongoing value."
             build_spell_amulet_lesson(board)
-        6:
-            instruction.text = "Reveal each leader's signature card — the one card that defines their whole strategy."
-            build_signature_lesson(board)
-        7:
+        5:
             instruction.text = "Reveal each keyword to learn what it does, using a real card as the example."
             build_keyword_lesson(board)
-        8:
+        6:
             instruction.text = "Move a follower to the Relapse Zone, recover it, then see how overdraw is Revived."
             build_recovery_lesson(board)
+        7:
+            instruction.text = "Use Second Chance, understand its cost, then spend Momentum yourself."
+            build_second_chance_lesson(board)
+        8:
+            instruction.text = "Reveal each leader's signature card — the one card that defines their whole strategy."
+            build_signature_lesson(board)
         9:
             instruction.text = "Play Sponsor, choose a Sponsee, and trigger the protective bond."
             build_sponsor_lesson(board)
@@ -2728,8 +2760,11 @@ func show_match_deck_selection() -> void:
         b.size = Vector2(198, 38)
         b.text = str(option.get("label", "DECK"))
         b.add_theme_font_size_override("font_size", ui_font_size(11))
-        b.add_theme_stylebox_override("normal", style(GOLD_COLOR if mode_id == battle_select_mode else Color(0.20,0.30,0.48), 8))
-        if mode_id == battle_select_mode: b.add_theme_color_override("font_color", Color(0.04,0.06,0.10))
+        if mode_id == battle_select_mode:
+            b.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 8))
+            b.add_theme_color_override("font_color", Color(0.04,0.06,0.10))
+        else:
+            b.add_theme_stylebox_override("normal", style(Color(0.20,0.30,0.48), 8))
         b.pressed.connect(func(): _battle_selection_set_mode(mode_id))
         center.add_child(b)
 
@@ -2753,7 +2788,7 @@ func show_match_deck_selection() -> void:
     button("BACK", Vector2(28, 498), Vector2(180, 54), show_home, shell)
     var begin := button("BEGIN BATTLE", Vector2(306, 498), Vector2(500, 54), _battle_selection_start, shell)
     begin.add_theme_font_size_override("font_size", ui_font_size(20))
-    begin.add_theme_stylebox_override("normal", style(GOLD_COLOR, 14))
+    begin.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 14))
     begin.add_theme_color_override("font_color", Color(0.04,0.06,0.10))
     var practice_begin := button("PRACTICE\n(long timer, no rewards)", Vector2(820, 498), Vector2(376, 54), _battle_selection_start_practice, shell)
     practice_begin.add_theme_font_size_override("font_size", ui_font_size(13))
@@ -4415,7 +4450,16 @@ func show_collection() -> void:
         var c: String = class_tabs[i]
         var tab_btn := button(c.to_upper(), Vector2(28 + i * tab_w, 170), Vector2(tab_w - 6, 34), _collection_set_class_filter.bind(c))
         if c == collection_filter_class:
-            tab_btn.add_theme_color_override("font_color", GOLD_COLOR)
+            # The active tab used to just tint its own text gold, which
+            # collided with the button's default hover border (also gold):
+            # hovering the already-selected tab turned the outline and the
+            # label the exact same color, so it read as a hollow gold
+            # bubble instead of a clearly "selected" chip. A solid filled
+            # highlight with dark text reads as selected in every state.
+            tab_btn.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 8))
+            tab_btn.add_theme_stylebox_override("hover", solid_style(GOLD_COLOR.lightened(0.15), 8))
+            tab_btn.add_theme_color_override("font_color", Color(0.08, 0.06, 0.02))
+            tab_btn.add_theme_color_override("font_hover_color", Color(0.08, 0.06, 0.02))
 
     # RARITIES includes tiers ("Signature Platinum") that don't actually
     # exist in data/cards.json yet, so build tabs from what's really on cards
@@ -4435,7 +4479,10 @@ func show_collection() -> void:
         var rtab_btn := button(r.to_upper(), Vector2(28 + i * rtab_w, 208), Vector2(rtab_w - 6, 30), _collection_set_rarity_filter.bind(r))
         rtab_btn.add_theme_font_size_override("font_size", 11)
         if r == collection_filter_rarity:
-            rtab_btn.add_theme_color_override("font_color", GOLD_COLOR)
+            rtab_btn.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 6))
+            rtab_btn.add_theme_stylebox_override("hover", solid_style(GOLD_COLOR.lightened(0.15), 6))
+            rtab_btn.add_theme_color_override("font_color", Color(0.08, 0.06, 0.02))
+            rtab_btn.add_theme_color_override("font_hover_color", Color(0.08, 0.06, 0.02))
 
     var binder := Panel.new()
     binder.position = Vector2(28,246)
