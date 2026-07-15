@@ -691,7 +691,10 @@ var platinum_pity := 0
 var selected_class := ""
 var collection_owned: Dictionary = {}
 var collection_shiny_owned: Dictionary = {}  # card_id -> shiny copy count (draw-only, no crafting)
-var _menu_art_cache: Dictionary = {}
+# Card art for menus uses CardView's shared static cache and catalog so that
+# collection, pack opening, and battle all show the exact same texture for
+# every card — no separate cache that can drift out of sync.
+# (_menu_art_cache removed; CardView._art_cache is used directly below.)
 var saved_deck: Array = []
 var saved_decks: Dictionary = {}
 var recovery_challenge_progress: Dictionary = {}
@@ -4497,10 +4500,11 @@ func _spotlight_reveal(real: Panel, rarity: String) -> void:
         rays.queue_free()
 
 func _load_menu_art_path(path: String) -> Texture2D:
-    if _menu_art_cache.has(path):
-        return _menu_art_cache[path] as Texture2D
-    # Read raw bytes first — bypasses Godot's stale .ctex import cache so the
-    # latest source .jpg is always shown in the editor.
+    # Uses CardView's shared static art cache — the exact same cache battle
+    # uses — so collection and pack opening always return the same Texture2D
+    # object as the battle scene for any given card.
+    if CardView._art_cache.has(path):
+        return CardView._art_cache[path] as Texture2D
     if FileAccess.file_exists(path):
         var bytes: PackedByteArray = FileAccess.get_file_as_bytes(path)
         var image := Image.new()
@@ -4511,23 +4515,21 @@ func _load_menu_art_path(path: String) -> Texture2D:
             error = image.load_png_from_buffer(bytes)
         if error == OK and not image.is_empty():
             var texture := ImageTexture.create_from_image(image)
-            _menu_art_cache[path] = texture
+            CardView._art_cache[path] = texture
             return texture
-    # PCK fallback: exported builds pack .ctex, not raw .jpg — load() is correct there.
     var imported: Texture2D = load(path) as Texture2D
     if imported != null:
-        _menu_art_cache[path] = imported
+        CardView._art_cache[path] = imported
         return imported
     return null
 
-var _menu_catalog_by_name: Dictionary = {}
-var _menu_catalog_loaded: bool = false
-
-func _ensure_menu_catalog_loaded() -> void:
-    if _menu_catalog_loaded:
+func _ensure_shared_catalog() -> void:
+    # Populates CardView's static catalog if it hasn't been loaded yet so that
+    # menu art lookups use the exact same name→id table as battle.
+    if CardView._catalog_loaded:
         return
-    _menu_catalog_loaded = true
-    _menu_catalog_by_name.clear()
+    CardView._catalog_loaded = true
+    CardView._catalog_by_name.clear()
     if not FileAccess.file_exists("res://data/cards.json"):
         return
     var file := FileAccess.open("res://data/cards.json", FileAccess.READ)
@@ -4540,23 +4542,22 @@ func _ensure_menu_catalog_loaded() -> void:
                 var entry: Dictionary = entry_variant
                 var key := str(entry.get("name", "")).strip_edges().to_lower()
                 if not key.is_empty():
-                    _menu_catalog_by_name[key] = entry.duplicate(true)
+                    CardView._catalog_by_name[key] = entry.duplicate(true)
 
 func card_art_texture(cd: Dictionary) -> Texture2D:
-    # Primary: look up catalog JD-XXX id by card name.
-    # Deck/hand dicts carry a numeric story-chapter id (1, 2, 3…) not the
-    # catalog string id, so name-based lookup is the only reliable path.
+    # Identical lookup to CardView._art_texture(): name → shared catalog →
+    # JD-XXX id → shared static art cache. All three render contexts
+    # (battle, collection, pack opening) resolve to the same Texture2D.
     var card_name: String = str(cd.get("name", "")).strip_edges().to_lower()
     if not card_name.is_empty():
-        _ensure_menu_catalog_loaded()
-        if _menu_catalog_by_name.has(card_name):
-            var catalog_id: String = str(_menu_catalog_by_name[card_name].get("id", "")).strip_edges().to_lower()
+        _ensure_shared_catalog()
+        if CardView._catalog_by_name.has(card_name):
+            var catalog_id: String = str(CardView._catalog_by_name[card_name].get("id", "")).strip_edges().to_lower()
             if not catalog_id.is_empty():
                 for extension in ["jpg", "png", "jpeg"]:
                     var t: Texture2D = _load_menu_art_path("res://assets/cards/full/%s.%s" % [catalog_id, extension])
                     if t != null:
                         return t
-    # Secondary: id field already looks like a catalog id (e.g. "JD-001").
     var card_id: String = str(cd.get("id", "")).strip_edges().to_lower()
     if card_id.begins_with("jd-"):
         for extension in ["jpg", "png", "jpeg"]:
