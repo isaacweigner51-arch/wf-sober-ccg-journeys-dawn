@@ -1,18 +1,21 @@
 {
-  "version": "0.8.15",
-  "build": "Hope Amulet Restored",
+  "version": "0.8.16",
+  "build": "Card Names Untangled",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Fixed Hope's missing class amulet, Second Chances -- it was defined in the game's battle logic but never added to the actual card catalog, so it could never be owned, opened from packs, or drafted into a deck. It's now a real, obtainable card and is included in Hope's starter deck, matching every other class.",
+  "notes": "Renamed the cards that all shared the name Second Chance / Second Chances, which also collided with the Second Chance mulligan step at the start of every match. Each card now has its own distinct name and is easier to tell apart.",
   "required": false,
-  "version_code": "0.8.15",
-  "build_name": "Hope Amulet Restored",
+  "version_code": "0.8.16",
+  "build_name": "Card Names Untangled",
   "card_count": 122,
-  "version_name": "0.8.15",
+  "version_name": "0.8.16",
   "fixes": [
-    "Hope's class amulet, Second Chances, is now a real obtainable card (it existed in battle logic but was missing from the card catalog, so it could never be collected or drafted). It's now included in Hope's starter deck, matching Courage, Serenity, and Purpose, each of which already had their own amulet available.",
-    "Added the missing Legendary follower Second Chance to the card catalog -- Hope's starter deck recipe already referenced it, but its card data was never defined, leaving a broken reference."
+    "Hope's amulet, formerly Second Chances, is now The Comeback Trail.",
+    "Hope's Legendary recovery follower, formerly Second Chance, is now Renewed Faith.",
+    "Hope's Epic spell that turns enemies into Newcomers, formerly Second Chance, is now Clean Slate.",
+    "The Universal Legendary recovery follower, formerly Second Chance, is now Renewed Resolve.",
+    "These names no longer collide with each other or with the Second Chance mulligan step at the start of every match."
   ],
   "features": [],
   "upcoming_events": [
