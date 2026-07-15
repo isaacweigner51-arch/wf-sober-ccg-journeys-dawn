@@ -664,38 +664,17 @@ func _load_card_art_path(path: String) -> Texture2D:
     return null
 
 func _art_texture() -> Texture2D:
-    # Primary path: look up the catalog (JD-XXX) ID by card name.
-    # Deck/hand card dicts carry a numeric story-chapter "id" (1, 2, 3…),
-    # not the catalog string ID.  Hydration won't overwrite a field that is
-    # already present, so the only reliable key into the art files is the
-    # name → catalog lookup done here before touching data["id"] at all.
-    var card_name: String = str(data.get("name", "")).strip_edges().to_lower()
-    if not card_name.is_empty():
-        _ensure_catalog_loaded()
-        if _catalog_by_name.has(card_name):
-            var catalog_id: String = str(_catalog_by_name[card_name].get("id", "")).strip_edges().to_lower()
-            if not catalog_id.is_empty():
-                for extension in ["jpg", "png", "jpeg"]:
-                    var t: Texture2D = _load_card_art_path("res://assets/cards/full/%s.%s" % [catalog_id, extension])
-                    if t != null:
-                        return t
-
-    # Secondary path: id field is already a catalog-style string (e.g. "JD-001").
-    var card_id: String = str(data.get("id", "")).strip_edges().to_lower()
-    if card_id.begins_with("jd-"):
-        for extension in ["jpg", "png", "jpeg"]:
-            var t: Texture2D = _load_card_art_path("res://assets/cards/full/%s.%s" % [card_id, extension])
-            if t != null:
-                return t
-
-    # A few generated/testing cards carry no catalog ID. Give those a
-    # deterministic fallback image so they are still visible everywhere.
-    print("[ART] FALLBACK for '%s'" % card_name)
-    var seed_value: int = absi(str(data.get("name", "card")).hash())
-    var art_index: int = seed_value % 16
-    var fallback: Texture2D = _load_card_art_path("res://assets/cards/art_%02d.png" % art_index)
-    if fallback != null:
-        return fallback
+    # All art resolution goes through the shared CardArt autoload so that
+    # battle cards use the exact same texture as collection and pack opening.
+    # The static _art_cache keeps the autoload from being hit every render frame.
+    var cache_key: String = str(data.get("name", "?")).strip_edges()
+    if _art_cache.has(cache_key):
+        return _art_cache[cache_key] as Texture2D
+    var t: Texture2D = CardArt.resolve(data)
+    if t != null:
+        _art_cache[cache_key] = t
+        return t
+    # Fallback: procedural SVG so the card is never visually blank in battle.
     return _svg_texture(_art_svg())
 
 func _card_back_svg() -> String:

@@ -28,6 +28,7 @@ pointing/emulate_mouse_from_touch=true
 pointing/emulate_touch_from_mouse=true
 
 [autoload]
+CardArt="*res://card_art.gd"
 UpdateManager="*res://update_manager.gd"
 AccessManager="*res://access_manager.gd"
 BillingManager="*res://billing_manager.gd"
