@@ -3668,6 +3668,7 @@ func show_store() -> void:
     button("OPEN OWNED PACKS",Vector2(185,265),Vector2(280,58),show_pack_opening,p)
     button("BUILD A DECK",Vector2(485,265),Vector2(220,58),show_deck_builder,p)
     button("CHECK PURCHASES",Vector2(725,265),Vector2(220,58),BillingManager.restore_pending_purchases,p)
+    button("PULL ODDS",Vector2(945,265),Vector2(105,58),func(): show_pack_odds(show_store),p)
     var billing_text := "Google Play Billing connected" if BillingManager.is_available() else "Cash purchases activate in an installed Google Play test/release build"
     label(billing_text,Vector2(150,345),Vector2(800,34),16,p).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     status_label = label("Next guaranteed Signature Platinum: %d packs" % (40-platinum_pity),Vector2(300,610),Vector2(680,44),20); status_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
@@ -3889,6 +3890,7 @@ func show_pack_opening() -> void:
     pack_visual.add_child(tap_catcher)
     label("TAP THE PACK TO OPEN IT", Vector2(390, 545), Vector2(500, 30), 17).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     label("Platinum pity: %d / 40   •   Average pull target: 1 in 11 packs" % platinum_pity,Vector2(310,580),Vector2(660,30),16).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    button("VIEW PULL ODDS", Vector2(1055, 172), Vector2(170, 40), func(): show_pack_odds(show_pack_opening))
 
     # Bulk-open row: skips the one-at-a-time tap-and-watch flow for players
     # sitting on a stack of packs, going straight to a results grid instead.
@@ -4019,6 +4021,50 @@ func open_packs_bulk(requested: int) -> void:
         if result["platinum_hit"]: platinum_count += 1
     save_profile()
     show_bulk_pack_results(all_pulled, count, platinum_count)
+
+func show_pack_odds(return_screen: Callable) -> void:
+    # Required disclosure for real-money pack purchases (Apple/Google both
+    # treat randomized-rarity packs as loot boxes and require the odds to be
+    # shown before purchase) -- this must mirror roll_rarity()/_roll_one_pack()
+    # exactly, or the disclosure silently drifts out of sync with the real
+    # drop table the next time odds are tuned.
+    clear_screen(); add_background(0.80); header("PULL ODDS", "Odds are identical for every pack, whether earned free or bought with cash")
+    var p := Panel.new(); p.position = Vector2(140, 118); p.size = Vector2(1000, 470)
+    p.add_theme_stylebox_override("panel", style()); root_layer.add_child(p)
+    label("Every pack = 5 cards. Cards 1-4 roll independently; card 5 is a guaranteed Silver-or-better, with a separate chance to be Signature Platinum.", Vector2(30, 14), Vector2(940, 40), 16, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+    label("CARDS 1-4 (EACH ROLLED INDEPENDENTLY)", Vector2(30, 66), Vector2(460, 26), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    var rows_common := [["Legendary", 2.5], ["Epic", 4.0], ["Gold", 7.5], ["Silver", 18.0], ["Bronze", 68.0]]
+    var y := 98
+    for row in rows_common:
+        var rarity: String = row[0]
+        var pct: float = row[1]
+        var l := label(rarity, Vector2(30, y), Vector2(220, 28), 17, p)
+        l.add_theme_color_override("font_color", card_rarity_color(rarity))
+        label("%.1f%%" % pct, Vector2(280, y), Vector2(180, 28), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+        y += 34
+
+    label("CARD 5 (GUARANTEED SILVER-OR-BETTER)", Vector2(520, 66), Vector2(460, 26), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    var rows_slot5 := [["Signature Platinum", 9.09], ["Legendary", 2.27], ["Epic", 3.64], ["Gold", 6.82], ["Silver", 78.18]]
+    y = 98
+    for row in rows_slot5:
+        var rarity: String = row[0]
+        var pct: float = row[1]
+        var display_rarity := "Platinum" if rarity == "Signature Platinum" else rarity
+        var l2 := label(display_rarity, Vector2(520, y), Vector2(220, 28), 17, p)
+        l2.add_theme_color_override("font_color", card_rarity_color(display_rarity))
+        label("~%.2f%%" % pct, Vector2(770, y), Vector2(180, 28), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+        y += 34
+
+    var pity_panel := Panel.new(); pity_panel.position = Vector2(30, 268); pity_panel.size = Vector2(940, 84)
+    pity_panel.add_theme_stylebox_override("panel", solid_style(Color(0.18, 0.14, 0.05), 10)); p.add_child(pity_panel)
+    label("PITY GUARANTEE", Vector2(20, 8), Vector2(900, 24), 16, pity_panel).add_theme_color_override("font_color", GOLD_COLOR)
+    label("If you haven't pulled a Signature Platinum in 40 packs, your next pack's card 5 is guaranteed Signature Platinum. You are currently at %d / 40 packs since your last one." % platinum_pity, Vector2(20, 32), Vector2(900, 46), 15, pity_panel)
+
+    label("Duplicate protection: pulling a card you already own at its copy limit converts it to Vials instead of a wasted duplicate.", Vector2(30, 364), Vector2(940, 30), 15, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    label("Odds apply the same way whether the pack was earned for free (story, login, Trials, VS Mode) or purchased with real money.", Vector2(30, 396), Vector2(940, 30), 15, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+    button("BACK", Vector2(550, 610), Vector2(180, 50), return_screen)
 
 func roll_rarity(guaranteed_silver: bool, force_platinum: bool) -> String:
     if force_platinum: return "Platinum"
