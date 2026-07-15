@@ -4479,12 +4479,8 @@ func _spotlight_reveal(real: Panel, rarity: String) -> void:
 func _load_menu_art_path(path: String) -> Texture2D:
     if _menu_art_cache.has(path):
         return _menu_art_cache[path] as Texture2D
-    # load() resolves Godot-imported JPG/PNG resources in both editor and export.
-    var imported: Texture2D = load(path) as Texture2D
-    if imported != null:
-        _menu_art_cache[path] = imported
-        return imported
-    # Editor/source fallback for images that have not been imported yet.
+    # Read raw bytes first — bypasses Godot's stale .ctex import cache so the
+    # latest source .jpg is always shown in the editor.
     if FileAccess.file_exists(path):
         var bytes: PackedByteArray = FileAccess.get_file_as_bytes(path)
         var image := Image.new()
@@ -4497,20 +4493,57 @@ func _load_menu_art_path(path: String) -> Texture2D:
             var texture := ImageTexture.create_from_image(image)
             _menu_art_cache[path] = texture
             return texture
+    # PCK fallback: exported builds pack .ctex, not raw .jpg — load() is correct there.
+    var imported: Texture2D = load(path) as Texture2D
+    if imported != null:
+        _menu_art_cache[path] = imported
+        return imported
     return null
 
+var _menu_catalog_by_name: Dictionary = {}
+var _menu_catalog_loaded: bool = false
+
+func _ensure_menu_catalog_loaded() -> void:
+    if _menu_catalog_loaded:
+        return
+    _menu_catalog_loaded = true
+    _menu_catalog_by_name.clear()
+    if not FileAccess.file_exists("res://data/cards.json"):
+        return
+    var file := FileAccess.open("res://data/cards.json", FileAccess.READ)
+    if file == null:
+        return
+    var parsed: Variant = JSON.parse_string(file.get_as_text())
+    if parsed is Array:
+        for entry_variant in parsed:
+            if entry_variant is Dictionary:
+                var entry: Dictionary = entry_variant
+                var key := str(entry.get("name", "")).strip_edges().to_lower()
+                if not key.is_empty():
+                    _menu_catalog_by_name[key] = entry.duplicate(true)
+
 func card_art_texture(cd: Dictionary) -> Texture2D:
-    # Use each card's own unique illustration (same lookup as battlefield/hand
-    # cards) everywhere in the menus: collection, crafting, deck builder,
-    # rewards, and packs. Only fall back to the shared 16-image pool when a
-    # card has no catalog ID or no matching art file exists.
+    # Primary: look up catalog JD-XXX id by card name.
+    # Deck/hand dicts carry a numeric story-chapter id (1, 2, 3…) not the
+    # catalog string id, so name-based lookup is the only reliable path.
+    var card_name: String = str(cd.get("name", "")).strip_edges().to_lower()
+    if not card_name.is_empty():
+        _ensure_menu_catalog_loaded()
+        if _menu_catalog_by_name.has(card_name):
+            var catalog_id: String = str(_menu_catalog_by_name[card_name].get("id", "")).strip_edges().to_lower()
+            if not catalog_id.is_empty():
+                for extension in ["jpg", "png", "jpeg"]:
+                    var t: Texture2D = _load_menu_art_path("res://assets/cards/full/%s.%s" % [catalog_id, extension])
+                    if t != null:
+                        return t
+    # Secondary: id field already looks like a catalog id (e.g. "JD-001").
     var card_id: String = str(cd.get("id", "")).strip_edges().to_lower()
-    if not card_id.is_empty():
+    if card_id.begins_with("jd-"):
         for extension in ["jpg", "png", "jpeg"]:
-            var direct_texture: Texture2D = _load_menu_art_path("res://assets/cards/full/%s.%s" % [card_id, extension])
-            if direct_texture != null:
-                return direct_texture
-    var seed_value: int = absi(str(cd.get("id", cd.get("name", "card"))).hash())
+            var t: Texture2D = _load_menu_art_path("res://assets/cards/full/%s.%s" % [card_id, extension])
+            if t != null:
+                return t
+    var seed_value: int = absi(str(cd.get("name", "card")).hash())
     var art_index: int = seed_value % 16
     return _load_menu_art_path("res://assets/cards/art_%02d.png" % art_index)
 
