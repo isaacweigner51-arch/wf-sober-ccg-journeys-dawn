@@ -4479,33 +4479,8 @@ func _spotlight_reveal(real: Panel, rarity: String) -> void:
     if rays != null and is_instance_valid(rays):
         rays.queue_free()
 
-func _load_menu_art_path(path: String) -> Texture2D:
-    # Uses CardView's shared static art cache — the exact same cache battle
-    # uses — so collection and pack opening always return the same Texture2D
-    # object as the battle scene for any given card.
-    if CardView._art_cache.has(path):
-        return CardView._art_cache[path] as Texture2D
-    if FileAccess.file_exists(path):
-        var bytes: PackedByteArray = FileAccess.get_file_as_bytes(path)
-        var image := Image.new()
-        var error: Error = ERR_FILE_UNRECOGNIZED
-        if path.to_lower().ends_with(".jpg") or path.to_lower().ends_with(".jpeg"):
-            error = image.load_jpg_from_buffer(bytes)
-        elif path.to_lower().ends_with(".png"):
-            error = image.load_png_from_buffer(bytes)
-        if error == OK and not image.is_empty():
-            var texture := ImageTexture.create_from_image(image)
-            CardView._art_cache[path] = texture
-            return texture
-    var imported: Texture2D = load(path) as Texture2D
-    if imported != null:
-        CardView._art_cache[path] = imported
-        return imported
-    return null
-
 func _ensure_shared_catalog() -> void:
-    # Populates CardView's static catalog if it hasn't been loaded yet so that
-    # menu art lookups use the exact same name→id table as battle.
+    # Populates CardView's static catalog (shared with battle) if not yet loaded.
     if CardView._catalog_loaded:
         return
     CardView._catalog_loaded = true
@@ -4525,28 +4500,30 @@ func _ensure_shared_catalog() -> void:
                     CardView._catalog_by_name[key] = entry.duplicate(true)
 
 func card_art_texture(cd: Dictionary) -> Texture2D:
-    # Identical lookup to CardView._art_texture(): name → shared catalog →
-    # JD-XXX id → shared static art cache. All three render contexts
-    # (battle, collection, pack opening) resolve to the same Texture2D.
-    var card_name: String = str(cd.get("name", "")).strip_edges().to_lower()
-    if not card_name.is_empty():
-        _ensure_shared_catalog()
-        if CardView._catalog_by_name.has(card_name):
-            var catalog_id: String = str(CardView._catalog_by_name[card_name].get("id", "")).strip_edges().to_lower()
-            if not catalog_id.is_empty():
-                for extension in ["jpg", "png", "jpeg"]:
-                    var t: Texture2D = _load_menu_art_path("res://assets/cards/full/%s.%s" % [catalog_id, extension])
-                    if t != null:
-                        return t
+    # Mirrors resolve_card_full_art() in main.gd exactly so collection,
+    # pack opening, and battle all hit the same Godot import cache (.ctex).
+    # Step 1 — id direct hit (cards from cards.json already carry "JD-001").
     var card_id: String = str(cd.get("id", "")).strip_edges().to_lower()
-    if card_id.begins_with("jd-"):
-        for extension in ["jpg", "png", "jpeg"]:
-            var t: Texture2D = _load_menu_art_path("res://assets/cards/full/%s.%s" % [card_id, extension])
+    if not card_id.is_empty():
+        var direct_path := "res://assets/cards/full/%s.jpg" % card_id
+        if ResourceLoader.exists(direct_path):
+            var t := load(direct_path) as Texture2D
             if t != null:
                 return t
+    # Step 2 — name → catalog id lookup (deck cards carry numeric story ids).
+    _ensure_shared_catalog()
+    var card_name: String = str(cd.get("name", "")).strip_edges().to_lower()
+    if not card_name.is_empty() and CardView._catalog_by_name.has(card_name):
+        var catalog_id: String = str(CardView._catalog_by_name[card_name].get("id", "")).strip_edges().to_lower()
+        if not catalog_id.is_empty():
+            var matched_path := "res://assets/cards/full/%s.jpg" % catalog_id
+            if ResourceLoader.exists(matched_path):
+                var t := load(matched_path) as Texture2D
+                if t != null:
+                    return t
+    # Step 3 — deterministic placeholder (same as resolve_card_full_art fallback).
     var seed_value: int = absi(str(cd.get("name", "card")).hash())
-    var art_index: int = seed_value % 16
-    return _load_menu_art_path("res://assets/cards/art_%02d.png" % art_index)
+    return load("res://assets/cards/art_%02d.png" % (seed_value % 16)) as Texture2D
 
 func card_rarity_color(rarity: String) -> Color:
     if rarity == "Shiny":
