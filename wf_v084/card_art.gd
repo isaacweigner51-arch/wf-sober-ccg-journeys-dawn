@@ -38,6 +38,9 @@ func _load_path(path: String) -> Texture2D:
 	if not exists:
 		return null
 	var t := load(path) as Texture2D
+	print("[CardArt] load(%s) -> %s" % [path, t])
+	if t == null:
+		push_error("[CardArt] load() returned null for path=%s  exists=%s" % [path, exists])
 	if t != null:
 		_cache[path] = t
 	return t

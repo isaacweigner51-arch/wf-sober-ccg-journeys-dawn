@@ -4634,7 +4634,10 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
     p.add_child(art_frame)
 
     var art := TextureRect.new()
-    art.texture = CardArt.resolve(cd)
+    var _art_resolved := CardArt.resolve(cd)
+    print("[menu.card_panel] cd.id=%s  cd.name=%s  resolved=%s" % [cd.get("id","?"), cd.get("name","?"), _art_resolved])
+    art.texture = _art_resolved
+    print("[menu.card_panel] art.texture after assign = %s" % art.texture)
     art.position = Vector2(2, 2)
     art.size = art_frame.size - Vector2(4, 4)
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
