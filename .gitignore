@@ -51,3 +51,12 @@ Thumbs.db
 # Godot editor import cache (regenerated automatically from .import sidecar files)
 .godot/
 attached_assets/
+
+# Android release signing key -- this is the one credential Google Play uses
+# to trust app updates as coming from you. It must never be committed; losing
+# it isn't recoverable (Play won't let you re-key an existing listing), and
+# leaking it lets anyone impersonate your app updates.
+android_keystore/
+export_credentials.cfg
+wf_v084/android_keystore/
+wf_v084/export_credentials.cfg
