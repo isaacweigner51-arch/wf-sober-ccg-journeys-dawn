@@ -3062,7 +3062,7 @@ func starter_recipe(c: String) -> Dictionary:
             # Hope generators: healing, recovery, and Relapse Zone value.
             "JD-001":3, "JD-003":3, "JD-005":3, "JD-006":3, "JD-009":3,
             "JD-010":3, "JD-081":3, "JD-082":3,
-            # Hope payoffs and finishers -- Second Chances is Hope's class
+            # Hope payoffs and finishers -- The Comeback Trail is Hope's class
             # amulet (its Relapse Zone recovery engine), the same role every
             # other class's starter deck gives its own amulet.
             "JD-007":3, "JD-012":2, "JD-015":1, "JD-131":3,
