@@ -121,6 +121,17 @@
     "max_copies": 3
   },
   {
+    "id": "JD-012",
+    "name": "Second Chance",
+    "class": "Hope",
+    "rarity": "Legendary",
+    "cost": 4,
+    "attack": 3,
+    "health": 5,
+    "effect": "On Play: Recover a follower from the Relapse Zone; it gains +2/+2.",
+    "max_copies": 2
+  },
+  {
     "id": "JD-013",
     "name": "Never Forgotten",
     "class": "Hope",
@@ -1334,5 +1345,18 @@
     "effect": "Spell: Destroy all followers. Restore 6 defense to your leader. If 5 or more followers were destroyed, draw 2 cards.",
     "max_copies": 3,
     "is_spell": true
+  },
+  {
+    "id": "JD-131",
+    "name": "Second Chances",
+    "class": "Hope",
+    "rarity": "Gold",
+    "cost": 2,
+    "attack": 0,
+    "health": 0,
+    "effect": "Amulet \u2014 stays on the board and has no Attack or Defense. It cannot be attacked or damaged, and can only be removed by effects that specifically target an Amulet. Whenever you recover a card from the Relapse Zone, gain Progress. At 3 Progress, restore 3 defense and permanently buff an ally. At 6 Progress, transform into Renewed Hope.",
+    "max_copies": 3,
+    "max_health": 0,
+    "is_amulet": true
   }
 ]

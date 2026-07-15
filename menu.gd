@@ -2567,7 +2567,7 @@ func _battle_preview_deck_ids(class_name_value: String, mode_value: String) -> A
                 }
             "Hope":
                 meta_recipe = {
-                    "JD-015":1, "JD-121":3, "JD-001":3, "JD-002":3,
+                    "JD-015":1, "JD-121":3, "JD-131":3, "JD-001":3, "JD-002":3,
                     "JD-003":3, "JD-005":3, "JD-006":3, "JD-007":3,
                     "JD-009":3, "JD-011":2, "JD-013":2, "JD-081":3,
                     "JD-082":3, "JD-083":2
@@ -3061,9 +3061,11 @@ func starter_recipe(c: String) -> Dictionary:
         "Hope": {
             # Hope generators: healing, recovery, and Relapse Zone value.
             "JD-001":3, "JD-003":3, "JD-005":3, "JD-006":3, "JD-009":3,
-            "JD-010":3, "JD-081":3, "JD-082":3, "JD-085":3,
-            # Hope payoffs and finishers.
-            "JD-007":3, "JD-012":2, "JD-015":1,
+            "JD-010":3, "JD-081":3, "JD-082":3,
+            # Hope payoffs and finishers -- Second Chances is Hope's class
+            # amulet (its Relapse Zone recovery engine), the same role every
+            # other class's starter deck gives its own amulet.
+            "JD-007":3, "JD-012":2, "JD-015":1, "JD-131":3,
             # Neutral consistency package.
             "JD-061":3, "JD-071":2, "JD-072":2
         },
