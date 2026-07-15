@@ -721,6 +721,7 @@ var academy_step := 0
 var academy_reward_claimed := false
 var academy_action_stage := 0
 var academy_feedback: Label
+var academy_feedback_chip: Panel
 var access_status: Label
 var access_token_input: LineEdit
 var daily_reward_day := 0
@@ -1797,10 +1798,16 @@ func show_academy_lesson() -> void:
     # lessons (signature cards, sponsor) -> deck building last, as the
     # capstone right before a player would actually go build one.
     var lesson_titles := ["THE BATTLEFIELD", "PLAY A FOLLOWER", "COMBAT", "END YOUR TURN", "SPELLS & AMULETS", "CARD EFFECTS & KEYWORDS", "RECOVERY & REVIVE", "PROVING YOURSELF", "LEADER SIGNATURE CARDS", "SPONSOR & SPONSEE", "BUILDING YOUR DECK"]
-    var mentors := ["Hope Mentor", "Courage Veteran", "Courage Veteran", "Courage Veteran", "Serenity Guardian", "Purpose Champion", "Hope Mentor", "Purpose Champion", "Recovery Academy Dean", "Purpose Champion", "Recovery Academy Dean"]
+    # Mentors now have actual names, not just job titles -- giving every lesson
+    # a consistent character voice instead of a faceless role label. The role
+    # titles are kept as a separate array (mentor_titles) purely so the
+    # portrait-lookup logic below (which matches a title's first word against
+    # CLASSES) keeps working unchanged.
+    var mentor_names := ["Dawn", "Marcus", "Marcus", "Marcus", "Priya", "Theo", "Dawn", "Theo", "Dean Alvarez", "Theo", "Dean Alvarez"]
+    var mentor_titles := ["Hope Mentor", "Courage Veteran", "Courage Veteran", "Courage Veteran", "Serenity Guardian", "Purpose Champion", "Hope Mentor", "Purpose Champion", "Recovery Academy Dean", "Purpose Champion", "Recovery Academy Dean"]
     var lesson_class: String = CLASSES[academy_step % CLASSES.size()]
     var accent := class_color(lesson_class)
-    header(lesson_titles[academy_step], "Lesson %d of %d • %s" % [academy_step + 1, ACADEMY_LESSON_COUNT, mentors[academy_step]])
+    header(lesson_titles[academy_step], "Lesson %d of %d • %s, %s" % [academy_step + 1, ACADEMY_LESSON_COUNT, mentor_names[academy_step], mentor_titles[academy_step]])
 
     # Mentor portrait chip layered onto the header, so each lesson has a face
     # attached to its voice instead of just a name in small text — the header
@@ -1810,7 +1817,7 @@ func show_academy_lesson() -> void:
     mentor_chip.size = Vector2(68, 68)
     mentor_chip.add_theme_stylebox_override("panel", style(accent, 34))
     root_layer.add_child(mentor_chip)
-    var mentor_class: String = mentors[academy_step].split(" ")[0]
+    var mentor_class: String = mentor_titles[academy_step].split(" ")[0]
     var mentor_portrait := TextureRect.new()
     mentor_portrait.texture = class_leader_texture(mentor_class if mentor_class in CLASSES else lesson_class)
     mentor_portrait.position = Vector2(6, 6)
@@ -1870,21 +1877,21 @@ func show_academy_lesson() -> void:
     # line from that lesson's mentor, shown above the mechanical objective,
     # gives every lesson an actual point beyond "click the highlighted thing."
     var mentor_lines := [
-        "Know the ground you're standing on before you're in the middle of a fight. That's how you stay steady when things get hard.",
-        "You don't get through this alone. Every follower you bring onto this board is somebody showing up for you.",
-        "Courage isn't reckless. Clear what's actually in your way first, then go for what matters.",
-        "Getting through one more day makes you stronger for the next one. That's what ending your turn really means.",
-        "Some relief is immediate. Real progress is the kind that keeps paying off, turn after turn.",
-        "The words on a card matter. Learn what they actually mean and you'll never misread one again.",
-        "A setback isn't the end of the story. What matters is what you do the day after.",
-        "Everyone gets do-overs. Just remember every one you take hands your opponent an opening — choose what you throw away with your eyes open.",
-        "Every leader here has one card that says exactly who they are. Find yours.",
-        "Nobody makes it through this by themselves. A sponsor takes the hit so you don't have to.",
-        "Before you walk out that door, know your program. The rules are what keep you honest with yourself.",
+        "Alright, deep breath. Before you throw a single punch, let's just look around — the ground you're standing on is the same ground that gets you through the bad days too.",
+        "Nobody walks in here alone, kid. Every follower you drop on that field showed up for you — so show up for them. Two Play Points, one big first step.",
+        "Courage isn't swinging wild. Clear the guy in your way first, then go for the real target. Sequence matters — in cards, and in life.",
+        "Ending your turn isn't quitting — it's surviving to the next one. Watch what actually happens when the clock resets. It's more than you'd think.",
+        "Some fixes are quick — a spell, a deep breath, gone in a second. Real progress is slower, and it compounds. Let me show you both.",
+        "Words on a card aren't decoration, they're instructions. Learn to actually read them and nothing on this board will ever blindside you again.",
+        "A setback sends you to the Relapse Zone — but that zone has a door out. Watch what happens when I go get someone back.",
+        "Second Chances are real, but they're not free — you hand your opponent an opening every time you take one. Spend them like you mean it.",
+        "Every leader who's ever walked through this Academy has one card that says exactly who they are. Go find yours.",
+        "Nobody graduates from this alone. A Sponsor takes the hit meant for you — that's the whole bond, right there.",
+        "Last stop before the real world: forty cards, your rules, your program. Get this part right and everything else takes care of itself.",
     ]
     var mentor_line := centered_label(mentor_lines[academy_step] if academy_step < mentor_lines.size() else "", Vector2(70, 8), Vector2(950, 40), 15, board)
     mentor_line.add_theme_color_override("font_color", accent.lightened(0.35))
-    var mentor_name_tag := centered_label("— %s" % mentors[academy_step], Vector2(70, 40), Vector2(950, 18), 11, board)
+    var mentor_name_tag := centered_label("— %s, %s" % [mentor_names[academy_step], mentor_titles[academy_step]], Vector2(70, 40), Vector2(950, 18), 11, board)
     mentor_name_tag.modulate = Color(0.7, 0.72, 0.78)
 
     var instruction := centered_label("", Vector2(70, 60), Vector2(950, 40), 19, board)
@@ -1893,8 +1900,10 @@ func show_academy_lesson() -> void:
     var feedback_chip := Panel.new()
     feedback_chip.position = Vector2(170, 452)
     feedback_chip.size = Vector2(750, 56)
+    feedback_chip.pivot_offset = feedback_chip.size * 0.5
     feedback_chip.add_theme_stylebox_override("panel", style(Color(accent.r, accent.g, accent.b, 0.55), 14))
     board.add_child(feedback_chip)
+    academy_feedback_chip = feedback_chip
     academy_feedback = centered_label("Complete the highlighted actions to continue.", Vector2(20, 0), Vector2(710, 56), 18, feedback_chip)
 
     match academy_step:
@@ -1931,6 +1940,15 @@ func show_academy_lesson() -> void:
         10:
             instruction.text = "Learn the rules for building a legal deck before you head to the Deck Builder."
             build_deck_building_lesson(board)
+
+    # Every lesson used to just snap into view the instant clear_screen() ran,
+    # which made stepping through the Academy feel like flipping slides
+    # instead of walking through a guided sequence. A quick fade-in on the
+    # freshly-built root_layer gives each lesson a soft entrance instead of a
+    # hard cut, without touching any of the interactive logic above.
+    root_layer.modulate.a = 0.0
+    var lesson_in := create_tween()
+    lesson_in.tween_property(root_layer, "modulate:a", 1.0, 0.28)
 
 func build_second_chance_lesson(board: Control) -> void:
     # Explicit up-front reference for the discard-count -> Momentum scaling,
@@ -2011,9 +2029,51 @@ func build_second_chance_lesson(board: Control) -> void:
     confirm_button.disabled = true
     controls["confirm"] = confirm_button
 
+# One in-character closing line per lesson, in the same mentor's voice as
+# that lesson's opening line in show_academy_lesson() -- shown as the
+# celebration beat in lesson_complete() so finishing a lesson lands as a
+# small scripted moment instead of the flow just quietly advancing.
+const ACADEMY_CLOSING_LINES := [
+    "Now you know this board better than most people know their own kitchen. Nice work.",
+    "That's it — that's the whole game in one click. You just played your first card like you meant it.",
+    "Clean trade, clean hit. That's how you close a fight without losing yourself in it.",
+    "See? The turn ends, but you don't. Onward.",
+    "One quick win, one slow burn — you just ran both playbooks. Not bad for your first spell and amulet.",
+    "Keywords cracked. You'll never squint at card text again.",
+    "Nobody's really gone until they choose to be. Recovery witnessed.",
+    "You paid the cost and took the swing anyway. That's Proving Yourself, right there.",
+    "Four leaders, four signatures, zero doubt about who you want to play.",
+    "That's the bond. Somebody had your back — remember to return the favor.",
+    "Forty cards, your program, your call. Go build something that's really you.",
+]
+
 func lesson_complete() -> void:
-    academy_feedback_text("Lesson complete — moving forward.")
-    await get_tree().create_timer(0.55).timeout
+    var closing_line: String = ACADEMY_CLOSING_LINES[academy_step] if academy_step < ACADEMY_CLOSING_LINES.size() else "Lesson complete — moving forward."
+    academy_feedback_text("✓ %s" % closing_line)
+
+    # A quick gold pulse on the feedback chip itself turns "the text changed"
+    # into an actual celebration beat -- and a small burst of sparkles off
+    # the same chip reuses the game's existing reward-sparkle visual language
+    # (also used for pack reveals) instead of inventing a new effect.
+    if is_instance_valid(academy_feedback_chip):
+        var chip := academy_feedback_chip
+        var pulse := create_tween()
+        pulse.tween_property(chip, "scale", Vector2(1.04, 1.18), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+        pulse.tween_property(chip, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+        spawn_reward_sparkles(chip.global_position + chip.size * 0.5, 10, [GOLD_COLOR, Color(1, 1, 1)], 70.0)
+
+    # Give the player a moment to actually read the closing line before the
+    # screen moves on, then fade the whole lesson out rather than cutting
+    # straight to the next one. Fixed-duration timers are used instead of
+    # awaiting tween.finished, since a tween killed by an in-flight scene
+    # change here would otherwise hang this await forever and soft-lock the
+    # Academy on this screen.
+    await get_tree().create_timer(0.95).timeout
+    if is_instance_valid(root_layer):
+        var lesson_out := create_tween()
+        lesson_out.tween_property(root_layer, "modulate:a", 0.0, 0.22)
+    await get_tree().create_timer(0.22).timeout
+
     academy_step += 1
     academy_action_stage = 0
     save_profile()
@@ -2077,7 +2137,7 @@ func build_play_follower_lesson(board: Control) -> void:
 func build_combat_lesson(board: Control) -> void:
     var ally: Button
     ally = academy_card("COURAGE ROOKIE", "3/3 • Ready", Vector2(160, 270), class_color("Courage"), func():
-        academy_feedback_text("Select a target first.", false)
+        academy_feedback_text("Pick a target first — I like where your head's at, but there's nothing to hit yet.", false)
     , board)
     var enemy: Button
     enemy = academy_card("ENEMY GUARD", "2/2", Vector2(455, 125), Color(0.85,0.30,0.25), func():
@@ -2093,7 +2153,7 @@ func build_combat_lesson(board: Control) -> void:
     var leader: Button
     leader = button("ENEMY LEADER\n20 DEFENSE", Vector2(745,125), Vector2(210,118), func():
         if academy_action_stage == 0:
-            academy_feedback_text("Defeat the enemy guard before attacking the leader.", false)
+            academy_feedback_text("Guard's still standing. Clear your path before you go for the leader.", false)
             return
         if academy_action_stage != 1: return
         academy_action_stage = 2
@@ -2308,7 +2368,7 @@ func build_spell_amulet_lesson(board: Control) -> void:
     var play_amulet: Button
     play_amulet = button("PLAY DAILY PROGRESS", Vector2(60, 320), Vector2(280, 56), func():
         if academy_action_stage != 1:
-            academy_feedback_text("Cast Deep Breath first.", false)
+            academy_feedback_text("Deep Breath first, Amulet second. One step at a time.", false)
             return
         academy_action_stage = 2
         if is_instance_valid(play_amulet):
@@ -2320,7 +2380,7 @@ func build_spell_amulet_lesson(board: Control) -> void:
     var end_turn_zero_pp: Button
     end_turn_zero_pp = button("END TURN WITH 0 PP LEFT", Vector2(360, 320), Vector2(300, 56), func():
         if academy_action_stage != 2:
-            academy_feedback_text("Play Daily Progress first.", false)
+            academy_feedback_text("Nothing's counting yet — get Daily Progress on the board first.", false)
             return
         progress[0] += 1
         safe_set_text(progress_note, "Progress: %d / 6" % progress[0])
@@ -2349,7 +2409,7 @@ func build_recovery_lesson(board: Control) -> void:
     var recover: Button
     recover = button("SECOND CHANCE\nRecover a follower",Vector2(435,285),Vector2(220,95),func():
         if academy_action_stage != 1:
-            academy_feedback_text("Move the follower into the Relapse Zone first.", false)
+            academy_feedback_text("Nothing to recover yet — send someone to the Relapse Zone first.", false)
             return
         academy_action_stage = 2
         safe_set_text(relapse, "RELAPSE ZONE\n0 cards")
@@ -2361,7 +2421,7 @@ func build_recovery_lesson(board: Control) -> void:
     var overdraw: Button
     overdraw = button("DRAW AT 10 / 10\nTest overdraw",Vector2(770,285),Vector2(220,95),func():
         if academy_action_stage != 2:
-            academy_feedback_text("Recover the follower first.", false)
+            academy_feedback_text("Not yet — bring your follower back first, then we'll test the overdraw.", false)
             return
         academy_action_stage = 3
         safe_set_text(overdraw, "REVIVED ✓\nCard moved to deck bottom")
@@ -2381,7 +2441,7 @@ func build_sponsor_lesson(board: Control) -> void:
     var sponsee: Button
     sponsee = academy_card("NEWCOMER", "Choose as Sponsee", Vector2(455,275), class_color("Hope"), func():
         if academy_action_stage != 1:
-            academy_feedback_text("Play The Sponsor first.", false)
+            academy_feedback_text("No Sponsor, no Sponsee. Play The Sponsor first.", false)
             return
         academy_action_stage = 2
         safe_set_text(sponsee, "SPONSEE\n4/4 • BONDED ✓")
@@ -2390,7 +2450,7 @@ func build_sponsor_lesson(board: Control) -> void:
     var protect: Button
     protect = button("ENEMY STRIKE\nDeal lethal damage",Vector2(790,285),Vector2(220,95),func():
         if academy_action_stage != 2:
-            academy_feedback_text("Choose the Sponsee first.", false)
+            academy_feedback_text("Pick your Sponsee before the hit lands.", false)
             return
         academy_action_stage = 3
         safe_set_text(protect, "PROTECTED ✓\nSponsee survives at 1")
@@ -2457,12 +2517,25 @@ func show_academy_graduation() -> void:
     var p := Panel.new(); p.position=Vector2(220,72); p.size=Vector2(840,575); p.add_theme_stylebox_override("panel",style(GOLD_COLOR,22)); root_layer.add_child(p)
     var t := label("THE FIRST DAY COMPLETE",Vector2(40,42),Vector2(760,58),34,p); t.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; t.add_theme_color_override("font_color",GOLD_COLOR)
     label("You learned the foundations of WF Sober CCG.",Vector2(80,125),Vector2(680,50),21,p).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    label("YOUR REWARD\n\nChoose one legal 40-card starter deck\n500 Gold",Vector2(120,210),Vector2(600,150),27,p).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    # A short in-character send-off from the Dean closes out the Academy's
+    # narrative through-line -- every lesson had a mentor voice, so the
+    # capstone screen should too, instead of ending on plain reward copy.
+    var dean_line := label("\"Eleven lessons in, and you already know more than you think you do. What you do with it next is up to you.\" — Dean Alvarez",Vector2(90,168),Vector2(660,50),14,p)
+    dean_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    dean_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    dean_line.add_theme_color_override("font_color", GOLD_COLOR.lightened(0.35))
+    label("YOUR REWARD\n\nChoose one legal 40-card starter deck\n500 Gold",Vector2(120,225),Vector2(600,150),27,p).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     if academy_complete:
         label("Training already completed — rewards can only be claimed once.",Vector2(130,390),Vector2(580,45),17,p).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
         button("RETURN HOME",Vector2(270,470),Vector2(300,58),show_home,p)
     else:
         button("CHOOSE YOUR STARTER DECK",Vector2(220,455),Vector2(400,64),show_graduation_class_choice,p)
+
+    # Same soft entrance used for every lesson, so graduation reads as the
+    # last beat of the same guided sequence rather than an abrupt jump-cut.
+    root_layer.modulate.a = 0.0
+    var grad_in := create_tween()
+    grad_in.tween_property(root_layer, "modulate:a", 1.0, 0.32)
 
 func show_graduation_class_choice() -> void:
     clear_screen(); add_background(0.70); header("CHOOSE YOUR PATH","Your reward is one exact 40-card starter deck and 500 Gold")
