@@ -690,6 +690,7 @@ var packs_opened := 0
 var platinum_pity := 0
 var selected_class := ""
 var collection_owned: Dictionary = {}
+var collection_shiny_owned: Dictionary = {}  # card_id -> shiny copy count (draw-only, no crafting)
 var _menu_art_cache: Dictionary = {}
 var saved_deck: Array = []
 var saved_decks: Dictionary = {}
@@ -712,6 +713,11 @@ var collection_filter_class := "All"
 var collection_filter_rarity := "All"
 var collection_search_query := ""
 var _collection_focus_search_next := false
+# When true, the collection/crafting binder only shows cards the player
+# doesn't yet own at their copy limit -- the direct answer to "which card do
+# I craft with these Vials I just earned?" without scrolling past cards
+# already owned.
+var collection_missing_only := false
 var battle_select_class := "Hope"
 var battle_select_mode := "custom"
 var battle_opponent_class := "Courage"
@@ -896,6 +902,7 @@ func load_profile() -> void:
         platinum_pity = int(cfg.get_value("packs", "platinum_pity", 0))
         selected_class = str(cfg.get_value("profile", "class", ""))
         collection_owned = cfg.get_value("collection", "owned", {})
+        collection_shiny_owned = cfg.get_value("collection", "shiny_owned", {})
         selected_deck_class = str(cfg.get_value("deck", "class", "Hope"))
         saved_decks = cfg.get_value("decks", "by_class", {})
         if saved_decks.is_empty():
@@ -961,6 +968,7 @@ func save_profile() -> void:
     cfg.set_value("packs", "platinum_pity", platinum_pity)
     cfg.set_value("profile", "class", selected_class)
     cfg.set_value("collection", "owned", collection_owned)
+    cfg.set_value("collection", "shiny_owned", collection_shiny_owned)
     saved_decks[selected_deck_class] = saved_deck.duplicate()
     cfg.set_value("deck", "cards", saved_deck) # Backward-compatible active deck.
     cfg.set_value("deck", "class", selected_deck_class)
@@ -3998,8 +4006,19 @@ func _roll_one_pack() -> Dictionary:
     for i in range(5):
         var rarity := roll_rarity(i == 4, platinum_hit and i == 4)
         var cd := random_card_of_rarity(rarity)
-        pulled.append(cd)
-        add_card_to_collection(cd)
+        var dup_info := add_card_to_collection(cd)
+        # Duplicate/vial info is stamped onto a *copy* of the card dict, not
+        # the shared entry inside `cards` -- mutating the master card list
+        # here would leak this pull's duplicate status onto every future
+        # pull of the same card.
+        var pulled_cd := cd.duplicate()
+        pulled_cd["_dup_info"] = dup_info
+        # 0.5% per-card shiny chance — draw-only, cannot be crafted.
+        # Shiny tracks in collection_shiny_owned independently of regular copies.
+        if randf() < 0.005:
+            pulled_cd["is_shiny"] = true
+            pulled_cd["_shiny_dup_info"] = add_shiny_to_collection(pulled_cd)
+        pulled.append(pulled_cd)
     if platinum_hit: platinum_pity = 0
     return {"pulled": pulled, "platinum_hit": platinum_hit}
 
@@ -4061,8 +4080,12 @@ func show_pack_odds(return_screen: Callable) -> void:
     label("PITY GUARANTEE", Vector2(20, 8), Vector2(900, 24), 16, pity_panel).add_theme_color_override("font_color", GOLD_COLOR)
     label("If you haven't pulled a Signature Platinum in 40 packs, your next pack's card 5 is guaranteed Signature Platinum. You are currently at %d / 40 packs since your last one." % platinum_pity, Vector2(20, 32), Vector2(900, 46), 15, pity_panel)
 
-    label("Duplicate protection: pulling a card you already own at its copy limit converts it to Vials instead of a wasted duplicate.", Vector2(30, 364), Vector2(940, 30), 15, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    label("Odds apply the same way whether the pack was earned for free (story, login, Trials, VS Mode) or purchased with real money.", Vector2(30, 396), Vector2(940, 30), 15, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    var shiny_panel := Panel.new(); shiny_panel.position = Vector2(30, 360); shiny_panel.size = Vector2(940, 52)
+    shiny_panel.add_theme_stylebox_override("panel", solid_style(Color(0.10, 0.06, 0.18), 10)); p.add_child(shiny_panel)
+    var shiny_title := label("✦  SHINY VARIANTS  (0.5% per card drawn)", Vector2(20, 6), Vector2(900, 22), 15, shiny_panel)
+    shiny_title.add_theme_color_override("font_color", Color(0.85, 0.62, 1.0))
+    label("Any card drawn from a pack has an independent 0.5% chance to be a shiny holographic variant. Shinies can only be drawn — never crafted.", Vector2(20, 28), Vector2(900, 20), 13, shiny_panel)
+    label("Odds apply the same way whether the pack was earned for free (story, login, Trials, VS Mode) or purchased with real money.", Vector2(30, 420), Vector2(940, 30), 15, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
     button("BACK", Vector2(550, 610), Vector2(180, 50), return_screen)
 
@@ -4082,12 +4105,36 @@ func random_card_of_rarity(rarity: String) -> Dictionary:
     if pool.is_empty(): pool = cards
     return pool[randi_range(0,pool.size()-1)]
 
-func add_card_to_collection(cd: Dictionary) -> void:
+func add_card_to_collection(cd: Dictionary) -> Dictionary:
+    # Returns whether this pull was a duplicate (already owned at its copy
+    # limit) and, if so, how many Vials it was converted to -- callers that
+    # display the pull (pack reveal, bulk results) need this to tell the
+    # player a duplicate was silently turned into currency instead of
+    # letting it look identical to a brand-new card.
     var id := str(cd["id"]); var rarity := str(cd["rarity"]); var owned := int(collection_owned.get(id,0)); var limit := int(COPY_LIMITS.get(rarity,1))
     if owned >= limit:
-        dust_balance += int(DUST_VALUES.get(rarity,10))
+        var vials := int(DUST_VALUES.get(rarity,10))
+        dust_balance += vials
+        return {"is_duplicate": true, "vials": vials}
     else:
         collection_owned[id] = owned + 1
+        return {"is_duplicate": false, "vials": 0}
+
+func add_shiny_to_collection(cd: Dictionary) -> Dictionary:
+    # Shiny variants track in a parallel dict; same COPY_LIMITS apply but
+    # shiny dupes are worth triple the regular Vial value — a shiny duplicate
+    # is far rarer than a regular one so it should feel meaningfully more
+    # valuable. Shiny cards cannot be crafted, only drawn from packs.
+    var id := str(cd["id"]); var rarity := str(cd["rarity"])
+    var owned := int(collection_shiny_owned.get(id, 0))
+    var limit := int(COPY_LIMITS.get(rarity, 1))
+    if owned >= limit:
+        var vials := int(DUST_VALUES.get(rarity, 10)) * 3
+        dust_balance += vials
+        return {"is_duplicate": true, "vials": vials}
+    else:
+        collection_shiny_owned[id] = owned + 1
+        return {"is_duplicate": false, "vials": 0}
 
 func pack_card_back(pos: Vector2, size_value: Vector2) -> Panel:
     # A face-down placeholder so the reveal reads as an actual pack being
@@ -4117,7 +4164,7 @@ func pack_rarity_burst(center: Vector2, rarity: String) -> void:
     # A brief radial flash sized and colored by rarity so a Legendary/Platinum
     # pull actually feels bigger than a Bronze one, instead of every card
     # revealing with identical, flat presentation.
-    var scale_by_rarity := {"Bronze": 60.0, "Silver": 75.0, "Gold": 95.0, "Signature Gold": 95.0, "Epic": 115.0, "Legendary": 140.0, "Platinum": 175.0}
+    var scale_by_rarity := {"Bronze": 60.0, "Silver": 75.0, "Gold": 95.0, "Signature Gold": 95.0, "Epic": 115.0, "Legendary": 140.0, "Platinum": 175.0, "Shiny": 130.0}
     var radius: float = scale_by_rarity.get(rarity, 70.0)
     var glow := ColorRect.new()
     glow.color = card_rarity_color(rarity)
@@ -4142,9 +4189,10 @@ func show_pack_results(pulled: Array, platinum_hit: bool) -> void:
         var back := pack_card_back(pos, Vector2(220, 340))
         root_layer.add_child(back)
         backs.append(back)
-    button("OPEN ANOTHER (%d)" % pack_inventory,Vector2(405,550),Vector2(230,55),show_pack_opening)
-    button("COLLECTION",Vector2(645,550),Vector2(180,55),show_collection)
-    button("DECK BUILDER",Vector2(835,550),Vector2(200,55),show_deck_builder)
+    button("OPEN ANOTHER (%d)" % pack_inventory,Vector2(255,550),Vector2(230,55),show_pack_opening)
+    button("CRAFT CARDS",Vector2(495,550),Vector2(190,55),show_craft_screen)
+    button("COLLECTION",Vector2(695,550),Vector2(180,55),show_collection)
+    button("DECK BUILDER",Vector2(885,550),Vector2(200,55),show_deck_builder)
     # Fire-and-forget: the reveal animation must never gate the buttons above
     # from appearing (a stuck tween here should never be able to strand the
     # player on this screen with no way forward).
@@ -4158,9 +4206,19 @@ func show_bulk_pack_results(pulled: Array, pack_count: int, platinum_count: int)
     # first, so a big bulk-open still reads as "here's everything you got"
     # instead of forcing a long wait through repeated small animations.
     clear_screen(); add_background(0.80)
+    # Per-card "DUPLICATE +N VIALS" badges tell the story of one card; players
+    # opening dozens of packs at once also want the single number "how much
+    # did I just get overall", which no individual badge answers on its own.
+    var total_dup_vials := 0
+    for cd in pulled:
+        var dup_info: Dictionary = cd.get("_dup_info", {})
+        if dup_info.get("is_duplicate", false):
+            total_dup_vials += int(dup_info.get("vials", 0))
     var subtitle := "%d packs opened" % pack_count
     if platinum_count > 0:
         subtitle += "  •  %d SIGNATURE PLATINUM!" % platinum_count
+    if total_dup_vials > 0:
+        subtitle += "  •  +%d VIALS FROM DUPLICATES" % total_dup_vials
     header("PACKS OPENED", subtitle); currency_bar()
 
     var sorted_pulled: Array = pulled.duplicate()
@@ -4198,9 +4256,10 @@ func show_bulk_pack_results(pulled: Array, pack_count: int, platinum_count: int)
         wrap.add_child(cp)
         grid.add_child(wrap)
 
-    button("OPEN ANOTHER (%d)" % pack_inventory, Vector2(405, 580), Vector2(230, 55), show_pack_opening)
-    button("COLLECTION", Vector2(645, 580), Vector2(180, 55), show_collection)
-    button("DECK BUILDER", Vector2(835, 580), Vector2(200, 55), show_deck_builder)
+    button("OPEN ANOTHER (%d)" % pack_inventory, Vector2(255, 580), Vector2(230, 55), show_pack_opening)
+    button("CRAFT CARDS", Vector2(495, 580), Vector2(190, 55), show_craft_screen)
+    button("COLLECTION", Vector2(695, 580), Vector2(180, 55), show_collection)
+    button("DECK BUILDER", Vector2(885, 580), Vector2(200, 55), show_deck_builder)
 
     # Bulk-open trades the per-card flip/spotlight sequence for speed, but it
     # shouldn't feel silent or instant either -- one rarity-appropriate sound
@@ -4232,7 +4291,7 @@ func _stagger_fade_in_grid(grid: GridContainer) -> void:
 # sfx grows with rarity so a bronze pull stays quick/quiet and a
 # legendary/platinum pull actually announces itself.
 const PACK_REVEAL_SFX := {"Bronze": "draw", "Silver": "draw", "Gold": "evolve", "Signature Gold": "evolve", "Epic": "evolve_new", "Legendary": "evolve_cinematic", "Platinum": "platinum"}
-const PACK_REVEAL_TITLE := {"Epic": "EPIC PULL!", "Legendary": "LEGENDARY PULL!", "Platinum": "SIGNATURE PLATINUM!"}
+const PACK_REVEAL_TITLE := {"Epic": "EPIC PULL!", "Legendary": "LEGENDARY PULL!", "Platinum": "SIGNATURE PLATINUM!", "Shiny": "✦  SHINY PULL!  ✦"}
 
 func _animate_pack_reveal(pulled: Array, backs: Array, platinum_hit: bool) -> void:
     for i in range(pulled.size()):
@@ -4263,8 +4322,9 @@ func _animate_pack_reveal(pulled: Array, backs: Array, platinum_hit: bool) -> vo
             continue
         var cd: Dictionary = pulled[i]
         var rarity := str(cd.get("rarity", "Bronze"))
+        var is_shiny_pull := bool(cd.get("is_shiny", false))
         play_pack_sfx(str(PACK_REVEAL_SFX.get(rarity, "draw")))
-        pack_rarity_burst(pos + size_value / 2.0, rarity)
+        pack_rarity_burst(pos + size_value / 2.0, "Shiny" if is_shiny_pull else rarity)
         var real := card_panel(cd, pos, size_value)
         real.pivot_offset = size_value / 2.0
         real.scale.x = 0.0
@@ -4276,11 +4336,11 @@ func _animate_pack_reveal(pulled: Array, backs: Array, platinum_hit: bool) -> vo
         flip_in.tween_property(real, "scale:x", 1.0, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
         flip_in.tween_property(real, "scale", Vector2(1.05, 0.95), 0.07).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
         flip_in.tween_property(real, "scale", Vector2(1.0, 1.0), 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-        if rarity in ["Epic", "Legendary", "Platinum"]:
+        if rarity in ["Epic", "Legendary", "Platinum"] or is_shiny_pull:
             await flip_in.finished
             if not is_instance_valid(real):
                 continue
-            await _spotlight_reveal(real, rarity)
+            await _spotlight_reveal(real, "Shiny" if is_shiny_pull else rarity)
 
 func _spotlight_reveal(real: Panel, rarity: String) -> void:
     # The single biggest lever for "feeling rewarded": Epic/Legendary/Platinum
@@ -4292,7 +4352,7 @@ func _spotlight_reveal(real: Panel, rarity: String) -> void:
     var origin_scale := real.scale
     var origin_parent := real.get_parent()
     var screen_center := Vector2(640.0, 300.0)
-    var target_scale: Vector2 = Vector2(1.55, 1.55) if rarity == "Platinum" else (Vector2(1.4, 1.4) if rarity == "Legendary" else Vector2(1.22, 1.22))
+    var target_scale: Vector2 = Vector2(1.55, 1.55) if rarity == "Platinum" else (Vector2(1.4, 1.4) if rarity == "Legendary" else (Vector2(1.32, 1.32) if rarity == "Shiny" else Vector2(1.22, 1.22)))
     var target_position: Vector2 = screen_center - (real.size * target_scale) / 2.0
 
     var dimmer := ColorRect.new()
@@ -4310,7 +4370,7 @@ func _spotlight_reveal(real: Panel, rarity: String) -> void:
     # spinning starburst gives Legendary/Platinum an actual radiant-altar
     # backdrop instead of just empty dimmed space.
     var rays: TextureRect = null
-    if rarity in ["Legendary", "Platinum"]:
+    if rarity in ["Legendary", "Platinum", "Shiny"]:
         var ray_gradient := Gradient.new()
         ray_gradient.colors = PackedColorArray([Color(glow_color.r, glow_color.g, glow_color.b, 0.0), Color(glow_color.r, glow_color.g, glow_color.b, 0.5), Color(glow_color.r, glow_color.g, glow_color.b, 0.0)])
         ray_gradient.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
@@ -4352,7 +4412,7 @@ func _spotlight_reveal(real: Panel, rarity: String) -> void:
     # two tiers get a distinct orchestral fanfare stacked on top of it right
     # as the card rises, so a Legendary/Platinum pull is audibly bigger than
     # just "a louder version of the same blip".
-    if rarity == "Legendary":
+    if rarity == "Legendary" or rarity == "Shiny":
         play_pack_sfx("legendary_fanfare", -2.0)
     elif rarity == "Platinum":
         play_pack_sfx("platinum_fanfare")
@@ -4455,6 +4515,8 @@ func card_art_texture(cd: Dictionary) -> Texture2D:
     return _load_menu_art_path("res://assets/cards/art_%02d.png" % art_index)
 
 func card_rarity_color(rarity: String) -> Color:
+    if rarity == "Shiny":
+        return Color(0.85, 0.62, 1.0)  # Holographic purple-white
     if rarity in ["Gold", "Signature Gold"]:
         return Color(1.0, 0.76, 0.20)
     elif rarity == "Epic":
@@ -4706,6 +4768,32 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
         effect.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
         effect.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
+    # A duplicate pull (already owned at its copy limit, silently converted
+    # to Vials by add_card_to_collection) must never look identical to a
+    # brand-new card in the reveal/results screens -- stamp a badge over the
+    # art whenever the caller tagged this card dict with _dup_info. Card
+    # dicts everywhere else (collection, deck builder, previews) never carry
+    # this key, so the badge only ever appears on actual pack pulls.
+    var dup_info: Dictionary = cd.get("_dup_info", {})
+    if bool(dup_info.get("is_duplicate", false)):
+        var dup_badge := Panel.new()
+        var dup_badge_h: float = clampf(size_value.y * 0.16, 20.0, 30.0)
+        dup_badge.position = Vector2(art_frame.position.x, art_frame.position.y + art_frame.size.y - dup_badge_h)
+        dup_badge.size = Vector2(art_frame.size.x, dup_badge_h)
+        dup_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        dup_badge.z_index = 25
+        var dup_style := StyleBoxFlat.new()
+        dup_style.bg_color = Color(0.1, 0.03, 0.16, 0.92)
+        dup_style.border_color = Color(0.78, 0.5, 1.0, 0.95)
+        dup_style.set_border_width_all(2)
+        dup_style.set_corner_radius_all(0)
+        dup_badge.add_theme_stylebox_override("panel", dup_style)
+        p.add_child(dup_badge)
+        var dup_label := label("DUPLICATE +%d VIALS" % int(dup_info.get("vials", 0)), Vector2(0, 0), dup_badge.size, 9 if compact_panel else 11, dup_badge)
+        dup_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        dup_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        dup_label.add_theme_color_override("font_color", Color(0.92, 0.82, 1.0))
+
     if previewable:
         var tap_catcher := Button.new()
         tap_catcher.flat = true
@@ -4716,6 +4804,28 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
         tap_catcher.tooltip_text = "Tap to inspect this card"
         tap_catcher.pressed.connect(show_card_preview.bind(cd))
         p.add_child(tap_catcher)
+
+    # Shiny ownership badge — a small ✦ N in the top-right corner so players
+    # can see at a glance which cards they own shiny copies of while browsing
+    # collection or crafting screens. Only added to non-shiny panels; a shiny
+    # card panel already renders with the rainbow foil, so the badge is
+    # redundant and visually noisy on top of that effect.
+    if not bool(cd.get("is_shiny", false)):
+        var _shiny_count := int(collection_shiny_owned.get(str(cd.get("id", "")), 0))
+        if _shiny_count > 0:
+            var _badge := Label.new()
+            _badge.text = "✦ %d" % _shiny_count
+            _badge.position = Vector2(4, 4)
+            _badge.size = Vector2(size_value.x - 8, 20)
+            _badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+            _badge.add_theme_font_size_override("font_size", 12)
+            _badge.add_theme_color_override("font_color", Color(0.88, 0.65, 1.0))
+            _badge.add_theme_color_override("font_shadow_color", Color.BLACK)
+            _badge.add_theme_constant_override("shadow_offset_x", 1)
+            _badge.add_theme_constant_override("shadow_offset_y", 1)
+            _badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            _badge.z_index = 50
+            p.add_child(_badge)
 
     return p
 
@@ -4771,6 +4881,21 @@ func _collection_set_rarity_filter(r: String) -> void:
     collection_filter_rarity = r
     show_collection()
 
+func _collection_set_missing_only(v: bool) -> void:
+    collection_missing_only = v
+    show_collection()
+
+func show_craft_screen() -> void:
+    # Direct shortcut from pack results ("I just got Vials, now what?") into
+    # a collection view pre-filtered to what those Vials can actually buy --
+    # clearing class/rarity/search filters so a missing card never hides
+    # behind whatever filter was left set from a previous visit.
+    collection_filter_class = "All"
+    collection_filter_rarity = "All"
+    collection_search_query = ""
+    collection_missing_only = true
+    show_collection()
+
 func _collection_set_search(text: String) -> void:
     collection_search_query = text
     _collection_focus_search_next = true
@@ -4783,7 +4908,9 @@ func show_collection() -> void:
     # (class, then rarity, then cost, then name) turn it into something you
     # can actually navigate, and an owned-count summary up top replaces
     # having to scroll the whole binder just to gauge collection progress.
-    clear_screen(); add_background(0.82); header("COLLECTION & CRAFTING","Craft any card from any class • Deck class only matters when building"); currency_bar()
+    clear_screen(); add_background(0.82)
+    header("COLLECTION & CRAFTING", "Showing cards you're missing" if collection_missing_only else "Craft any card from any class • Deck class only matters when building")
+    currency_bar()
     var guide := label("CREATE: Bronze 50  •  Silver 150  •  Gold 500  •  Epic 900  •  Legendary 2,000  •  Platinum 4,500",Vector2(90,118),Vector2(1100,26),15)
     guide.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     guide.add_theme_color_override("font_color", Color(0.78,0.90,1.0))
@@ -4815,6 +4942,18 @@ func show_collection() -> void:
         search_box.grab_focus()
         search_box.caret_column = search_box.text.length()
         _collection_focus_search_next = false
+
+    var missing_toggle := button(
+        "✓ MISSING ONLY" if collection_missing_only else "MISSING ONLY",
+        Vector2(858, 172), Vector2(180, 28),
+        _collection_set_missing_only.bind(not collection_missing_only)
+    )
+    missing_toggle.add_theme_font_size_override("font_size", 12)
+    if collection_missing_only:
+        missing_toggle.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 6))
+        missing_toggle.add_theme_stylebox_override("hover", solid_style(GOLD_COLOR.lightened(0.15), 6))
+        missing_toggle.add_theme_color_override("font_color", Color(0.08, 0.06, 0.02))
+        missing_toggle.add_theme_color_override("font_hover_color", Color(0.08, 0.06, 0.02))
 
     var class_tabs := ["All"] + CLASSES + ["Neutral"]
     var tab_w: float = 1224.0 / float(class_tabs.size())
@@ -4939,6 +5078,11 @@ func _collection_filtered_sorted_cards() -> Array:
             continue
         if collection_filter_rarity != "All" and str(cd.get("rarity", "")) != collection_filter_rarity:
             continue
+        if collection_missing_only:
+            var owned_count := int(collection_owned.get(str(cd["id"]), 0))
+            var copy_limit := int(COPY_LIMITS.get(str(cd.get("rarity", "Bronze")), 1))
+            if owned_count >= copy_limit:
+                continue
         if not query.is_empty():
             var name_match := str(cd.get("name", "")).to_lower().contains(query)
             var effect_match := str(cd.get("effect", "")).to_lower().contains(query)

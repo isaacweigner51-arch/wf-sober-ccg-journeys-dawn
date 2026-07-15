@@ -25,6 +25,9 @@ var ready_glow: ColorRect
 var foil_glow: ColorRect
 var living_glow: Panel
 var shine_strip: ColorRect
+var shiny_rainbow: ColorRect
+var shiny_sparks: Array = []
+var _spark_timers: Array = []
 var hovering := false
 var shimmer_time := 0.0
 var idle_phase := 0.0
@@ -310,6 +313,26 @@ func _build() -> void:
     foil_glow.visible = str(data.get("rarity", "Bronze")) == "Platinum" or bool(data.get("evolved", false))
     frame.add_child(foil_glow)
 
+    # Shiny: rainbow foil overlay + 10 sparkle dots for the holographic effect.
+    # Visibility is driven entirely by is_shiny in the card data dict, so any
+    # CardView receiving a shiny card renders correctly without extra wiring.
+    var _is_shiny: bool = bool(data.get("is_shiny", false))
+    shiny_rainbow = ColorRect.new()
+    shiny_rainbow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    shiny_rainbow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    shiny_rainbow.color = Color(0.8, 0.4, 1.0, 0.0)
+    shiny_rainbow.visible = _is_shiny
+    frame.add_child(shiny_rainbow)
+    for _si in 10:
+        var _sp := ColorRect.new()
+        _sp.size = Vector2(5, 5)
+        _sp.color = Color(1.0, 1.0, 0.9, 0.0)
+        _sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        _sp.visible = _is_shiny
+        frame.add_child(_sp)
+        shiny_sparks.append(_sp)
+        _spark_timers.append(randf_range(0.0, 2.8))
+
     name_label = Label.new()
     name_label.position = Vector2(8, 4)
     name_label.size = Vector2(custom_minimum_size.x - 16, 24)
@@ -472,6 +495,21 @@ func _process(delta: float) -> void:
     if foil_glow != null and foil_glow.visible:
         var pulse: float = (sin(shimmer_time * 3.2) + 1.0) * 0.5
         foil_glow.color = Color(0.62 + pulse * 0.25, 0.86 + pulse * 0.10, 1.0, 0.08 + pulse * 0.12)
+    if shiny_rainbow != null and shiny_rainbow.visible:
+        # Rainbow foil: slow hue cycle across the full card surface
+        shiny_rainbow.color = Color.from_hsv(fmod(shimmer_time * 0.18, 1.0), 0.60, 1.0, 0.20)
+        # Sparkle dots: each flashes on its own timer at a random card position
+        for _si in shiny_sparks.size():
+            var _old_t: float = _spark_timers[_si]
+            _spark_timers[_si] = fmod(_old_t + delta, 2.8)
+            var _phase: float = _spark_timers[_si]
+            var _sp: ColorRect = shiny_sparks[_si]
+            if _old_t > _phase:  # timer just wrapped — pick a new random position
+                _sp.position = Vector2(randf_range(2.0, custom_minimum_size.x - 8.0), randf_range(2.0, custom_minimum_size.y - 8.0))
+            var _bright := 0.0
+            if _phase < 0.30: _bright = _phase / 0.30
+            elif _phase < 0.60: _bright = 1.0 - (_phase - 0.30) / 0.30
+            _sp.color = Color.from_hsv(fmod(shimmer_time * 0.4 + float(_si) * 0.1, 1.0), 0.4, 1.0, _bright * 0.92)
     if living_glow != null:
         living_glow.modulate.a = 0.42 + life_wave * 0.35
     if art_rect != null and not hidden_card:
@@ -502,6 +540,8 @@ func _living_glow_style() -> StyleBoxFlat:
     elif rarity == "Platinum": glow = Color(0.62, 0.88, 1.0, 0.48)
     if bool(data.get("evolved", false)):
         glow = Color(0.34, 0.92, 1.0, 0.58)
+    if bool(data.get("is_shiny", false)):
+        glow = Color(0.88, 0.65, 1.0, 0.62)
     style.border_color = glow
     style.set_border_width_all(3)
     style.set_corner_radius_all(9)
