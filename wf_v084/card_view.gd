@@ -670,14 +670,21 @@ func _art_texture() -> Texture2D:
     # already present, so the only reliable key into the art files is the
     # name → catalog lookup done here before touching data["id"] at all.
     var card_name: String = str(data.get("name", "")).strip_edges().to_lower()
+    print("[ART] card='%s' raw_id='%s'" % [card_name, str(data.get("id", ""))])
     if not card_name.is_empty():
         _ensure_catalog_loaded()
+        print("[ART] catalog size=%d has_name=%s" % [_catalog_by_name.size(), str(_catalog_by_name.has(card_name))])
         if _catalog_by_name.has(card_name):
             var catalog_id: String = str(_catalog_by_name[card_name].get("id", "")).strip_edges().to_lower()
+            print("[ART] catalog_id='%s'" % catalog_id)
             if not catalog_id.is_empty():
                 for extension in ["jpg", "png", "jpeg"]:
-                    var t: Texture2D = _load_card_art_path("res://assets/cards/full/%s.%s" % [catalog_id, extension])
+                    var try_path := "res://assets/cards/full/%s.%s" % [catalog_id, extension]
+                    var exists := FileAccess.file_exists(try_path)
+                    print("[ART] try='%s' exists=%s" % [try_path, str(exists)])
+                    var t: Texture2D = _load_card_art_path(try_path)
                     if t != null:
+                        print("[ART] SUCCESS '%s'" % try_path)
                         return t
 
     # Secondary path: id field is already a catalog-style string (e.g. "JD-001").
@@ -690,6 +697,7 @@ func _art_texture() -> Texture2D:
 
     # A few generated/testing cards carry no catalog ID. Give those a
     # deterministic fallback image so they are still visible everywhere.
+    print("[ART] FALLBACK for '%s'" % card_name)
     var seed_value: int = absi(str(data.get("name", "card")).hash())
     var art_index: int = seed_value % 16
     var fallback: Texture2D = _load_card_art_path("res://assets/cards/art_%02d.png" % art_index)
