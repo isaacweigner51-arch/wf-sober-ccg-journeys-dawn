@@ -4221,6 +4221,26 @@ func show_bulk_pack_results(pulled: Array, pack_count: int, platinum_count: int)
         subtitle += "  •  +%d VIALS FROM DUPLICATES" % total_dup_vials
     header("PACKS OPENED", subtitle); currency_bar()
 
+    # Build per-rarity counts and display them between the header and card grid
+    # so players opening large batches can see at a glance how many Epics,
+    # Legendaries, etc. they pulled without having to count badges themselves.
+    var rarity_counts := {}
+    for cd in pulled:
+        var r: String = str(cd.get("rarity", "Bronze"))
+        rarity_counts[r] = rarity_counts.get(r, 0) + 1
+    var breakdown_parts: Array = []
+    for r in BULK_RARITY_ORDER:
+        var cnt: int = rarity_counts.get(r, 0)
+        if cnt > 0:
+            breakdown_parts.append("%d %s" % [cnt, r])
+    if not breakdown_parts.is_empty():
+        var breakdown_label := label(
+            "  •  ".join(breakdown_parts),
+            Vector2(28, 112), Vector2(810, 54), 15
+        )
+        breakdown_label.add_theme_color_override("font_color", GOLD_COLOR)
+        breakdown_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
     var sorted_pulled: Array = pulled.duplicate()
     sorted_pulled.sort_custom(func(a, b):
         var ra: int = BULK_RARITY_ORDER.find(str(a.get("rarity", "Bronze")))
