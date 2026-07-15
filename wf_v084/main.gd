@@ -4998,17 +4998,22 @@ func _finish_match(player_won: bool) -> void:
         else:
             safe_set_text(status_label, "Battle won, but complete every class objective to graduate.")
 
-    # Start the cinematic without awaiting its internal tween chain. A fixed
-    # results delay guarantees that a killed tween or freed UI node can never
-    # leave the game frozen on the VICTORY banner again.
+    # This used to fire the cinematic without awaiting it, then cut it off
+    # after a guessed 1.55s delay -- but the cinematic's own steps (loser
+    # vfx, winner bounce, sparkles, banner in/hold/out) add up to roughly
+    # 2.2s+ on their own, so that guess was *always* shorter than the real
+    # sequence and would tear finish_layer down mid-banner every single time,
+    # which is exactly the "victory screen overlapping/undimmed" bug reported
+    # repeatedly. Every step inside _play_victory_sequence now awaits a fixed
+    # timer (not an open-ended tween.finished), so it always completes in
+    # bounded time -- await it directly instead of racing it with a guess.
     if player_won:
         play_sfx("victory")
-        _play_victory_sequence(player_leader, enemy_leader)
+        await _play_victory_sequence(player_leader, enemy_leader)
     else:
         play_sfx("defeat")
-        _play_victory_sequence(enemy_leader, player_leader)
+        await _play_victory_sequence(enemy_leader, player_leader)
 
-    await get_tree().create_timer(1.55, true, false, true).timeout
     if is_instance_valid(training_panel):
         training_panel.queue_free()
     if player_won:
@@ -5494,7 +5499,17 @@ func _return_to_main_menu() -> void:
 func show_vfx(text_value: String, world_pos: Vector2, color: Color) -> void:
     var label := Label.new(); label.text = text_value; label.position = world_pos; label.z_index = 900; label.add_theme_font_size_override("font_size", ui_font(31)); label.add_theme_color_override("font_color", color); label.add_theme_color_override("font_shadow_color", Color.BLACK); label.add_theme_constant_override("shadow_offset_x", 3); label.add_theme_constant_override("shadow_offset_y", 3)
     if not safe_add_child(self, label): return
-    var tween := create_tween().set_parallel(true); tween.tween_property(label, "position:y", world_pos.y - 55, 0.55); tween.tween_property(label, "modulate:a", 0.0, 0.55); await tween.finished
+    var tween := create_tween().set_parallel(true); tween.tween_property(label, "position:y", world_pos.y - 55, 0.55); tween.tween_property(label, "modulate:a", 0.0, 0.55)
+    # Was `await tween.finished` -- if this tween is ever interrupted (its
+    # target label freed, or fighting another tween on the same property)
+    # that signal never fires, and every caller that awaits show_vfx hangs
+    # forever. _play_victory_sequence awaits this for the DEFEATED popup
+    # *before* it ever builds the scrim/backdrop/banner, so a single stuck
+    # frame here silently skipped the entire victory screen dimming and left
+    # only whatever got drawn earlier floating over a fully-lit board. Await
+    # a fixed timer matching the tween's own duration instead, same fix as
+    # every other tween.finished hang in this file.
+    await get_tree().create_timer(0.55, true, false, true).timeout
     if is_instance_valid(label): label.queue_free()
 
 func refresh_ui(animate_new: bool = false, new_index: int = -1, new_player_side: bool = true) -> void:
