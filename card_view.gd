@@ -664,24 +664,29 @@ func _load_card_art_path(path: String) -> Texture2D:
     return null
 
 func _art_texture() -> Texture2D:
-    # Use the same unique-by-id artwork lookup as the Second Chance renderer
-    # for every context (hand, battlefield, and mulligan) so a card always
-    # shows its own illustration instead of one of 16 recycled placeholders.
-    var card_id: String = str(data.get("id", "")).strip_edges().to_lower()
-    if not card_id.is_empty():
-        for extension in ["jpg", "png", "jpeg"]:
-            var direct_texture: Texture2D = _load_card_art_path("res://assets/cards/full/%s.%s" % [card_id, extension])
-            if direct_texture != null:
-                return direct_texture
+    # Primary path: look up the catalog (JD-XXX) ID by card name.
+    # Deck/hand card dicts carry a numeric story-chapter "id" (1, 2, 3…),
+    # not the catalog string ID.  Hydration won't overwrite a field that is
+    # already present, so the only reliable key into the art files is the
+    # name → catalog lookup done here before touching data["id"] at all.
+    var card_name: String = str(data.get("name", "")).strip_edges().to_lower()
+    if not card_name.is_empty():
+        _ensure_catalog_loaded()
+        if _catalog_by_name.has(card_name):
+            var catalog_id: String = str(_catalog_by_name[card_name].get("id", "")).strip_edges().to_lower()
+            if not catalog_id.is_empty():
+                for extension in ["jpg", "png", "jpeg"]:
+                    var t: Texture2D = _load_card_art_path("res://assets/cards/full/%s.%s" % [catalog_id, extension])
+                    if t != null:
+                        return t
 
-    # Retry after catalog hydration in case a runtime-created card lacked an ID.
-    var hydrated := _hydrate_card_data(data)
-    card_id = str(hydrated.get("id", "")).strip_edges().to_lower()
-    if not card_id.is_empty():
+    # Secondary path: id field is already a catalog-style string (e.g. "JD-001").
+    var card_id: String = str(data.get("id", "")).strip_edges().to_lower()
+    if card_id.begins_with("jd-"):
         for extension in ["jpg", "png", "jpeg"]:
-            var matched_texture: Texture2D = _load_card_art_path("res://assets/cards/full/%s.%s" % [card_id, extension])
-            if matched_texture != null:
-                return matched_texture
+            var t: Texture2D = _load_card_art_path("res://assets/cards/full/%s.%s" % [card_id, extension])
+            if t != null:
+                return t
 
     # A few generated/testing cards carry no catalog ID. Give those a
     # deterministic fallback image so they are still visible everywhere.
