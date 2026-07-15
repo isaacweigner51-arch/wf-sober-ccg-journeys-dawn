@@ -3998,8 +3998,14 @@ func _roll_one_pack() -> Dictionary:
     for i in range(5):
         var rarity := roll_rarity(i == 4, platinum_hit and i == 4)
         var cd := random_card_of_rarity(rarity)
-        pulled.append(cd)
-        add_card_to_collection(cd)
+        var dup_info := add_card_to_collection(cd)
+        # Duplicate/vial info is stamped onto a *copy* of the card dict, not
+        # the shared entry inside `cards` -- mutating the master card list
+        # here would leak this pull's duplicate status onto every future
+        # pull of the same card.
+        var pulled_cd := cd.duplicate()
+        pulled_cd["_dup_info"] = dup_info
+        pulled.append(pulled_cd)
     if platinum_hit: platinum_pity = 0
     return {"pulled": pulled, "platinum_hit": platinum_hit}
 
@@ -4082,12 +4088,20 @@ func random_card_of_rarity(rarity: String) -> Dictionary:
     if pool.is_empty(): pool = cards
     return pool[randi_range(0,pool.size()-1)]
 
-func add_card_to_collection(cd: Dictionary) -> void:
+func add_card_to_collection(cd: Dictionary) -> Dictionary:
+    # Returns whether this pull was a duplicate (already owned at its copy
+    # limit) and, if so, how many Vials it was converted to -- callers that
+    # display the pull (pack reveal, bulk results) need this to tell the
+    # player a duplicate was silently turned into currency instead of
+    # letting it look identical to a brand-new card.
     var id := str(cd["id"]); var rarity := str(cd["rarity"]); var owned := int(collection_owned.get(id,0)); var limit := int(COPY_LIMITS.get(rarity,1))
     if owned >= limit:
-        dust_balance += int(DUST_VALUES.get(rarity,10))
+        var vials := int(DUST_VALUES.get(rarity,10))
+        dust_balance += vials
+        return {"is_duplicate": true, "vials": vials}
     else:
         collection_owned[id] = owned + 1
+        return {"is_duplicate": false, "vials": 0}
 
 func pack_card_back(pos: Vector2, size_value: Vector2) -> Panel:
     # A face-down placeholder so the reveal reads as an actual pack being
@@ -4705,6 +4719,32 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
         effect.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         effect.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
         effect.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+    # A duplicate pull (already owned at its copy limit, silently converted
+    # to Vials by add_card_to_collection) must never look identical to a
+    # brand-new card in the reveal/results screens -- stamp a badge over the
+    # art whenever the caller tagged this card dict with _dup_info. Card
+    # dicts everywhere else (collection, deck builder, previews) never carry
+    # this key, so the badge only ever appears on actual pack pulls.
+    var dup_info: Dictionary = cd.get("_dup_info", {})
+    if bool(dup_info.get("is_duplicate", false)):
+        var dup_badge := Panel.new()
+        var dup_badge_h: float = clampf(size_value.y * 0.16, 20.0, 30.0)
+        dup_badge.position = Vector2(art_frame.position.x, art_frame.position.y + art_frame.size.y - dup_badge_h)
+        dup_badge.size = Vector2(art_frame.size.x, dup_badge_h)
+        dup_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        dup_badge.z_index = 25
+        var dup_style := StyleBoxFlat.new()
+        dup_style.bg_color = Color(0.1, 0.03, 0.16, 0.92)
+        dup_style.border_color = Color(0.78, 0.5, 1.0, 0.95)
+        dup_style.set_border_width_all(2)
+        dup_style.set_corner_radius_all(0)
+        dup_badge.add_theme_stylebox_override("panel", dup_style)
+        p.add_child(dup_badge)
+        var dup_label := label("DUPLICATE +%d VIALS" % int(dup_info.get("vials", 0)), Vector2(0, 0), dup_badge.size, 9 if compact_panel else 11, dup_badge)
+        dup_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        dup_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        dup_label.add_theme_color_override("font_color", Color(0.92, 0.82, 1.0))
 
     if previewable:
         var tap_catcher := Button.new()

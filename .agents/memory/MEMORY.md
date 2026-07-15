@@ -17,3 +17,4 @@
 - [wf-sober-ccg victory screen — actual confirmed root cause](wf-sober-ccg-victory-screen-real-fix.md) — Godot z_index >4096 fails silently (ERROR line only, no clamp, no crash); headless check never catches it; get the Output panel log before re-theorizing.
 - [wf-sober-ccg highlight/text color collision pattern](wf-sober-ccg-highlight-text-collision.md) — `style()` helper always keeps bg_color=PANEL even when passed a "fill" color; grep `style(GOLD_COLOR`+nearby dark font_color to find "empty bubble" bugs.
 - [Godot Android release signing without storing secrets in files](godot-android-release-signing.md) — use GODOT_ANDROID_KEYSTORE_RELEASE_* env vars instead of export_presets.cfg to keep the keystore password out of git entirely.
+- [wf-sober-ccg duplicate pull badge](wf-sober-ccg-duplicate-pull-badge.md) — pull metadata must be stamped on a duplicated card dict, never the shared `cards` array entry, or it leaks onto future pulls of that card.

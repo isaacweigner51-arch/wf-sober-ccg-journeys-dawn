@@ -1,16 +1,17 @@
 {
-  "version": "0.8.22",
-  "build": "Recovery Academy Overhaul",
+  "version": "0.8.23",
+  "build": "Duplicate Pull Clarity",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "The Recovery Academy tutorial got a full personality pass: every mentor now has a name and voice, each lesson opens and closes with an in-character line, finishing a lesson triggers a small gold celebration instead of just moving on, and lessons now fade smoothly into one another instead of cutting instantly. Also gave Renewed Faith its own dedicated card art instead of a placeholder.",
+  "notes": "Pack openings now tell you when a pull was a duplicate instead of looking like a brand-new card. Also gave Renewed Faith its own dedicated card art instead of a placeholder, and the Recovery Academy tutorial got a full personality pass.",
   "required": false,
-  "version_code": "0.8.22",
-  "build_name": "Recovery Academy Overhaul",
+  "version_code": "0.8.23",
+  "build_name": "Duplicate Pull Clarity",
   "card_count": 123,
-  "version_name": "0.8.22",
+  "version_name": "0.8.23",
   "fixes": [
+    "A pulled card that you already owned at its copy limit was silently converted to Vials, but the pack reveal and bulk-open results showed it exactly like a brand-new card. Both screens now stamp a \"DUPLICATE +N VIALS\" badge on any pull that got converted to currency instead.",
     "Renewed Faith (JD-012) was missing dedicated card art and was silently falling back to a generic placeholder image everywhere it appeared. It now has its own artwork matching the rest of the Hope class."
   ],
   "features": [
