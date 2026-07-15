@@ -1,21 +1,18 @@
 {
-  "version": "0.8.16",
-  "build": "Card Names Untangled",
+  "version": "0.8.17",
+  "build": "Victory Screen, For Real This Time",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Renamed the cards that all shared the name Second Chance / Second Chances, which also collided with the Second Chance mulligan step at the start of every match. Each card now has its own distinct name and is easier to tell apart.",
+  "notes": "Found and fixed the actual cause of the victory screen showing up undimmed and overlapping the board: the game was cutting the victory animation off on a fixed guessed timer that was shorter than the animation itself, and one of the animation's internal waits could hang and silently skip the dimming. Both are fixed at the source.",
   "required": false,
-  "version_code": "0.8.16",
-  "build_name": "Card Names Untangled",
+  "version_code": "0.8.17",
+  "build_name": "Victory Screen, For Real This Time",
   "card_count": 122,
-  "version_name": "0.8.16",
+  "version_name": "0.8.17",
   "fixes": [
-    "Hope's amulet, formerly Second Chances, is now The Comeback Trail.",
-    "Hope's Legendary recovery follower, formerly Second Chance, is now Renewed Faith.",
-    "Hope's Epic spell that turns enemies into Newcomers, formerly Second Chance, is now Clean Slate.",
-    "The Universal Legendary recovery follower, formerly Second Chance, is now Renewed Resolve.",
-    "These names no longer collide with each other or with the Second Chance mulligan step at the start of every match."
+    "The victory/defeat animation was being force-cut by a fixed timer that was shorter than the animation itself, tearing down the dimmed background and banner mid-sequence and leaving the raw, undimmed battlefield visible with the VICTORY text floating over it. The game now waits for the actual animation to finish instead of guessing how long it takes.",
+    "One step inside that animation (the DEFEATED popup) could hang indefinitely if interrupted, which silently skipped the rest of the sequence, including the screen dimming, before it ever ran. That step now always completes in bounded time."
   ],
   "features": [],
   "upcoming_events": [
