@@ -5614,7 +5614,6 @@ func rebuild_hand() -> void:
         view.scale = Vector2(0.78, 0.78)
         view.base_position = view.position
         view.card_chosen.connect(play_card)
-        view.reorder_requested.connect(reorder_hand_card)
         view.drag_action_requested.connect(_on_card_drag_action)
         view.inspect_requested.connect(show_card_details)
         player_hand_area.add_child(view)
@@ -5727,6 +5726,14 @@ func _on_card_drag_action(card_index: int, context: String, release_global: Vect
         if is_instance_valid(player_amulet_area) and player_amulet_area.get_global_rect().has_point(release_global):
             play_card(card_index)
             return
+        # Dropped back onto another card still in hand: reorder instead of
+        # playing it (mirrors the old "drag onto another card" convention).
+        if is_instance_valid(player_hand_area):
+            for child in player_hand_area.get_children():
+                if child is CardView and child.card_index != card_index and child.get_global_rect().has_point(release_global):
+                    reorder_hand_card(card_index, child.card_index)
+                    return
+        return
     elif context == "player_board":
         if card_index < 0 or card_index >= player_board.size():
             return
