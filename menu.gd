@@ -710,6 +710,8 @@ var selected_deck_class := "Hope"
 # craft/dust action remembers what the player was looking at.
 var collection_filter_class := "All"
 var collection_filter_rarity := "All"
+var collection_search_query := ""
+var _collection_focus_search_next := false
 var battle_select_class := "Hope"
 var battle_select_mode := "custom"
 var battle_opponent_class := "Courage"
@@ -4292,13 +4294,49 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
     if rarity not in ["Bronze", "Silver"]:
         border = card_rarity_color(rarity)
 
+    # Rarity used to be readable only from the small "TYPE • RARITY" text
+    # line below the stats -- two cards side by side looked identical at a
+    # glance unless you actually read that line. A colored glow halo (the
+    # same glow-by-rarity language CardView already uses for battle cards)
+    # plus a diagonal foil sheen for the top two tiers now makes rarity
+    # legible from across the grid, border color/text stay as a backup.
+    var glow_color := Color(0, 0, 0, 0.55)
+    var glow_size := 6
+    var border_width := 3
+    match rarity:
+        "Silver":
+            glow_color = Color(0.78, 0.88, 1.0, 0.35)
+            glow_size = 9
+        "Gold":
+            glow_color = Color(1.0, 0.78, 0.24, 0.45)
+            glow_size = 11
+        "Epic":
+            glow_color = Color(0.72, 0.38, 1.0, 0.50)
+            glow_size = 12
+        "Legendary":
+            glow_color = Color(1.0, 0.5, 0.18, 0.55)
+            glow_size = 14
+            border_width = 4
+        "Platinum":
+            glow_color = Color(0.62, 0.92, 1.0, 0.60)
+            glow_size = 16
+            border_width = 4
+        "Signature Gold":
+            glow_color = Color(1.0, 0.85, 0.3, 0.60)
+            glow_size = 16
+            border_width = 4
+        "Signature Platinum":
+            glow_color = Color(0.7, 0.96, 1.0, 0.65)
+            glow_size = 18
+            border_width = 4
+
     var frame_style := StyleBoxFlat.new()
     frame_style.bg_color = Color(0.05, 0.045, 0.07, 1.0)
     frame_style.border_color = border
-    frame_style.set_border_width_all(3)
+    frame_style.set_border_width_all(border_width)
     frame_style.set_corner_radius_all(12)
-    frame_style.shadow_color = Color(0, 0, 0, 0.55)
-    frame_style.shadow_size = 6
+    frame_style.shadow_color = glow_color
+    frame_style.shadow_size = glow_size
     p.add_theme_stylebox_override("panel", frame_style)
 
     # A slim inset highlight line reads as a stamped metal card edge instead
@@ -4382,6 +4420,31 @@ func card_panel(cd: Dictionary, pos: Vector2, size_value: Vector2, previewable :
     sheen_rect.size = art.size
     sheen_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
     art_frame.add_child(sheen_rect)
+
+    # A second, card-wide diagonal foil band (beyond the plain art sheen
+    # above) is what actually sells "foil card" for the top rarity tiers --
+    # tinted with the same glow color as the halo so the whole card reads
+    # as one coherent premium treatment instead of a glow plus an unrelated
+    # sheen.
+    if rarity in ["Legendary", "Platinum", "Signature Gold", "Signature Platinum"]:
+        var foil_gradient := Gradient.new()
+        foil_gradient.colors = PackedColorArray([
+            Color(glow_color.r, glow_color.g, glow_color.b, 0.0),
+            Color(1.0, 1.0, 1.0, 0.32),
+            Color(glow_color.r, glow_color.g, glow_color.b, 0.0),
+        ])
+        foil_gradient.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+        var foil_tex := GradientTexture2D.new()
+        foil_tex.gradient = foil_gradient
+        foil_tex.fill_from = Vector2(0.1, 0.0)
+        foil_tex.fill_to = Vector2(0.75, 1.0)
+        var foil_rect := TextureRect.new()
+        foil_rect.texture = foil_tex
+        foil_rect.position = Vector2.ZERO
+        foil_rect.size = size_value
+        foil_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        foil_rect.z_index = 1
+        p.add_child(foil_rect)
 
     # A circular cost gem stamped over the plate/art seam, exactly where a
     # real card's mana/cost icon would sit — not a bare number floating on
@@ -4518,6 +4581,11 @@ func _collection_set_rarity_filter(r: String) -> void:
     collection_filter_rarity = r
     show_collection()
 
+func _collection_set_search(text: String) -> void:
+    collection_search_query = text
+    _collection_focus_search_next = true
+    show_collection()
+
 func show_collection() -> void:
     # Previously a single unsorted, unfilterable grid of all 121 cards in raw
     # data order -- finding one specific card meant scrolling past every
@@ -4539,11 +4607,30 @@ func show_collection() -> void:
     summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     summary.add_theme_color_override("font_color", Color(0.6,0.66,0.78))
 
+    # Search sits alongside the class/rarity tabs rather than replacing them --
+    # with over a hundred cards, scrolling past every class/rarity to find one
+    # specific card by memory was the actual pain point search needed to fix.
+    var search_box := LineEdit.new()
+    search_box.position = Vector2(390, 172)
+    search_box.size = Vector2(400, 28)
+    search_box.placeholder_text = "Search by name or keyword..."
+    search_box.text = collection_search_query
+    search_box.add_theme_font_size_override("font_size", 14)
+    search_box.text_changed.connect(_collection_set_search)
+    root_layer.add_child(search_box)
+    if not collection_search_query.is_empty():
+        var clear_search := button("✕", Vector2(798, 172), Vector2(28, 28), _collection_set_search.bind(""))
+        clear_search.add_theme_font_size_override("font_size", 12)
+    if _collection_focus_search_next:
+        search_box.grab_focus()
+        search_box.caret_column = search_box.text.length()
+        _collection_focus_search_next = false
+
     var class_tabs := ["All"] + CLASSES + ["Neutral"]
     var tab_w: float = 1224.0 / float(class_tabs.size())
     for i in range(class_tabs.size()):
         var c: String = class_tabs[i]
-        var tab_btn := button(c.to_upper(), Vector2(28 + i * tab_w, 170), Vector2(tab_w - 6, 34), _collection_set_class_filter.bind(c))
+        var tab_btn := button(c.to_upper(), Vector2(28 + i * tab_w, 206), Vector2(tab_w - 6, 34), _collection_set_class_filter.bind(c))
         if c == collection_filter_class:
             # The active tab used to just tint its own text gold, which
             # collided with the button's default hover border (also gold):
@@ -4571,7 +4658,7 @@ func show_collection() -> void:
     var rtab_w: float = 1224.0 / float(rarity_tabs.size())
     for i in range(rarity_tabs.size()):
         var r: String = rarity_tabs[i]
-        var rtab_btn := button(r.to_upper(), Vector2(28 + i * rtab_w, 208), Vector2(rtab_w - 6, 30), _collection_set_rarity_filter.bind(r))
+        var rtab_btn := button(r.to_upper(), Vector2(28 + i * rtab_w, 244), Vector2(rtab_w - 6, 30), _collection_set_rarity_filter.bind(r))
         rtab_btn.add_theme_font_size_override("font_size", 11)
         if r == collection_filter_rarity:
             rtab_btn.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 6))
@@ -4580,8 +4667,8 @@ func show_collection() -> void:
             rtab_btn.add_theme_color_override("font_hover_color", Color(0.08, 0.06, 0.02))
 
     var binder := Panel.new()
-    binder.position = Vector2(28,246)
-    binder.size = Vector2(1224,430)
+    binder.position = Vector2(28,282)
+    binder.size = Vector2(1224,394)
     var binder_style := StyleBoxFlat.new()
     binder_style.bg_color = Color(0.01,0.02,0.045,0.78)
     binder_style.border_color = GOLD_COLOR
@@ -4594,7 +4681,7 @@ func show_collection() -> void:
     root_layer.add_child(binder)
     var scroll := ScrollContainer.new()
     scroll.position=Vector2(12,12)
-    scroll.size=Vector2(1200,406)
+    scroll.size=Vector2(1200,370)
     binder.add_child(scroll)
     if filtered_preview.is_empty():
         centered_label("No cards match this filter.", Vector2(0,180), Vector2(1200,30), 16, scroll)
@@ -4655,12 +4742,18 @@ func show_collection() -> void:
 
 func _collection_filtered_sorted_cards() -> Array:
     var out: Array = []
+    var query := collection_search_query.strip_edges().to_lower()
     for cd in cards:
         var card_class := str(cd.get("class", "Neutral"))
         if collection_filter_class != "All" and card_class != collection_filter_class:
             continue
         if collection_filter_rarity != "All" and str(cd.get("rarity", "")) != collection_filter_rarity:
             continue
+        if not query.is_empty():
+            var name_match := str(cd.get("name", "")).to_lower().contains(query)
+            var effect_match := str(cd.get("effect", "")).to_lower().contains(query)
+            if not name_match and not effect_match:
+                continue
         out.append(cd)
     var rarity_order := ["Bronze", "Silver", "Gold", "Epic", "Legendary", "Platinum", "Signature Gold", "Signature Platinum"]
     out.sort_custom(func(a: Dictionary, b: Dictionary):
