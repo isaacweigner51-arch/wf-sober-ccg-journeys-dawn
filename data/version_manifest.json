@@ -1,18 +1,17 @@
 {
-  "version": "0.8.19",
-  "build": "Tutorial Order & Highlight Contrast",
+  "version": "0.8.20",
+  "build": "Mobile Tutorial Loop Fix",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Reordered the Academy tutorial so it teaches the basics first (the battlefield, playing a follower, combat, ending your turn) instead of opening with an advanced mechanic before you knew what a zone or a follower even was. Also fixed several buttons and tabs on the Home, Battle Setup, and Collection screens where the highlighted/selected color and the text color were rendering the same, making buttons look like empty outlined bubbles with no visible label.",
+  "notes": "Fixed a bug where finishing a match could send you back into the Academy tutorial and leave you stuck there, even if you had already graduated. Several places that record match rewards or start a challenge/story/trial battle were saving your profile back to disk without protecting the rest of your save if that save file couldn't be read cleanly first -- which could silently erase your tutorial-complete status (and other saved progress) and get worse on every following match.",
   "required": false,
-  "version_code": "0.8.19",
-  "build_name": "Tutorial Order & Highlight Contrast",
+  "version_code": "0.8.20",
+  "build_name": "Mobile Tutorial Loop Fix",
   "card_count": 122,
-  "version_name": "0.8.19",
+  "version_name": "0.8.20",
   "fixes": [
-    "The Academy tutorial used to open its very first lesson with Second Chance and Momentum -- a discard-for-value trade-off with real cost math -- before teaching what a zone, a follower, or a turn even was. Lessons are now ordered: the battlefield, playing a follower, combat, ending your turn, spells & amulets, keywords, Recovery & Revive, then Second Chance (which now builds on Recovery instead of coming before it), signature cards, sponsor, and deck building last.",
-    "The gold BATTLE button and ENTER BATTLE button on the Home screen, the active deck-mode button and BEGIN BATTLE button on the Battle Setup screen, and the selected class/rarity filter tabs on the Collection screen were all drawing their dark label text on top of a background that stayed nearly black instead of actually filling with the highlight color -- so the text was nearly invisible and only a colored outline showed. All five now fill with a real solid highlight so the label is legible."
+    "Completing a match, a Recovery Road challenge, a Story stage, or a Trials battle could each save your profile back to disk after only reading part of it, instead of your whole save. If that save file ever failed to load cleanly first (most likely after the app was interrupted mid-save on a phone), this would silently wipe the rest of your progress -- including marking the Academy tutorial as not-complete -- and every match after that would send you straight back into the tutorial with no way out. All of these now check that your full save loaded successfully before writing anything back, so a bad read can no longer erase real progress."
   ],
   "features": [],
   "upcoming_events": [
