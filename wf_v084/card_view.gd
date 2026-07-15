@@ -271,6 +271,7 @@ func _build() -> void:
         art_rect.texture = _svg_texture(_card_back_svg())
     else:
         art_rect.texture = _art_texture()
+    print("[CardView] art_rect.texture after assign = %s  (card=%s)" % [art_rect.texture, str(data.get("name","?"))])
     frame.add_child(art_rect)
     art_home = art_rect.position
 
@@ -671,11 +672,14 @@ func _art_texture() -> Texture2D:
     if _art_cache.has(cache_key):
         return _art_cache[cache_key] as Texture2D
     var t: Texture2D = CardArt.resolve(data)
+    print("[CardView] _art_texture() card=%s  resolved=%s" % [cache_key, t])
     if t != null:
         _art_cache[cache_key] = t
         return t
     # Fallback: procedural SVG so the card is never visually blank in battle.
-    return _svg_texture(_art_svg())
+    var svg_t := _svg_texture(_art_svg())
+    print("[CardView] _art_texture() using SVG fallback for card=%s  svg_tex=%s" % [cache_key, svg_t])
+    return svg_t
 
 func _card_back_svg() -> String:
     return """<svg xmlns='http://www.w3.org/2000/svg' width='240' height='150'>
