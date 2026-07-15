@@ -14,3 +14,4 @@
 - [add_child crashes surviving scene/node teardown](godot-add-child-after-scene-free.md) — fixing one crash site isn't enough; guard every add_child-after-await with a safe_add_child helper.
 - [Two-button handoff closure soft-locks](wf-sober-ccg-closure-two-button-handoff.md) — a button's callback referencing itself or a sibling button variable directly captures null forever; box both in a shared Dictionary instead.
 - [gitPush/CLI push rejected despite healthy connector](github-push-rejected-cli-fallback.md) — use GitHub Git Data API via connector proxyFetch as fallback; never `git reset --hard origin/<branch>` after, it discards local work against a stale ref.
+- [wf-sober-ccg victory screen — actual root cause](wf-sober-ccg-victory-screen-real-fix.md) — a recurring bug can have two independent causes with the same symptom; fixing one race condition doesn't rule out a second (fixed-delay-vs-real-duration mismatch + tween.finished hang).

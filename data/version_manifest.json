@@ -1,18 +1,19 @@
 {
-  "version": "0.8.17",
-  "build": "Victory Screen, For Real This Time",
+  "version": "0.8.18",
+  "build": "The Actual Victory Screen Fix",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Found and fixed the actual cause of the victory screen showing up undimmed and overlapping the board: the game was cutting the victory animation off on a fixed guessed timer that was shorter than the animation itself, and one of the animation's internal waits could hang and silently skip the dimming. Both are fixed at the source.",
+  "notes": "Found the real, confirmed cause of the victory screen showing up underneath/overlapping the board instead of covering it: three places in the game tried to set a display-layer value (z_index) to a number higher than the game engine allows, which silently failed every single time instead of erroring loudly. Fixed all three, including the one behind this exact bug.",
   "required": false,
-  "version_code": "0.8.17",
-  "build_name": "Victory Screen, For Real This Time",
+  "version_code": "0.8.18",
+  "build_name": "The Actual Victory Screen Fix",
   "card_count": 122,
-  "version_name": "0.8.17",
+  "version_name": "0.8.18",
   "fixes": [
-    "The victory/defeat animation was being force-cut by a fixed timer that was shorter than the animation itself, tearing down the dimmed background and banner mid-sequence and leaving the raw, undimmed battlefield visible with the VICTORY text floating over it. The game now waits for the actual animation to finish instead of guessing how long it takes.",
-    "One step inside that animation (the DEFEATED popup) could hang indefinitely if interrupted, which silently skipped the rest of the sequence, including the screen dimming, before it ever ran. That step now always completes in bounded time."
+    "The victory/defeat result screen (VICTORY or YOU LOSE with your rewards and buttons) was set to draw on a layer number the engine doesn't support, so it silently failed to move to the front and rendered underneath ordinary battlefield elements instead of covering them -- this is what caused it to look like a jumbled overlap of card art and text on every single win.",
+    "The card detail/inspection popup (long-press a card) had the same kind of invalid layer number and could be hidden behind other screen elements.",
+    "The pre-battle intro transition had the same kind of invalid layer number as well."
   ],
   "features": [],
   "upcoming_events": [

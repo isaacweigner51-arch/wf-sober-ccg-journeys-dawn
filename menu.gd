@@ -2466,7 +2466,10 @@ func _show_battle_intro(player_class_name: String, opponent_class_name: String) 
     var intro := ColorRect.new()
     intro.color = Color(0.005, 0.008, 0.018, 1.0)
     intro.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    intro.z_index = 5000
+    # Was 5000 -- over Godot's CanvasItem z_index cap of 4096, which silently
+    # fails to apply instead of clamping (see main.gd's show_game_over for
+    # the full explanation of this failure mode).
+    intro.z_index = 4096
     intro.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(intro)
 
