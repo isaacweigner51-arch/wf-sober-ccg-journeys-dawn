@@ -30,3 +30,9 @@ id = "uLm-kwW9VCDLRdLl-6zXI"
 uri = "file://android_keystore/release.jks"
 type = "unspecified"
 title = "release.jks — Android Release Keystore"
+
+[[outputs]]
+id = "QEsFxMpcbwvD3Iz-cIyTl"
+uri = "file://release_keystore.zip"
+type = "unspecified"
+title = "release.jks — Android Release Keystore"
