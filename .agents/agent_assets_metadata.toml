@@ -24,3 +24,9 @@ id = "ihMEYtsG6333gi9HoIg1V"
 uri = "file://attached_assets/generated_audio/sound_effect_impact_leader_deep.mp3"
 type = "audio"
 title = "impact_leader_deep"
+
+[[outputs]]
+id = "uLm-kwW9VCDLRdLl-6zXI"
+uri = "file://android_keystore/release.jks"
+type = "unspecified"
+title = "release.jks — Android Release Keystore"
