@@ -8,23 +8,23 @@
   "required": false,
   "version_code": "0.8.29",
   "build_name": "Shiny Horizons",
-  "card_count": 139,
+  "card_count": 138,
   "version_name": "0.8.29",
   "fixes": [],
   "features": [
-    "SPONSOR SHINY ART — The Sponsor's shiny/platinum copy now renders dedicated holographic art: platinum light rays, rainbow iridescence, and a 'ONE DAY AT A TIME' mug baked into the image.",
-    "SPONSOR EVOLUTION CINEMATIC — When The Sponsor evolves, a moody rain-streaked diner scene fades in behind the card as the backdrop, grounding the moment in a real place.",
-    "EASTER EGG CARDS — Two hidden Legendary cards have been added to the pool. Find them if you can.",
-    "RECOVERY ACADEMY REBUILT — Six lessons now run inside the real battle scene with followers on the field. Play a Follower, Combat, End Your Turn, Spells & Amulets, Recovery & Revive, and Sponsor & Sponsee all use live gameplay instead of static UI panels.",
-    "TUTORIAL OVERLAY — A fixed mentor banner appears at the top of the battle screen during Academy lessons, showing the lesson name, mentor, and step-by-step instructions that update as you progress.",
-    "SCRIPTED ENEMY TURN — During Recovery & Revive (lesson 5) the opponent attacks your follower on their first turn, putting it into the Relapse Zone so you can practice the recover mechanic immediately.",
-    "LESSON PROGRESSION — Completing a battle lesson automatically increments your Academy step and returns you to the Academy screen, ready for the next lesson.",
-    "CLASS BALANCE — All four classes now have equal card counts per rarity: 5 Bronze, 3 Silver, 4 Gold, 2 Epic, 4 Legendary, 1 Platinum each.",
-    "COPY LIMITS EXPANDED — Legendaries now allow 3 copies per deck (up from 2). Platinums, Signature Platinums, and Signature Golds now allow 2 copies per deck (up from 1). Epics remain at 3.",
-    "SPONSOR TRIAL CINEMATIC — Battling The Sponsor plays a dedicated cinematic intro before the battle loads.",
-    "SPONSOR TRIAL REWARD — Defeating The Sponsor for the first time awards a \u2728 Shiny Platinum copy."
+    "SPONSOR SHINY ART \u2014 The Sponsor's shiny/platinum copy now renders dedicated holographic art: platinum light rays, rainbow iridescence, and a 'ONE DAY AT A TIME' mug baked into the image.",
+    "SPONSOR EVOLUTION CINEMATIC \u2014 When The Sponsor evolves, a moody rain-streaked diner scene fades in behind the card as the backdrop, grounding the moment in a real place.",
+    "EASTER EGG CARDS \u2014 Two hidden Legendary cards have been added to the pool. Find them if you can.",
+    "RECOVERY ACADEMY REBUILT \u2014 Six lessons now run inside the real battle scene with followers on the field. Play a Follower, Combat, End Your Turn, Spells & Amulets, Recovery & Revive, and Sponsor & Sponsee all use live gameplay instead of static UI panels.",
+    "TUTORIAL OVERLAY \u2014 A fixed mentor banner appears at the top of the battle screen during Academy lessons, showing the lesson name, mentor, and step-by-step instructions that update as you progress.",
+    "SCRIPTED ENEMY TURN \u2014 During Recovery & Revive (lesson 5) the opponent attacks your follower on their first turn, putting it into the Relapse Zone so you can practice the recover mechanic immediately.",
+    "LESSON PROGRESSION \u2014 Completing a battle lesson automatically increments your Academy step and returns you to the Academy screen, ready for the next lesson.",
+    "CLASS BALANCE \u2014 All four classes now have equal card counts per rarity: 5 Bronze, 3 Silver, 4 Gold, 2 Epic, 4 Legendary, 1 Platinum each.",
+    "COPY LIMITS EXPANDED \u2014 Legendaries now allow 3 copies per deck (up from 2). Platinums, Signature Platinums, and Signature Golds now allow 2 copies per deck (up from 1). Epics remain at 3.",
+    "SPONSOR TRIAL CINEMATIC \u2014 Battling The Sponsor plays a dedicated cinematic intro before the battle loads.",
+    "SPONSOR TRIAL REWARD \u2014 Defeating The Sponsor for the first time awards a \u2728 Shiny Platinum copy."
   ],
   "upcoming_events": [
-    "More seasonal content and cards are in development — check back after future updates for details."
+    "More seasonal content and cards are in development \u2014 check back after future updates for details."
   ]
 }
