@@ -1,22 +1,26 @@
 {
-  "version": "0.8.25",
+  "version": "0.8.26",
   "build": "Shiny Horizons",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Collection, Pack Opening, and Deck Builder now show each card's unique illustrated art.",
+  "notes": "Card balance overhaul — new mechanics, buffed Legendaries, reworked Sponsor, and expanded deck limits.",
   "required": false,
-  "version_code": "0.8.25",
+  "version_code": "0.8.26",
   "build_name": "Shiny Horizons",
-  "card_count": 123,
-  "version_name": "0.8.25",
-  "fixes": [
-    "Collection, Pack Opening, and Deck Builder now display each card's unique illustrated art instead of placeholder images. All screens share a single art loader so battle, menus, and pack reveals always show the same illustration for every card."
-  ],
+  "card_count": 124,
+  "version_name": "0.8.26",
+  "fixes": [],
   "features": [
-    "All 123 cards now have unique AI-generated art matched to each card's name, class, and rarity. Hope cards glow with warm purple and gold dawn light; Courage burns with crimson and amber; Serenity flows in soft teal and blue; Purpose is grounded in warm gold and earth tones; Neutral shows community and fellowship scenes.",
-    "Shiny holographic card variants are now in the game. Every card drawn from a pack has a 0.5% independent chance to be a shiny — they render with a slow rainbow foil color cycle and sparkle particle bursts, get their own spotlight reveal sequence, and are tracked separately from your regular collection copies. Shinies can only be drawn, never crafted.",
-    "The Pull Odds screen now discloses the 0.5% shiny chance per card drawn, keeping the loot-box disclosure accurate."
+    "COPY LIMITS EXPANDED — Legendaries now allow 3 copies per deck (up from 2). Platinums, Signature Platinums, and Signature Golds now allow 2 copies per deck (up from 1). Epics remain at 3.",
+    "PHOENIX RISING REDESIGNED — Now a 1-cost 1/1. When destroyed, it gets back up at the start of your next turn at +1/+1 (1/1 → 2/2 → … → 10/10). At 10/10 it falls permanently. Cannot return if banished or transformed. Its death triggers a golden upward dissolve instead of the usual crumple.",
+    "TURNING POINT — New Purpose Legendary (3-cost, 2/4). On Play: if your leader has less defense than the enemy, draw 2 cards and gain 1 maximum PP. Otherwise draw 1. A comeback tool that rewards playing from behind.",
+    "PURPOSE ETERNAL RECLASSIFIED — Rarity changed from Legendary to Epic, meaning you can now run up to 3 copies. Ability upgraded from Charge to Charge-Storm — it attacks immediately and pierces through a full enemy board.",
+    "VOICE OF REASSURANCE REWORKED — Cost reduced from 9 to 3. On Play: draw 2 cards, then reduce the cost of the 2 most expensive cards in hand by 1 each.",
+    "PEACE BEYOND FEAR REWORKED — Cost reduced from 9 to 7. On Play: restore 5 defense, draw a card, and Exhaust all enemy followers so they cannot attack next turn.",
+    "HOPE UNENDING BUFFED — Cost reduced from 9 to 7. Stats adjusted to 5/8 (from 7/11). Same heal-and-draw effect, now available two turns earlier.",
+    "THE SPONSOR BUFFED — Arrival now summons 2 Sponsees immediately (up from 1). Still summons 1 more at the end of each of your turns. All Sponsees are now 3/3 base (up from 2/2). Courage Sponsees are 4/3 with Charge; Hope Sponsees are 3/5; Serenity Sponsees are 3/5 with Guard; Purpose Sponsees are 3/3 and grant 2 Progress on entry (up from 1). Sponsee death heals updated: Hope restores 5, Serenity 3, Courage 2.",
+    "SPONSOR TRIAL CINEMATIC — Battling The Sponsor now opens a dedicated cinematic intro: a dark fade-in, the message 'Someone has been watching your progress...', The Sponsor's portrait emerging with a golden glow, his name, and his quote before the battlefield loads."
   ],
   "upcoming_events": [
     "More seasonal content and cards are in development — check back after future updates for details."
