@@ -455,11 +455,11 @@
     "name": "Voice of Reassurance",
     "class": "Serenity",
     "rarity": "Legendary",
-    "cost": 6,
-    "attack": 5,
-    "health": 8,
-    "effect": "On Play: Draw 2 and reduce the highest-cost card in hand by 1.",
-    "max_copies": 2
+    "cost": 3,
+    "attack": 3,
+    "health": 5,
+    "effect": "On Play: Draw 2, then reduce the two highest-cost cards in hand by 1 each.",
+    "max_copies": 3
   },
   {
     "id": "JD-043",
@@ -867,8 +867,8 @@
     "cost": 8,
     "attack": 5,
     "health": 9,
-    "effect": "Signature Platinum: Create a Sponsee on Arrival and at the end of each of your turns. Sponsees inherit your leader class path.",
-    "max_copies": 1
+    "effect": "SIGNATURE PLATINUM \u2014 Arrival: Summon 2 Sponsees. End of your turn: Summon another Sponsee. Sponsees are 3/3 and carry your class path\u2019s strength.",
+    "max_copies": 2
   },
   {
     "id": "JD-081",
@@ -1358,5 +1358,160 @@
     "max_copies": 3,
     "max_health": 0,
     "is_amulet": true
+  },
+  {
+    "id": "JD-124",
+    "name": "Peace Beyond Fear",
+    "class": "Serenity",
+    "rarity": "Legendary",
+    "cost": 7,
+    "attack": 8,
+    "health": 12,
+    "effect": "On Play: Restore 5 defense, draw a card, and Exhaust all enemy followers so they cannot attack next turn.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-125",
+    "name": "Phoenix Rising",
+    "class": "Courage",
+    "rarity": "Legendary",
+    "cost": 1,
+    "attack": 1,
+    "health": 1,
+    "effect": "Destroyed: returns at the start of your next turn at +1/+1 (1/1 \u2192 10/10). At 10/10, permanently falls. Does not return if banished or transformed.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-126",
+    "name": "Steady Architect",
+    "class": "Purpose",
+    "rarity": "Silver",
+    "cost": 4,
+    "attack": 3,
+    "health": 6,
+    "effect": "Protector.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-127",
+    "name": "Visionary Planner",
+    "class": "Purpose",
+    "rarity": "Gold",
+    "cost": 5,
+    "attack": 4,
+    "health": 6,
+    "effect": "Arrival: Draw 2, then reduce the highest-cost card in hand by 1.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-128",
+    "name": "Legacy Mason",
+    "class": "Purpose",
+    "rarity": "Legendary",
+    "cost": 6,
+    "attack": 6,
+    "health": 7,
+    "effect": "Arrival: Reduce every card in your hand by 1.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-129",
+    "name": "Purpose Eternal",
+    "class": "Purpose",
+    "rarity": "Epic",
+    "cost": 9,
+    "attack": 9,
+    "health": 10,
+    "effect": "Charge. Storm. Breakthrough \u2014 cuts through even a full board.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-130",
+    "name": "Hope Unending",
+    "class": "Hope",
+    "rarity": "Legendary",
+    "cost": 7,
+    "attack": 5,
+    "health": 8,
+    "effect": "On Play: Restore 6 defense and draw a card.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-132",
+    "name": "Relentless Drive",
+    "class": "Courage",
+    "rarity": "Epic",
+    "cost": 6,
+    "attack": 6,
+    "health": 4,
+    "effect": "Charge. Storm. Cuts through every follower on the field.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-133",
+    "name": "Battle Hardened",
+    "class": "Courage",
+    "rarity": "Epic",
+    "cost": 5,
+    "attack": 5,
+    "health": 5,
+    "effect": "On Play: Give all allied followers +1/+1.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-134",
+    "name": "Still Waters",
+    "class": "Serenity",
+    "rarity": "Epic",
+    "cost": 6,
+    "attack": 4,
+    "health": 8,
+    "effect": "Guard. On Play: Restore 3 defense.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-135",
+    "name": "Healing Grace",
+    "class": "Hope",
+    "rarity": "Epic",
+    "cost": 5,
+    "attack": 4,
+    "health": 6,
+    "effect": "On Play: Restore 4 defense and draw a card.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-136",
+    "name": "Sanctuary of Serenity",
+    "class": "Serenity",
+    "rarity": "Gold",
+    "cost": 2,
+    "attack": 0,
+    "health": 0,
+    "effect": "Amulet \u2014 Whenever your leader\u2019s Defense is restored, permanently give an allied follower +1/+1.",
+    "max_copies": 3,
+    "is_amulet": true
+  },
+  {
+    "id": "JD-137",
+    "name": "Structured Plan",
+    "class": "Purpose",
+    "rarity": "Gold",
+    "cost": 4,
+    "attack": 3,
+    "health": 5,
+    "effect": "On Play: Draw a card, then reduce the highest-cost card in hand by 1.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-138",
+    "name": "Turning Point",
+    "class": "Purpose",
+    "rarity": "Legendary",
+    "cost": 3,
+    "attack": 2,
+    "health": 4,
+    "effect": "On Play: If your leader has less defense than the enemy, draw 2 cards and gain 1 maximum PP.",
+    "max_copies": 3
   }
 ]
