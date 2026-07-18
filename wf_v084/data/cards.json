@@ -655,7 +655,7 @@
     "name": "Walking Free",
     "class": "Purpose",
     "rarity": "Platinum",
-    "cost": 10,
+    "cost": 6,
     "attack": 6,
     "health": 8,
     "effect": "Signature Platinum: Evolve for free. Give Purpose followers remaining in your deck +1/+1, recover 2 PP, draw 2 cards, and enable Purpose sequencing.",
