@@ -458,6 +458,15 @@ func death_animation() -> void:
     tween.tween_property(self, "rotation", 0.35, 0.25)
     tween.tween_property(self, "modulate:a", 0.0, 0.22)
 
+func phoenix_death_animation() -> void:
+    # Phoenix Rising: dissolves upward into golden light rather than crumpling.
+    modulate = Color(1.0, 0.72, 0.30, 1.0)
+    var tween := create_tween().set_parallel(true)
+    tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    tween.tween_property(self, "position:y", position.y - 40.0, 0.42)
+    tween.tween_property(self, "modulate:a", 0.0, 0.42)
+    tween.tween_property(self, "scale", Vector2(1.3, 1.3), 0.42)
+
 func _hover_on() -> void:
     if hidden_card:
         return

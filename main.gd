@@ -44,6 +44,10 @@ var player_board: Array = []
 var enemy_board: Array = []
 var player_relapse: Array = []
 var enemy_relapse: Array = []
+var phoenix_pending_player := false
+var phoenix_pending_enemy := false
+var phoenix_tier_player := 1
+var phoenix_tier_enemy := 1
 
 var player_hand_area: Control
 var player_board_area: Control
@@ -389,12 +393,12 @@ func build_class_cards(faction_name: String) -> Array:
             card("Measured Response",5,4,6,faction_name,"Gold","damage_unit",4,"On Play: Deal 4 to the strongest enemy follower.","star"),
             card("Keeper of Balance",5,4,7,faction_name,"Gold","heal_draw",2,"On Play: Restore 2 defense and draw a card.","hands"),
             card("Tide of Acceptance",6,5,7,faction_name,"Gold","damage_all",3,"On Play: Deal 3 to every other follower.","road"),
-            card("Voice of Reassurance",4,3,5,faction_name,"Legendary","draw_reduce",2,"On Play: Draw 2, then reduce the highest-cost card in hand by 1.","hands"),
+            card("Voice of Reassurance",3,3,5,faction_name,"Legendary","draw_reduce_two",0,"On Play: Draw 2, then reduce the two highest-cost cards in hand by 1 each.","hands"),
             card("Sanctuary Elder",7,5,10,faction_name,"Legendary","guard_heal",4,"Guard. On Play: Restore 4 defense.","shield"),
             card("Moment of Clarity",7,6,8,faction_name,"Legendary","board_clear",0,"On Play: Send every other follower to the Relapse Zone.","star"),
             card("Calm After the Storm",8,0,0,faction_name,"Epic","calm_after_storm",0,"Spell: Destroy all followers. Restore 6 defense. If 5 or more followers were destroyed, draw 2 cards.","star"),
             card("Inner Peace",8,6,8,faction_name,"Platinum","serenity_platinum",0,"SIGNATURE PLATINUM — Evolve for free. Restore 5 defense and preserve the first allied follower that would be destroyed each turn.","star"),
-            card("Peace Beyond Fear",9,8,12,faction_name,"Legendary","heal_draw",5,"On Play: Restore 5 defense and draw a card.","star","jd-124")]
+            card("Peace Beyond Fear",7,8,12,faction_name,"Legendary","heal_draw_exhaust",5,"On Play: Restore 5 defense, draw a card, and Exhaust all enemy followers next turn.","star","jd-124")]
     if faction_name == "Courage":
         return [
             card("Spark Runner",1,2,1,faction_name,"Bronze","charge",0,"Charge.","flame"),
@@ -413,7 +417,7 @@ func build_class_cards(faction_name: String) -> Array:
             card("Controlled Burn",7,6,6,faction_name,"Legendary","damage_all",5,"On Play: Deal 5 to every other follower.","flame"),
             card("Rise Together",7,5,6,faction_name,"Legendary","rise_together",0,"Protector. Arrival: If 3 Courage followers have entered play this match, evolve this for free. When this evolves, give every Courage follower remaining in your deck +1/+1.","star"),
             card("Rally the Free",8,5,7,faction_name,"Platinum","rally_the_free",0,"SIGNATURE PLATINUM — Evolve for free. Give every Courage follower remaining in your deck +2/+2. The first Courage follower you play each turn gains Rush.","star"),
-            card("Phoenix Rising",9,9,8,faction_name,"Legendary","revive_charge",0,"On Play: Recover an allied follower; it gains Charge.","star","jd-125")]
+            card("Phoenix Rising",1,1,1,faction_name,"Legendary","phoenix_rising",0,"Destroyed: returns at the start of your next turn at +1/+1 (1/1 → 10/10). At 10/10, permanently falls. Does not return if banished or transformed.","star","jd-125")]
     if faction_name == "Purpose":
         return [
             card("First Step",1,1,2,faction_name,"Bronze","first_step",0,"Arrival: Draw a card. If you have fewer maximum PP than your opponent, gain 1 temporary PP this turn.","road"),
@@ -430,9 +434,10 @@ func build_class_cards(faction_name: String) -> Array:
             card("Finding Purpose",4,3,5,faction_name,"Legendary","finding_purpose",1,"Arrival: Gain 1 maximum PP. After 3 Purpose evolutions, gain another maximum PP and draw a card.","star"),
             card("Legacy Mason",6,6,7,faction_name,"Legendary","cost_reduce_all",1,"Arrival: Reduce every card in your hand by 1.","hands","jd-128"),
             card("Worldshaper",7,8,8,faction_name,"Legendary","progress_power",0,"Arrival: Gain +1/+1 for each bonus maximum PP earned this match.","hands"),
+            card("Turning Point",3,2,4,faction_name,"Legendary","turning_point",0,"On Play: If your leader has less defense than the enemy, draw 2 cards and gain 1 maximum PP.","road"),
             card("Strategic Collapse",8,0,0,faction_name,"Epic","strategic_collapse",0,"Spell — Choose One: Deal 5 damage to all enemy followers, or return all enemy followers with 5 or less Attack to their owner's hand. Draw a card.","star"),
             card("Walking Free",10,6,8,faction_name,"Platinum","walking_free",0,"SIGNATURE PLATINUM — Evolve for free. Give Purpose followers remaining in your deck +1/+1, recover 2 PP, draw 2, and grant a sequencing leader effect.","star"),
-            card("Purpose Eternal",9,9,10,faction_name,"Legendary","charge",0,"Breakthrough. A focused late-game finisher.","star","jd-129")]
+            card("Purpose Eternal",9,9,10,faction_name,"Epic","charge_storm",0,"Charge. Storm. Breakthrough — cuts through even a full board.","star","jd-129")]
     return [
         card("Dawnwing Messenger",1,1,2,"Hope","Bronze","draw",1,"On Play: Draw a card.","road"),
         card("Kindled Promise",1,1,3,"Hope","Bronze","heal_leader",1,"On Play: Restore 1 defense.","hands"),
@@ -451,7 +456,7 @@ func build_class_cards(faction_name: String) -> Array:
         card("New Beginning",7,5,8,"Hope","Legendary","board_clear_heal",4,"On Play: Clear every other follower, then restore 4 defense.","star"),
         card("Clean Slate",7,0,0,"Hope","Epic","second_chance",0,"Spell: Transform the 3 enemy followers with the highest Attack into Newcomers (1/1). Restore 3 defense.","hands"),
         card("Beacon of Hope",8,5,7,"Hope","Platinum","hope_platinum",0,"SIGNATURE PLATINUM — Evolve for free. Summon two Inspired Volunteers and empower the first ally that enters play each turn.","star"),
-        card("Hope Unending",9,7,11,"Hope","Legendary","heal_draw",6,"On Play: Restore 6 defense and draw a card.","star","jd-130")]
+        card("Hope Unending",7,5,8,"Hope","Legendary","heal_draw",6,"On Play: Restore 6 defense and draw a card.","star","jd-130")]
 
 func build_universal_cards() -> Array:
     return [
@@ -466,7 +471,7 @@ func build_universal_cards() -> Array:
         card("Fresh Perspective",5,4,6,"Universal","Gold","bounce",0,"On Play: Return the strongest enemy follower to its owner's hand.","star"),
         card("Renewed Resolve",6,5,6,"Universal","Legendary","revive_buff",2,"On Play: Recover a follower; it gains +2/+2.","star"),
         card("Rock Bottom",7,4,7,"Universal","Legendary","board_clear_draw",0,"On Play: Send every other follower to the Relapse Zone. Both players draw 2.","flame"),
-        card("The Sponsor",8,5,9,"Universal","Platinum","sponsor",0,"SIGNATURE PLATINUM — Create a Sponsee on Arrival and at the end of each of your turns. Sponsees inherit your class path.","star")]
+        card("The Sponsor",8,5,9,"Universal","Platinum","sponsor",0,"SIGNATURE PLATINUM — Arrival: Summon 2 Sponsees. End of your turn: Summon another Sponsee. Sponsees are 3/3 and carry your class path's strength.","star")]
 
 func build_class_deck(faction_name: String) -> Array:
     var class_cards: Array = build_class_cards(faction_name)
@@ -520,7 +525,7 @@ func build_story_opponent_deck(faction_name: String, stage_id: int) -> Array:
         var c: Dictionary = shuffled[idx % shuffled.size()]
         var card_name := str(c.get("name", "Card"))
         var rarity := str(c.get("rarity", "Bronze"))
-        var limit := 1 if rarity == "Platinum" else (2 if rarity == "Legendary" else 3)
+        var limit := 2 if rarity in ["Platinum", "Signature Platinum", "Signature Gold"] else 3
         if int(counts.get(card_name, 0)) < limit:
             deck.append(c.duplicate(true))
             counts[card_name] = int(counts.get(card_name, 0)) + 1
@@ -573,7 +578,7 @@ func _fill_legal_deck(deck: Array, counts: Dictionary, source: Array) -> void:
         var card_data: Dictionary = source[idx % source.size()]
         var card_name := str(card_data.get("name", "Card"))
         var rarity := str(card_data.get("rarity", "Bronze"))
-        var limit := 1 if rarity == "Platinum" else (2 if rarity == "Legendary" else 3)
+        var limit := 2 if rarity in ["Platinum", "Signature Platinum", "Signature Gold"] else 3
         if int(counts.get(card_name, 0)) < limit:
             deck.append(card_data.duplicate(true))
             counts[card_name] = int(counts.get(card_name, 0)) + 1
@@ -650,7 +655,7 @@ func _developer_curve_deck(pool: Array, low_target: int = 14, mid_target: int = 
             var card_data: Dictionary = buckets[key][pass_index % buckets[key].size()]
             var name := str(card_data.get("name", "Card"))
             var rarity := str(card_data.get("rarity", "Bronze"))
-            var limit := 1 if rarity == "Platinum" else (2 if rarity == "Legendary" else 3)
+            var limit := 2 if rarity in ["Platinum", "Signature Platinum", "Signature Gold"] else 3
             if int(counts.get(name, 0)) < limit:
                 result.append(card_data.duplicate(true))
                 counts[name] = int(counts.get(name, 0)) + 1
@@ -708,7 +713,7 @@ func build_developer_final_boss_deck() -> Array:
             break
         var name := str(card_data.get("name", ""))
         var rarity := str(card_data.get("rarity", "Bronze"))
-        var limit := 1 if rarity == "Platinum" else (2 if rarity == "Legendary" else 3)
+        var limit := 2 if rarity in ["Platinum", "Signature Platinum", "Signature Gold"] else 3
         var copies := 0
         for existing in deck:
             if str(existing.get("name", "")) == name:
@@ -797,7 +802,7 @@ func build_developer_meta_deck(faction_name: String) -> Array:
             break
         var name := str(card_data.get("name", ""))
         var rarity := str(card_data.get("rarity", "Bronze"))
-        var limit := 1 if rarity == "Platinum" else (2 if rarity == "Legendary" else 3)
+        var limit := 2 if rarity in ["Platinum", "Signature Platinum", "Signature Gold"] else 3
         var copies := 0
         for existing in deck:
             if str(existing.get("name", "")) == name:
@@ -3078,6 +3083,7 @@ func start_online_host_match() -> void:
     player_mana=0; player_max_mana=0; enemy_mana=0; enemy_max_mana=0; turn_number=0
     player_momentum=0; enemy_momentum=0; momentum_used_this_turn=false
     player_hand.clear(); enemy_hand.clear(); player_board.clear(); enemy_board.clear(); player_relapse.clear(); enemy_relapse.clear()
+    phoenix_pending_player = false; phoenix_pending_enemy = false; phoenix_tier_player = 1; phoenix_tier_enemy = 1
     player_deck = prepare_balanced_draw_order(build_deck_for_mode(selected_class, player_deck_mode))
     enemy_deck = prepare_balanced_draw_order(build_deck_for_mode(enemy_class, enemy_deck_mode))
     for i in range(4):
@@ -3527,6 +3533,7 @@ func start_game() -> void:
     player_momentum = 0; enemy_momentum = 0; momentum_used_this_turn = false
     player_courage_entered = 0; enemy_courage_entered = 0
     player_hand.clear(); enemy_hand.clear(); player_board.clear(); enemy_board.clear(); player_relapse.clear(); enemy_relapse.clear()
+    phoenix_pending_player = false; phoenix_pending_enemy = false; phoenix_tier_player = 1; phoenix_tier_enemy = 1
     player_deck = prepare_balanced_draw_order(build_deck_for_mode(selected_class, player_deck_mode))
     enemy_deck = prepare_balanced_draw_order(build_deck_for_mode(enemy_class, enemy_deck_mode))
     for i in range(4):
@@ -3845,6 +3852,17 @@ func start_player_turn() -> void:
         else:
             unit["can_attack"] = true
         unit["evolved_this_turn"] = false
+    if phoenix_pending_player and not game_over:
+        phoenix_pending_player = false
+        var t := phoenix_tier_player
+        await get_tree().create_timer(0.35).timeout
+        if follower_count(player_board) < MAX_BOARD:
+            var phoenix := _make_phoenix_card(t)
+            player_board.append(phoenix)
+            refresh_ui(true, player_board.size() - 1, true)
+            await show_vfx("PHOENIX RISES! %d/%d" % [t, t], area_center(true), Color(1.0, 0.72, 0.30))
+        else:
+            await show_vfx("PHOENIX CANNOT RETURN — BOARD FULL", area_center(true), Color(1.0, 0.25, 0.18))
     if not (turn_number == 1 and player_goes_first):
         draw_card(player_deck, player_hand)
     safe_set_text(status_label, "Your turn — play cards, attack, or spend Momentum.")
@@ -3858,31 +3876,41 @@ func sponsor_in_play(board: Array) -> bool:
             return true
     return false
 
+func _make_phoenix_card(tier: int) -> Dictionary:
+    var phoenix := card("Phoenix Rising", 1, tier, tier, "Courage", "Legendary", "phoenix_rising", 0,
+        "Destroyed: returns at the start of your next turn at +1/+1 (1/1 → 10/10). At 10/10, permanently falls.",
+        "star", "jd-125")
+    phoenix["phoenix_tier"] = tier
+    phoenix["max_health"] = tier
+    phoenix["can_attack"] = false
+    phoenix["summoned_turn"] = turn_number
+    return phoenix
+
 func create_sponsee(player_side: bool) -> void:
     var board: Array = player_board if player_side else enemy_board
     if follower_count(board) >= MAX_BOARD or not sponsor_in_play(board):
         return
     var path := selected_class if player_side else enemy_class
-    var token := card("Sponsee", 2, 2, 2, "Universal", "Token", "sponsee", 0, "Guided by %s." % path, "hands")
+    var token := card("Sponsee", 2, 3, 3, "Universal", "Token", "sponsee", 0, "Guided by %s." % path, "hands")
     token["is_sponsee"] = true
     token["sponsor_protection"] = true
     match path:
         "Courage":
-            token["attack"] = 3
+            token["attack"] = 4
             token["can_attack"] = true
-            token["display_text"] = "Courage Path: Determination. Can attack followers immediately."
+            token["display_text"] = "Courage Path: Charge. Legacy restores 2 Defense."
         "Hope":
-            token["health"] = 3
-            token["max_health"] = 3
-            token["display_text"] = "Hope Path: Legacy restores 3 Defense."
+            token["health"] = 5
+            token["max_health"] = 5
+            token["display_text"] = "Hope Path: Legacy restores 5 Defense."
         "Serenity":
-            token["health"] = 3
-            token["max_health"] = 3
+            token["health"] = 5
+            token["max_health"] = 5
             token["ability"] = "guard"
-            token["display_text"] = "Serenity Path: Protector."
+            token["display_text"] = "Serenity Path: Protector. Legacy restores 3 Defense."
         "Purpose":
-            token["display_text"] = "Purpose Path: Gain 1 Progress when this enters play."
-            add_progress(player_side, 1)
+            token["display_text"] = "Purpose Path: Gain 2 Progress when this enters play."
+            add_progress(player_side, 2)
     board.append(token)
     await show_vfx("%s SPONSEE" % path.to_upper(), area_center(player_side), Color(1.0,0.82,0.34))
 
@@ -4105,6 +4133,18 @@ func show_pass_device_overlay(title_text: String, message: String, callback: Cal
 
 func enemy_turn() -> void:
     clear_daily_progress_temporary_buffs(false)
+    if phoenix_pending_enemy and not game_over:
+        phoenix_pending_enemy = false
+        var t := phoenix_tier_enemy
+        await get_tree().create_timer(0.35).timeout
+        if follower_count(enemy_board) < MAX_BOARD:
+            var phoenix := _make_phoenix_card(t)
+            phoenix["can_attack"] = false
+            enemy_board.append(phoenix)
+            refresh_ui(true, -1, false)
+            await show_vfx("PHOENIX RISES! %d/%d" % [t, t], area_center(false), Color(1.0, 0.72, 0.30))
+        else:
+            await show_vfx("PHOENIX CANNOT RETURN — BOARD FULL", area_center(false), Color(1.0, 0.25, 0.18))
     enemy_max_mana = min(MAX_MANA, enemy_max_mana + 1); enemy_mana = enemy_max_mana
     if not (turn_number == 0 and not player_goes_first):
         draw_card(enemy_deck, enemy_hand)
@@ -4141,7 +4181,7 @@ func enemy_turn() -> void:
             refresh_ui()
             await get_tree().create_timer(0.28).timeout
             continue
-        unit["can_attack"] = unit["ability"] == "charge"
+        unit["can_attack"] = unit["ability"] in ["charge", "charge_storm"]
         unit["summoned_turn"] = turn_number
         if str(unit.get("faction", "")) == "Courage":
             enemy_courage_entered += 1
@@ -4222,7 +4262,7 @@ func play_card(index: int) -> void:
         refresh_ui()
         send_online_snapshot()
         return
-    chosen["can_attack"] = chosen["ability"] in ["charge", "rush"]
+    chosen["can_attack"] = chosen["ability"] in ["charge", "charge_storm", "rush"]
     chosen["summoned_turn"] = turn_number
     if str(chosen.get("faction", "")) == "Courage":
         player_courage_entered += 1
@@ -4394,6 +4434,8 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
             unit["is_sponsor"] = true
             board[sponsor_index] = unit
         await play_sponsor_evolution_animation(unit, player_side)
+        await create_sponsee(player_side)
+        await create_sponsee(player_side)
     elif ability == "rise_together":
         var courage_count := player_courage_entered if player_side else enemy_courage_entered
         var board: Array = player_board if player_side else enemy_board
@@ -4529,6 +4571,42 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
         if hp <= 10:
             unit["attack"] = int(unit["attack"]) + 3; unit["health"] = int(unit["health"]) + 3; unit["max_health"] = int(unit["max_health"]) + 3; unit["can_attack"] = true
             await show_vfx("LAST STAND +3/+3", area_center(player_side), Color(1.0, 0.25, 0.18))
+    elif ability == "turning_point":
+        var own_hp := player_health if player_side else enemy_health
+        var foe_hp := enemy_health if player_side else player_health
+        if own_hp < foe_hp:
+            draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
+            draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
+            if player_side: player_max_mana = mini(MAX_MANA, player_max_mana + 1); player_mana = mini(player_max_mana, player_mana + 1)
+            else: enemy_max_mana = mini(MAX_MANA, enemy_max_mana + 1); enemy_mana = mini(enemy_max_mana, enemy_mana + 1)
+            await trigger_progress_growth(player_side)
+            await show_vfx("TURNING POINT!", area_center(player_side), Color(0.60, 0.85, 1.0))
+        else:
+            draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
+            await show_vfx("TURNING POINT: DRAW", area_center(player_side), Color(0.60, 0.85, 1.0))
+    elif ability == "draw_reduce_two":
+        draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
+        draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
+        var hand_dr2 := player_hand if player_side else enemy_hand
+        var sorted_idx: Array = range(hand_dr2.size())
+        sorted_idx.sort_custom(func(a, b): return int(hand_dr2[a].get("cost", 0)) > int(hand_dr2[b].get("cost", 0)))
+        var reduced := 0
+        for idx in sorted_idx:
+            if reduced >= 2: break
+            if int(hand_dr2[idx].get("cost", 0)) > 0:
+                hand_dr2[idx]["cost"] = int(hand_dr2[idx]["cost"]) - 1
+                reduced += 1
+        await show_vfx("REASSURANCE — PLAN AHEAD", area_center(player_side), Color(0.75, 0.92, 1.0))
+    elif ability == "heal_draw_exhaust":
+        if player_side: player_health = min(STARTING_HEALTH, player_health + amount)
+        else: enemy_health = min(STARTING_HEALTH, enemy_health + amount)
+        draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
+        var foes_exhaust: Array = enemy_board if player_side else player_board
+        for foe in foes_exhaust:
+            if not bool(foe.get("is_amulet", false)):
+                foe["skip_next_attack"] = true
+                foe["can_attack"] = false
+        await show_vfx("PEACE BEYOND FEAR", area_center(player_side), Color(0.55, 0.85, 1.0))
     elif ability in ["revive", "revive_buff", "revive_charge", "revive_to_hand"]:
         await recover_from_relapse(player_side, ability, amount)
     elif ability in ["board_clear", "board_clear_heal", "board_clear_draw"]:
@@ -4887,12 +4965,31 @@ func destroy_unit(board: Array, index: int, player_side: bool, specifically_targ
         return
     if bool(dead.get("is_sponsee", false)):
         var path := selected_class if player_side else enemy_class
-        var heal_amount := 3 if path == "Hope" else 1
+        var heal_amount := 5 if path == "Hope" else (3 if path == "Serenity" else (2 if path == "Courage" else 1))
         if player_side:
             player_health = min(STARTING_HEALTH, player_health + heal_amount)
         else:
             enemy_health = min(STARTING_HEALTH, enemy_health + heal_amount)
         await show_vfx("SPONSEE LEGACY +%d" % heal_amount, area_center(player_side), Color(0.45,1.0,0.62))
+    if str(dead.get("ability", "")) == "phoenix_rising" and not bool(dead.get("was_banished", false)) and not bool(dead.get("was_transformed", false)):
+        var tier := int(dead.get("phoenix_tier", 1))
+        var area_ph: Control = player_board_area if player_side else enemy_board_area
+        var dead_view_ph: CardView = find_card_view_for_board_index(area_ph, index)
+        if dead_view_ph != null:
+            dead_view_ph.phoenix_death_animation()
+            await get_tree().create_timer(0.45).timeout
+        training_on_follower_lost(player_side)
+        board.remove_at(index)
+        if tier >= 10:
+            var rz: Array = player_relapse if player_side else enemy_relapse
+            rz.append(dead.duplicate(true))
+            await show_vfx("NOTHING CAN BREAK MY RESOLVE!", area_center(player_side), Color(1.0, 0.82, 0.34))
+        else:
+            if player_side: phoenix_pending_player = true; phoenix_tier_player = tier + 1
+            else: phoenix_pending_enemy = true; phoenix_tier_enemy = tier + 1
+            await show_vfx("GETS BACK UP!", area_center(player_side), Color(1.0, 0.65, 0.25))
+        refresh_ui()
+        return
     var area := player_board_area if player_side else enemy_board_area
     var dead_view: CardView = find_card_view_for_board_index(area, index)
     if dead_view != null:
