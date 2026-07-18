@@ -673,6 +673,18 @@ func _load_card_art_path(path: String) -> Texture2D:
     return null
 
 func _art_texture() -> Texture2D:
+    # Shiny variant override: The Sponsor has dedicated premium holographic art
+    # with platinum light rays and rainbow iridescence baked into the image.
+    var _card_id: String = str(data.get("id", "")).strip_edges().to_lower()
+    if bool(data.get("is_shiny", false)) and _card_id == "jd-080":
+        var shiny_key := "jd-080-shiny"
+        if _art_cache.has(shiny_key):
+            return _art_cache[shiny_key] as Texture2D
+        var shiny_t := _load_card_art_path("res://assets/cards/full/jd-080-shiny.jpg")
+        if shiny_t != null:
+            _art_cache[shiny_key] = shiny_t
+            return shiny_t
+
     # All art resolution goes through the shared CardArt autoload so that
     # battle cards use the exact same texture as collection and pack opening.
     # The static _art_cache keeps the autoload from being hit every render frame.

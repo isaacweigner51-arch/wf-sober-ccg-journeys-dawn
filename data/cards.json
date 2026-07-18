@@ -1513,5 +1513,29 @@
     "health": 4,
     "effect": "On Play: If your leader has less defense than the enemy, draw 2 cards and gain 1 maximum PP.",
     "max_copies": 3
+  },
+  {
+    "id": "JD-139",
+    "name": "Walking Free",
+    "class": "Universal",
+    "rarity": "Legendary",
+    "cost": 5,
+    "attack": 3,
+    "health": 5,
+    "effect": "Rush. When this follower destroys an enemy follower, restore 3 Defense to your leader and draw a card.",
+    "max_copies": 1,
+    "flavor": "Some doors only open from the inside."
+  },
+  {
+    "id": "JD-140",
+    "name": "The Undaunted",
+    "class": "Courage",
+    "rarity": "Legendary",
+    "cost": 7,
+    "attack": 5,
+    "health": 6,
+    "effect": "Ward. Bane. At the end of your turn, give all other Courage allies +1/+1 and restore 1 Defense to your leader.",
+    "max_copies": 1,
+    "flavor": "Broken by nothing. Forged by everything."
   }
 ]

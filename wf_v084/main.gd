@@ -1383,6 +1383,19 @@ func play_sponsor_evolution_animation(unit: Dictionary, player_side: bool) -> vo
     dimmer.z_index = 1200
     add_child(dimmer)
 
+    # Cinematic backdrop: the Sponsor's diner scene fades in behind the card
+    # as the evolution fires, grounding the moment in a real place and face.
+    var cinematic_bg := TextureRect.new()
+    var _cin_tex := load("res://assets/cards/full/jd-080-cinematic.jpg") as Texture2D
+    cinematic_bg.texture = _cin_tex
+    cinematic_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    cinematic_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    cinematic_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    cinematic_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    cinematic_bg.z_index = 1205
+    cinematic_bg.modulate = Color(1.0, 1.0, 1.0, 0.0)
+    add_child(cinematic_bg)
+
     var sponsor_glow := ColorRect.new()
     sponsor_glow.position = screen_center - Vector2(175, 175)
     sponsor_glow.size = Vector2(350, 350)
@@ -1439,6 +1452,7 @@ func play_sponsor_evolution_animation(unit: Dictionary, player_side: bool) -> vo
     var rise := create_tween().set_parallel(true)
     rise.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
     rise.tween_property(dimmer, "color:a", 0.86, 0.32)
+    rise.tween_property(cinematic_bg, "modulate:a", 0.60, 0.45)
     rise.tween_property(card_view, "position", centered_position + Vector2(-90, 0), 0.42)
     rise.tween_property(card_view, "scale", Vector2(1.9, 1.9), 0.42)
     rise.tween_property(sponsor_glow, "color:a", 0.24, 0.35)
@@ -1474,6 +1488,7 @@ func play_sponsor_evolution_animation(unit: Dictionary, player_side: bool) -> vo
     return_tween.tween_property(card_view, "position", original_position, 0.30)
     return_tween.tween_property(card_view, "scale", original_scale, 0.30)
     return_tween.tween_property(dimmer, "color:a", 0.0, 0.28)
+    return_tween.tween_property(cinematic_bg, "modulate:a", 0.0, 0.28)
     return_tween.tween_property(sponsor_glow, "color:a", 0.0, 0.24)
     return_tween.tween_property(sponsee_portrait, "modulate:a", 0.0, 0.24)
     return_tween.tween_property(connection, "modulate:a", 0.0, 0.24)
@@ -1483,6 +1498,7 @@ func play_sponsor_evolution_animation(unit: Dictionary, player_side: bool) -> vo
 
     card_view.z_index = 0
     dimmer.queue_free()
+    cinematic_bg.queue_free()
     sponsor_glow.queue_free()
     sponsee_portrait.queue_free()
     connection.queue_free()
