@@ -14,6 +14,8 @@ var remote_manifest_url := ""
 # and "upcoming_events" to describe that release.
 var current_notes := ""
 var current_fixes: Array = []
+var current_features: Array = []
+var current_new_cards: Array = []
 var current_upcoming_events: Array = []
 
 func _ready() -> void:
@@ -25,6 +27,8 @@ func _ready() -> void:
             remote_manifest_url = str(parsed.get("remote_manifest_url", ""))
             current_notes = str(parsed.get("notes", ""))
             current_fixes = parsed.get("fixes", [])
+            current_features = parsed.get("features", [])
+            current_new_cards = parsed.get("new_cards", [])
             current_upcoming_events = parsed.get("upcoming_events", [])
 
 # Snapshot of what changed in the build currently installed, for a "What's
@@ -35,6 +39,8 @@ func get_whats_new() -> Dictionary:
         "version": current_version,
         "notes": current_notes,
         "fixes": current_fixes,
+        "features": current_features,
+        "new_cards": current_new_cards,
         "upcoming_events": current_upcoming_events,
     }
 

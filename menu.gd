@@ -1392,16 +1392,19 @@ func maybe_show_whats_new() -> void:
         return
     var fixes: Array = info.get("fixes", [])
     var upcoming: Array = info.get("upcoming_events", [])
-    if fixes.is_empty() and upcoming.is_empty():
-        # Nothing authored for this release yet — don't show an empty popup,
-        # but still remember it so we don't keep re-checking every frame Home
-        # rebuilds this session.
+    var new_cards: Array = info.get("new_cards", [])
+    # Filter easter eggs out of features before showing
+    var features: Array = []
+    for entry in info.get("features", []):
+        if not str(entry).to_upper().contains("EASTER"):
+            features.append(entry)
+    if fixes.is_empty() and features.is_empty() and new_cards.is_empty() and upcoming.is_empty():
         last_seen_whats_new_version = version
         save_profile()
         return
-    show_whats_new_popup(version, fixes, upcoming)
+    show_whats_new_popup(version, fixes, features, new_cards, upcoming)
 
-func show_whats_new_popup(version: String, fixes: Array, upcoming: Array) -> void:
+func show_whats_new_popup(version: String, fixes: Array, features: Array, new_cards: Array, upcoming: Array) -> void:
     var scrim := ColorRect.new()
     scrim.color = Color(0.02, 0.03, 0.06, 0.85)
     scrim.position = Vector2.ZERO
@@ -1438,38 +1441,51 @@ func show_whats_new_popup(version: String, fixes: Array, upcoming: Array) -> voi
     list.add_theme_constant_override("separation", 6)
     scroll.add_child(list)
 
+    var _add_section_header := func(text_value: String, color: Color) -> void:
+        var spacer := Control.new(); spacer.custom_minimum_size = Vector2(624, 6); list.add_child(spacer)
+        var hdr := Label.new()
+        hdr.text = text_value
+        hdr.add_theme_font_size_override("font_size", ui_font_size(15))
+        hdr.add_theme_color_override("font_color", color)
+        list.add_child(hdr)
+
+    var _add_bullet := func(text_value: String, color: Color) -> void:
+        var item := Label.new()
+        item.text = "•  %s" % text_value
+        item.add_theme_font_size_override("font_size", ui_font_size(14))
+        item.add_theme_color_override("font_color", color)
+        item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        item.custom_minimum_size = Vector2(624, 0)
+        list.add_child(item)
+
     if not fixes.is_empty():
-        var fixes_header := Label.new()
-        fixes_header.text = "BUG FIXES & IMPROVEMENTS"
-        fixes_header.add_theme_font_size_override("font_size", ui_font_size(15))
-        fixes_header.add_theme_color_override("font_color", Color(0.55, 1.0, 0.70))
-        list.add_child(fixes_header)
+        _add_section_header.call("CHANGES & IMPROVEMENTS", Color(0.55, 1.0, 0.70))
         for entry in fixes:
-            var item := Label.new()
-            item.text = "•  %s" % str(entry)
-            item.add_theme_font_size_override("font_size", ui_font_size(14))
-            item.add_theme_color_override("font_color", Color(0.94,0.95,1.0))
-            item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-            item.custom_minimum_size = Vector2(624, 0)
-            list.add_child(item)
+            _add_bullet.call(str(entry), Color(0.94, 0.95, 1.0))
+
+    if not features.is_empty():
+        _add_section_header.call("FEATURES", Color(0.55, 1.0, 0.70))
+        for entry in features:
+            _add_bullet.call(str(entry), Color(0.94, 0.95, 1.0))
+
+    if not new_cards.is_empty():
+        _add_section_header.call("NEW CARDS", GOLD_COLOR)
+        var rarity_colors := {
+            "Bronze": Color(0.72, 0.48, 0.22), "Silver": Color(0.78, 0.82, 0.88),
+            "Gold": Color(0.95, 0.78, 0.20), "Epic": Color(0.65, 0.30, 0.90),
+            "Legendary": Color(0.95, 0.55, 0.10), "Platinum": Color(0.55, 0.92, 0.98),
+        }
+        for card_entry in new_cards:
+            var cd: Dictionary = card_entry if card_entry is Dictionary else {}
+            var rarity: String = str(cd.get("rarity", ""))
+            var rc: Color = rarity_colors.get(rarity, Color(0.85, 0.85, 0.85))
+            var line := "%s  [%s %s]" % [str(cd.get("name","?")), str(cd.get("class","?")), rarity]
+            _add_bullet.call(line, rc)
 
     if not upcoming.is_empty():
-        var spacer := Control.new()
-        spacer.custom_minimum_size = Vector2(624, 10)
-        list.add_child(spacer)
-        var upcoming_header := Label.new()
-        upcoming_header.text = "UPCOMING"
-        upcoming_header.add_theme_font_size_override("font_size", ui_font_size(15))
-        upcoming_header.add_theme_color_override("font_color", Color(1.0, 0.83, 0.35))
-        list.add_child(upcoming_header)
+        _add_section_header.call("UPCOMING", Color(1.0, 0.83, 0.35))
         for entry in upcoming:
-            var item2 := Label.new()
-            item2.text = "•  %s" % str(entry)
-            item2.add_theme_font_size_override("font_size", ui_font_size(14))
-            item2.add_theme_color_override("font_color", Color(0.94,0.95,1.0))
-            item2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-            item2.custom_minimum_size = Vector2(624, 0)
-            list.add_child(item2)
+            _add_bullet.call(str(entry), Color(0.94, 0.95, 1.0))
 
     var close_btn := button("GOT IT", Vector2(270, 480), Vector2(160, 48), func():
         last_seen_whats_new_version = version

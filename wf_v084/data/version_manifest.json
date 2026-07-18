@@ -10,7 +10,18 @@
   "build_name": "Shiny Horizons",
   "card_count": 147,
   "version_name": "0.8.30",
-  "fixes": [],
+  "fixes": [
+    "Academy Lesson 1 redesigned \u2014 visual zone tiles, no walls of text, progression fixed.",
+    "Recovery Academy rebuilt \u2014 6 lessons now run inside real battles with live followers.",
+    "Class balance complete \u2014 all 4 classes now even: 6 Bronze / 5 Silver / 7 Gold / 6 Epic / 5 Legendary / 1 Platinum each (147 cards total).",
+    "The Sponsor shiny art updated \u2014 holographic platinum light rays and rainbow iridescence.",
+    "Sponsor Evolution cinematic \u2014 moody diner backdrop plays when The Sponsor evolves.",
+    "Sponsor Trial reward \u2014 defeating The Sponsor for the first time awards a Shiny Platinum copy.",
+    "Walking Free (JD-060) cost lowered from 10 to 6.",
+    "The Undaunted (JD-140) art corrected \u2014 clean look, no tattoos.",
+    "Tutorial overlay \u2014 mentor banner stays at top of battle screen during Academy lessons.",
+    "Lesson progression \u2014 completing a battle lesson auto-returns you to the Academy."
+  ],
   "features": [
     "Academy zone lesson redesigned \u2014 visual zone tiles, no long text, fixed progression bug so players can advance past Lesson 1.",
     "The Undaunted (JD-140) art corrected \u2014 clean chest, no tattoos.",
@@ -29,5 +40,73 @@
   ],
   "upcoming_events": [
     "More seasonal content and cards are in development \u2014 check back after future updates for details."
+  ],
+  "new_cards": [
+    {
+      "id": "JD-138",
+      "name": "Turning Point",
+      "class": "Purpose",
+      "rarity": "Legendary"
+    },
+    {
+      "id": "JD-140",
+      "name": "The Undaunted",
+      "class": "Courage",
+      "rarity": "Legendary"
+    },
+    {
+      "id": "JD-141",
+      "name": "Morning Promise",
+      "class": "Hope",
+      "rarity": "Silver"
+    },
+    {
+      "id": "JD-142",
+      "name": "Stand Your Ground",
+      "class": "Courage",
+      "rarity": "Silver"
+    },
+    {
+      "id": "JD-143",
+      "name": "Gentle Breath",
+      "class": "Serenity",
+      "rarity": "Silver"
+    },
+    {
+      "id": "JD-144",
+      "name": "Sunrise Session",
+      "class": "Hope",
+      "rarity": "Gold"
+    },
+    {
+      "id": "JD-145",
+      "name": "Battle Tested",
+      "class": "Courage",
+      "rarity": "Gold"
+    },
+    {
+      "id": "JD-146",
+      "name": "Never Quit",
+      "class": "Courage",
+      "rarity": "Gold"
+    },
+    {
+      "id": "JD-147",
+      "name": "Peaceful Harbor",
+      "class": "Serenity",
+      "rarity": "Gold"
+    },
+    {
+      "id": "JD-148",
+      "name": "The Believer",
+      "class": "Hope",
+      "rarity": "Legendary"
+    },
+    {
+      "id": "JD-149",
+      "name": "Finding Peace",
+      "class": "Serenity",
+      "rarity": "Legendary"
+    }
   ]
 }
