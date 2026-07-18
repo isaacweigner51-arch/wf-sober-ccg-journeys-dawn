@@ -5356,9 +5356,6 @@ func award_pending_trial() -> Dictionary:
     var special := ""
     if tier >= 4:
         if first_clear:
-            var owned = cfg.get_value("collection", "owned", {})
-            owned["JD-080"] = int(owned.get("JD-080", 0)) + 1
-            cfg.set_value("collection", "owned", owned)
             var shiny_owned = cfg.get_value("collection", "shiny_owned", {})
             shiny_owned["JD-080"] = int(shiny_owned.get("JD-080", 0)) + 1
             cfg.set_value("collection", "shiny_owned", shiny_owned)
