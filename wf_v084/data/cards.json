@@ -1515,18 +1515,6 @@
     "max_copies": 3
   },
   {
-    "id": "JD-139",
-    "name": "Walking Free",
-    "class": "Universal",
-    "rarity": "Legendary",
-    "cost": 5,
-    "attack": 3,
-    "health": 5,
-    "effect": "Rush. When this follower destroys an enemy follower, restore 3 Defense to your leader and draw a card.",
-    "max_copies": 1,
-    "flavor": "Some doors only open from the inside."
-  },
-  {
     "id": "JD-140",
     "name": "The Undaunted",
     "class": "Courage",
