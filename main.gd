@@ -5359,9 +5359,12 @@ func award_pending_trial() -> Dictionary:
             var owned = cfg.get_value("collection", "owned", {})
             owned["JD-080"] = int(owned.get("JD-080", 0)) + 1
             cfg.set_value("collection", "owned", owned)
+            var shiny_owned = cfg.get_value("collection", "shiny_owned", {})
+            shiny_owned["JD-080"] = int(shiny_owned.get("JD-080", 0)) + 1
+            cfg.set_value("collection", "shiny_owned", shiny_owned)
             cfg.set_value("trials", "sponsor_leader_unlocked", true)
             cfg.set_value("trials", "sponsor_sleeve_unlocked", true)
-            special = "The Sponsor Unlocked!"
+            special = "✦ Shiny The Sponsor Unlocked!"
         cfg.set_value("trials", "sponsor_defeated", true)
     cfg.set_value("trials", "pending_opponent", "")
     cfg.set_value("trials", "pending_tier", 0)

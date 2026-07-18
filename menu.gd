@@ -3730,7 +3730,7 @@ func show_trials() -> void:
     label(sp_desc, Vector2(12, 280), Vector2(352, 74), 14, sp)
     var sp_reward_text := "%d GOLD" % int(TRIAL_GOLD_REWARDS.get(4, 0))
     if not sponsor_defeated:
-        sp_reward_text += "\n+ his leader portrait, a card sleeve, and 1 Platinum copy of The Sponsor"
+        sp_reward_text += "\n+ his leader portrait, a card sleeve, and 1 ✦ Shiny Platinum copy of The Sponsor"
     var sp_reward_label := label(sp_reward_text, Vector2(12, 356), Vector2(352, 56), 13, sp)
     sp_reward_label.add_theme_color_override("font_color", Color(0.55, 0.9, 0.6) if sponsor_defeated else GOLD_COLOR)
     var sp_btn := button("LOCKED" if not sponsor_unlocked else "FACE THE SPONSOR", Vector2(12, 400), Vector2(352, 44),
