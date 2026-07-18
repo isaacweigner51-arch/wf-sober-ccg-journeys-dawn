@@ -4029,18 +4029,223 @@ func open_pack() -> void:
     save_profile(); show_pack_results(result["pulled"], result["platinum_hit"])
 
 func open_packs_bulk(requested: int) -> void:
-    # requested == -1 means "open everything owned". Used by the bulk-open
-    # row so players don't have to tap through packs one at a time.
+    # requested == -1 means "open everything owned". Rolls all packs upfront
+    # so the intro summary is accurate, then reveals them one-at-a-time so
+    # Legendary/Platinum pulls each still get their spotlight moment.
     var count: int = pack_inventory if requested == -1 else min(requested, pack_inventory)
     if count <= 0: return
+    var pack_results: Array = []
     var all_pulled: Array = []
     var platinum_count := 0
     for i in range(count):
         var result := _roll_one_pack()
+        pack_results.append(result)
         all_pulled.append_array(result["pulled"])
         if result["platinum_hit"]: platinum_count += 1
     save_profile()
-    show_bulk_pack_results(all_pulled, count, platinum_count)
+    _show_bulk_intro(pack_results, all_pulled, count, platinum_count)
+
+func _show_bulk_intro(pack_results: Array, all_pulled: Array, pack_count: int, platinum_count: int) -> void:
+    clear_screen(); add_background(0.92); currency_bar()
+
+    # Tally rarity counts and duplicate vials across all pulled cards.
+    var rarity_counts: Dictionary = {}
+    var total_dup_vials := 0
+    for cd in all_pulled:
+        var r: String = str(cd.get("rarity", "Bronze"))
+        rarity_counts[r] = rarity_counts.get(r, 0) + 1
+        var dup_info: Dictionary = cd.get("_dup_info", {})
+        if dup_info.get("is_duplicate", false):
+            total_dup_vials += int(dup_info.get("vials", 0))
+
+    # ── Header ────────────────────────────────────────────────────────────────
+    var title_lbl := Label.new()
+    title_lbl.text = "OPENING %d PACKS" % pack_count
+    title_lbl.position = Vector2(190, 18)   # starts 30 px above final resting place
+    title_lbl.size = Vector2(900, 76)
+    title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title_lbl.add_theme_font_size_override("font_size", 52)
+    title_lbl.add_theme_color_override("font_color", GOLD_COLOR)
+    title_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+    title_lbl.add_theme_constant_override("shadow_offset_x", 3)
+    title_lbl.add_theme_constant_override("shadow_offset_y", 3)
+    title_lbl.modulate.a = 0.0
+    root_layer.add_child(title_lbl)
+
+    var subtitle_parts: Array = []
+    if platinum_count > 0:
+        subtitle_parts.append("★ %d Signature Platinum" % platinum_count)
+    var leg_count: int = rarity_counts.get("Legendary", 0)
+    if leg_count > 0:
+        subtitle_parts.append("%d Legendary" % leg_count)
+    var epic_count: int = rarity_counts.get("Epic", 0)
+    if epic_count > 0:
+        subtitle_parts.append("%d Epic" % epic_count)
+    if total_dup_vials > 0:
+        subtitle_parts.append("+%d Vials" % total_dup_vials)
+    var subtitle_text: String = "  •  ".join(subtitle_parts) if not subtitle_parts.is_empty() else "%d cards total" % all_pulled.size()
+    var sub_lbl := label(subtitle_text, Vector2(190, 98), Vector2(900, 36), 20)
+    sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    sub_lbl.modulate.a = 0.0
+
+    # ── Rarity breakdown pills ─────────────────────────────────────────────────
+    var rarities_present: Array = []
+    for r in BULK_RARITY_ORDER:
+        if rarity_counts.get(r, 0) > 0:
+            rarities_present.append(r)
+
+    var pill_h := 46.0
+    var pill_gap := 10.0
+    var total_pill_h: float = rarities_present.size() * pill_h + (rarities_present.size() - 1) * pill_gap
+    var pills_start_y: float = 154.0 + (330.0 - total_pill_h) / 2.0
+
+    var breakdown_pills: Array = []
+    for i in range(rarities_present.size()):
+        var r: String = rarities_present[i]
+        var cnt: int = rarity_counts.get(r, 0)
+        var row_y: float = pills_start_y + i * (pill_h + pill_gap)
+        var rcolor := card_rarity_color(r)
+
+        var pill := Panel.new()
+        pill.position = Vector2(800.0, row_y)   # starts off-screen right; slides to 340
+        pill.size = Vector2(600, pill_h)
+        var pill_style := StyleBoxFlat.new()
+        pill_style.bg_color = Color(rcolor.r, rcolor.g, rcolor.b, 0.14)
+        pill_style.border_color = rcolor
+        pill_style.set_border_width_all(1)
+        pill_style.set_corner_radius_all(23)
+        pill.add_theme_stylebox_override("panel", pill_style)
+        pill.modulate.a = 0.0
+        root_layer.add_child(pill)
+
+        var r_lbl := label(r.to_upper(), Vector2(22, 7), Vector2(360, pill_h - 14), 18, pill)
+        r_lbl.add_theme_color_override("font_color", rcolor)
+        r_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+        var cnt_lbl := label("× %d" % cnt, Vector2(420, 7), Vector2(160, pill_h - 14), 20, pill)
+        cnt_lbl.add_theme_color_override("font_color", Color.WHITE)
+        cnt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+        cnt_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+        breakdown_pills.append(pill)
+
+    # ── Buttons ────────────────────────────────────────────────────────────────
+    var on_reveal := func(): _reveal_packs_sequential(pack_results, all_pulled, pack_count, platinum_count)
+    var on_skip   := func(): show_bulk_pack_results(all_pulled, pack_count, platinum_count)
+    var reveal_btn := button("▶  REVEAL PACKS", Vector2(390, 562), Vector2(310, 56), on_reveal)
+    reveal_btn.modulate.a = 0.0
+    var skip_btn := button("SKIP TO SUMMARY", Vector2(714, 562), Vector2(230, 56), on_skip)
+    skip_btn.modulate.a = 0.0
+
+    # Fire the entrance animation (fire-and-forget).
+    _animate_bulk_intro(title_lbl, sub_lbl, breakdown_pills, reveal_btn, skip_btn,
+                        platinum_count, leg_count, rarity_counts)
+
+func _animate_bulk_intro(title_lbl: Label, sub_lbl: Label, pills: Array,
+                         reveal_btn: BaseButton, skip_btn: BaseButton,
+                         platinum_count: int, leg_count: int, rarity_counts: Dictionary) -> void:
+    # Title drops in from slightly above with a back-ease overshoot.
+    var title_in := create_tween().set_parallel(true)
+    title_in.tween_property(title_lbl, "modulate:a", 1.0, 0.30).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    title_in.tween_property(title_lbl, "position:y", 48.0, 0.38).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    await title_in.finished
+
+    # Subtitle fades in.
+    var sub_in := create_tween()
+    sub_in.tween_property(sub_lbl, "modulate:a", 1.0, 0.22)
+    await sub_in.finished
+
+    # Rarity pills slide in from the right, staggered.
+    for pill in pills:
+        if not is_instance_valid(pill):
+            continue
+        var pill_in := create_tween().set_parallel(true)
+        pill_in.tween_property(pill, "modulate:a", 1.0, 0.20).set_trans(Tween.TRANS_QUAD)
+        pill_in.tween_property(pill, "position:x", 340.0, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        await get_tree().create_timer(0.07).timeout
+
+    await get_tree().create_timer(0.10).timeout
+
+    # Fanfare + sparkles for high-rarity hauls.
+    if platinum_count > 0:
+        play_pack_sfx("platinum_fanfare")
+        spawn_reward_sparkles(Vector2(640, 340), 32, [GOLD_COLOR, Color(1, 1, 1)], 170.0)
+        await get_tree().create_timer(0.28).timeout
+    elif leg_count > 0:
+        play_pack_sfx("legendary_fanfare", -3.0)
+        spawn_reward_sparkles(Vector2(640, 340), 18, [card_rarity_color("Legendary"), Color(1, 1, 1)], 130.0)
+        await get_tree().create_timer(0.20).timeout
+
+    # Reveal + skip buttons fade in together.
+    if is_instance_valid(reveal_btn) and is_instance_valid(skip_btn):
+        var btn_in := create_tween().set_parallel(true)
+        btn_in.tween_property(reveal_btn, "modulate:a", 1.0, 0.22)
+        btn_in.tween_property(skip_btn,   "modulate:a", 1.0, 0.22)
+        await btn_in.finished
+        # Gentle pulse on the reveal button so it draws the eye.
+        var pulse := create_tween().set_loops(3).bind_node(reveal_btn)
+        pulse.tween_property(reveal_btn, "modulate:a", 0.65, 0.28)
+        pulse.tween_property(reveal_btn, "modulate:a", 1.00, 0.28)
+
+func _reveal_packs_sequential(pack_results: Array, all_pulled: Array, pack_count: int, platinum_count: int) -> void:
+    _open_next_pack_in_sequence(pack_results, all_pulled, pack_count, platinum_count, 0)
+
+func _open_next_pack_in_sequence(pack_results: Array, all_pulled: Array,
+                                  pack_count: int, platinum_count: int, idx: int) -> void:
+    if idx >= pack_results.size():
+        show_bulk_pack_results(all_pulled, pack_count, platinum_count)
+        return
+    var result: Dictionary  = pack_results[idx]
+    var pulled: Array       = result["pulled"]
+    var plat_hit: bool      = result["platinum_hit"]
+    var on_next := func(): _open_next_pack_in_sequence(pack_results, all_pulled, pack_count, platinum_count, idx + 1)
+    _show_sequential_pack_reveal(pulled, plat_hit, idx + 1, pack_results.size(),
+                                  all_pulled, pack_count, platinum_count, on_next)
+
+func _show_sequential_pack_reveal(pulled: Array, platinum_hit: bool,
+                                   pack_num: int, total_packs: int,
+                                   all_pulled: Array, pack_count: int, plat_total: int,
+                                   on_next: Callable) -> void:
+    clear_screen(); add_background(0.80)
+    var pack_label := "PACK %d OF %d" % [pack_num, total_packs]
+    header(pack_label, "SIGNATURE PLATINUM!" if platinum_hit else "Cards added to your collection")
+    currency_bar()
+
+    var backs: Array[Panel] = []
+    for i in range(pulled.size()):
+        var pos := Vector2(55 + i * 244, 178)
+        var back := pack_card_back(pos, Vector2(220, 340))
+        root_layer.add_child(back)
+        backs.append(back)
+
+    # NEXT PACK / DONE button — disabled until reveal finishes so Legendary/
+    # Platinum spotlights can't be skipped accidentally; enabled the instant
+    # animations complete, then pulses to signal it's ready.
+    var next_caption: String
+    if pack_num >= total_packs:
+        next_caption = "VIEW SUMMARY"
+    else:
+        next_caption = "NEXT PACK  (%d remaining)" % (total_packs - pack_num)
+    var next_btn := button(next_caption, Vector2(390, 550), Vector2(390, 55), on_next)
+    next_btn.disabled = true
+
+    # Skip-to-summary always available so a player opening 25 packs isn't
+    # forced through every single animation if they just want the results.
+    var on_skip := func(): show_bulk_pack_results(all_pulled, pack_count, plat_total)
+    button("SKIP TO SUMMARY", Vector2(793, 550), Vector2(222, 55), on_skip)
+
+    _enable_next_after_reveal(pulled, backs, platinum_hit, next_btn)
+
+func _enable_next_after_reveal(pulled: Array, backs: Array, platinum_hit: bool, next_btn: BaseButton) -> void:
+    # Awaits the full reveal animation (including any spotlight sequences), then
+    # enables the next-pack button and pulses it to draw the player's eye.
+    await _animate_pack_reveal(pulled, backs, platinum_hit)
+    if not is_instance_valid(next_btn):
+        return
+    next_btn.disabled = false
+    var pulse := create_tween().set_loops(4).bind_node(next_btn)
+    pulse.tween_property(next_btn, "modulate:a", 0.55, 0.25)
+    pulse.tween_property(next_btn, "modulate:a", 1.00, 0.25)
 
 func show_pack_odds(return_screen: Callable) -> void:
     # Required disclosure for real-money pack purchases (Apple/Google both
