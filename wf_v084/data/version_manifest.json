@@ -1,5 +1,5 @@
 {
-  "version": "0.8.30",
+  "version": "0.8.31",
   "build": "Shiny Horizons",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
@@ -12,6 +12,8 @@
   "version_name": "0.8.30",
   "fixes": [],
   "features": [
+    "Academy zone lesson redesigned \u2014 visual zone tiles, no long text, fixed progression bug so players can advance past Lesson 1.",
+    "The Undaunted (JD-140) art corrected \u2014 clean chest, no tattoos.",
     "CLASS BALANCE COMPLETE \u2014 All four classes (Hope, Courage, Serenity, Purpose) are now perfectly even across every rarity tier: 6 Bronze, 5 Silver, 7 Gold, 6 Epic, 5 Legendary, 1 Platinum each.",
     "SPONSOR SHINY ART \u2014 The Sponsor's shiny/platinum copy now renders dedicated holographic art: platinum light rays, rainbow iridescence, and a 'ONE DAY AT A TIME' mug baked into the image.",
     "SPONSOR EVOLUTION CINEMATIC \u2014 When The Sponsor evolves, a moody rain-streaked diner scene fades in behind the card as the backdrop, grounding the moment in a real place.",

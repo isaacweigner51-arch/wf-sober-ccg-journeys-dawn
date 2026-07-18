@@ -774,6 +774,20 @@ func safe_set_text(node: Object, value: String) -> void:
 func _ready() -> void:
     randomize()
     ensure_home_music()
+    # Fast-path back into the Academy when returning from a tutorial battle —
+    # reads the flag that _tutorial_complete() writes, skips the launch screen,
+    # and shows the next lesson immediately.
+    var _tut_cfg := ConfigFile.new()
+    if _tut_cfg.load("user://battle_setup.cfg") == OK \
+            and str(_tut_cfg.get_value("battle","mode","")) == "tutorial" \
+            and bool(_tut_cfg.get_value("tutorial","lesson_complete",false)):
+        _tut_cfg.set_value("tutorial","lesson_complete",false)
+        _tut_cfg.save("user://battle_setup.cfg")
+        cards = load_cards()
+        load_profile()
+        # profile already has the incremented step; just show it
+        show_academy_lesson()
+        return
     if not get_viewport().size_changed.is_connected(_on_viewport_size_changed):
         get_viewport().size_changed.connect(_on_viewport_size_changed)
     if not AccessManager.authentication_finished.is_connected(_on_access_authentication_finished):
@@ -800,14 +814,6 @@ func _ready() -> void:
         NetworkManager.account_authenticated.connect(_on_launch_auth_result)
     cards = load_cards()
     load_profile()
-    var _tut_cfg := ConfigFile.new()
-    if _tut_cfg.load("user://battle_setup.cfg") == OK \
-            and str(_tut_cfg.get_value("battle","mode","")) == "tutorial" \
-            and bool(_tut_cfg.get_value("tutorial","lesson_complete",false)):
-        _tut_cfg.set_value("tutorial","lesson_complete",false)
-        _tut_cfg.save("user://battle_setup.cfg")
-        show_academy_lesson()
-        return
     show_launch_screen()
     if NetworkManager.connected and not NetworkManager.access_token.is_empty():
         launch_status.text = "Restoring account session..."
@@ -1812,6 +1818,8 @@ func launch_tutorial_battle(tutorial_lesson: int) -> void:
     get_tree().change_scene_to_file("res://main.tscn")
 
 func show_academy_lesson() -> void:
+    # Lessons 1-4, 6, and 9 run inside the real battle scene with followers
+    # on the field. Map academy_step → tutorial_lesson index and skip the UI.
     const BATTLE_STEPS := {1: 1, 2: 2, 3: 3, 4: 4, 6: 5, 9: 6}
     if BATTLE_STEPS.has(academy_step):
         launch_tutorial_battle(BATTLE_STEPS[academy_step])
@@ -1923,12 +1931,7 @@ func show_academy_lesson() -> void:
         "Nobody graduates from this alone. A Sponsor takes the hit meant for you — that's the whole bond, right there.",
         "Last stop before the real world: forty cards, your rules, your program. Get this part right and everything else takes care of itself.",
     ]
-    var mentor_line := centered_label(mentor_lines[academy_step] if academy_step < mentor_lines.size() else "", Vector2(70, 8), Vector2(950, 40), 15, board)
-    mentor_line.add_theme_color_override("font_color", accent.lightened(0.35))
-    var mentor_name_tag := centered_label("— %s, %s" % [mentor_names[academy_step], mentor_titles[academy_step]], Vector2(70, 40), Vector2(950, 18), 11, board)
-    mentor_name_tag.modulate = Color(0.7, 0.72, 0.78)
-
-    var instruction := centered_label("", Vector2(70, 60), Vector2(950, 40), 19, board)
+    var instruction := centered_label("", Vector2(70, 28), Vector2(950, 52), 22, board)
     instruction.add_theme_color_override("font_color", Color(0.96,0.93,0.82))
 
     var feedback_chip := Panel.new()
@@ -2117,37 +2120,87 @@ func lesson_complete() -> void:
         show_academy_lesson()
 
 func build_zone_lesson(board: Control) -> void:
-    # Each zone used to just report "identified" when clicked -- true, but it
-    # never said why that zone matters, so the lesson taught where things are
-    # without ever teaching what they're for. A one-line "why" per zone (shown
-    # in the feedback chip on click) turns it from a five-item scavenger hunt
-    # into an actual orientation to the board.
     var why := {
-        "leader": "This is what you're protecting. The match ends the moment it hits 0.",
-        "hand": "Your options for this turn. Anything not played by End Turn just waits for next turn.",
-        "deck": "Run out of deck and you can't draw — every card you spend now is one less later.",
-        "relapse": "Where your fallen followers go. It isn't the end for them — Recovery can bring them back.",
-        "points": "What you spend to play cards. It goes up by 1 every turn, so your options grow with it.",
+        "leader": "Your leader has 20 Defense — when it hits 0, the match is over.",
+        "hand": "Your hand holds the cards you can play this turn.",
+        "deck": "Your deck is your supply. Run out and you can't draw.",
+        "relapse": "Fallen followers go here — Recovery can bring them back.",
+        "points": "Play Points are spent to play cards. You gain 1 more each turn.",
+    }
+    var icons := {"leader":"♥", "hand":"🃏", "deck":"📦", "relapse":"💀", "points":"⚡"}
+    var labels := {"leader":"LEADER\n20 Defense", "hand":"YOUR HAND\nCards available", "deck":"YOUR DECK\nCards remaining", "relapse":"RELAPSE ZONE\nFallen followers", "points":"PLAY POINTS\n3 / 3"}
+    var zone_colors := {
+        "leader": Color(0.72, 0.18, 0.18),
+        "hand":   Color(0.20, 0.48, 0.72),
+        "deck":   Color(0.28, 0.55, 0.28),
+        "relapse":Color(0.45, 0.18, 0.55),
+        "points": Color(0.72, 0.60, 0.10),
     }
     var selected := {"leader":false, "hand":false, "deck":false, "relapse":false, "points":false}
     var counter := [0]
-    var make_zone := func(text_value: String, pos: Vector2, key: String):
-        var b: Button
-        b = button(text_value, pos, Vector2(170, 70), func():
+    # b_refs boxes each button so the callback can reference it after assignment.
+    var b_refs: Dictionary = {}
+
+    var make_zone := func(pos: Vector2, key: String):
+        var tile := Panel.new()
+        tile.position = pos
+        tile.size = Vector2(195, 88)
+        var zc: Color = zone_colors[key]
+        var sb := StyleBoxFlat.new()
+        sb.bg_color = Color(zc.r, zc.g, zc.b, 0.22)
+        sb.border_color = zc
+        sb.set_border_width_all(3)
+        sb.corner_radius_top_left = 12; sb.corner_radius_top_right = 12
+        sb.corner_radius_bottom_left = 12; sb.corner_radius_bottom_right = 12
+        tile.add_theme_stylebox_override("panel", sb)
+        tile.mouse_filter = Control.MOUSE_FILTER_STOP
+        board.add_child(tile)
+        b_refs[key] = tile
+
+        var icon_lbl := Label.new()
+        icon_lbl.text = icons[key]
+        icon_lbl.position = Vector2(10, 8)
+        icon_lbl.size = Vector2(36, 36)
+        icon_lbl.add_theme_font_size_override("font_size", 24)
+        icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        tile.add_child(icon_lbl)
+
+        var name_lbl := Label.new()
+        name_lbl.text = labels[key]
+        name_lbl.position = Vector2(46, 8)
+        name_lbl.size = Vector2(140, 72)
+        name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        name_lbl.add_theme_font_size_override("font_size", 14)
+        name_lbl.add_theme_color_override("font_color", Color(0.96, 0.93, 0.82))
+        name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        tile.add_child(name_lbl)
+
+        tile.gui_input.connect(func(ev: InputEvent):
+            if not (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT): return
             if selected[key]: return
             selected[key] = true
             counter[0] += 1
-            if is_instance_valid(b):
-                b.disabled = true
-                b.text += "  ✓"
-            academy_feedback_text("%s — %d of 5 zones found." % [str(why.get(key, "")), counter[0]])
-            if counter[0] == 5: lesson_complete()
-        , board)
-    make_zone.call("YOUR LEADER\n20 DEFENSE", Vector2(90, 130), "leader")
-    make_zone.call("YOUR HAND\nCards available", Vector2(290, 320), "hand")
-    make_zone.call("YOUR DECK\nCards remaining", Vector2(830, 130), "deck")
-    make_zone.call("RELAPSE ZONE\nFallen followers", Vector2(830, 320), "relapse")
-    make_zone.call("PLAY POINTS\n3 / 3", Vector2(90, 320), "points")
+            var t: Panel = b_refs.get(key)
+            if is_instance_valid(t):
+                var done_sb := StyleBoxFlat.new()
+                done_sb.bg_color = Color(zc.r, zc.g, zc.b, 0.65)
+                done_sb.border_color = Color(0.6, 1.0, 0.6)
+                done_sb.set_border_width_all(3)
+                done_sb.corner_radius_top_left = 12; done_sb.corner_radius_top_right = 12
+                done_sb.corner_radius_bottom_left = 12; done_sb.corner_radius_bottom_right = 12
+                t.add_theme_stylebox_override("panel", done_sb)
+                if is_instance_valid(icon_lbl): icon_lbl.text = "✓"
+            academy_feedback_text("%s  (%d / 5)" % [why.get(key, ""), counter[0]])
+            if counter[0] == 5:
+                await get_tree().create_timer(0.4).timeout
+                lesson_complete()
+        )
+
+    make_zone.call(Vector2(80,  110), "leader")
+    make_zone.call(Vector2(310, 110), "hand")
+    make_zone.call(Vector2(795, 110), "deck")
+    make_zone.call(Vector2(795, 300), "relapse")
+    make_zone.call(Vector2(80,  300), "points")
 
 func build_play_follower_lesson(board: Control) -> void:
     centered_label("PLAY POINTS: 2 / 2", Vector2(65, 122), Vector2(220, 54), 22, board)
@@ -4159,6 +4212,7 @@ func open_packs_bulk(requested: int) -> void:
 func _show_bulk_intro(pack_results: Array, all_pulled: Array, pack_count: int, platinum_count: int) -> void:
     clear_screen(); add_background(0.92); currency_bar()
 
+    # Tally rarity counts and duplicate vials across all pulled cards.
     var rarity_counts: Dictionary = {}
     var total_dup_vials := 0
     for cd in all_pulled:
@@ -4168,9 +4222,10 @@ func _show_bulk_intro(pack_results: Array, all_pulled: Array, pack_count: int, p
         if dup_info.get("is_duplicate", false):
             total_dup_vials += int(dup_info.get("vials", 0))
 
+    # ── Header ────────────────────────────────────────────────────────────────
     var title_lbl := Label.new()
     title_lbl.text = "OPENING %d PACKS" % pack_count
-    title_lbl.position = Vector2(190, 18)
+    title_lbl.position = Vector2(190, 18)   # starts 30 px above final resting place
     title_lbl.size = Vector2(900, 76)
     title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     title_lbl.add_theme_font_size_override("font_size", 52)
@@ -4197,6 +4252,7 @@ func _show_bulk_intro(pack_results: Array, all_pulled: Array, pack_count: int, p
     sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     sub_lbl.modulate.a = 0.0
 
+    # ── Rarity breakdown pills ─────────────────────────────────────────────────
     var rarities_present: Array = []
     for r in BULK_RARITY_ORDER:
         if rarity_counts.get(r, 0) > 0:
@@ -4215,7 +4271,7 @@ func _show_bulk_intro(pack_results: Array, all_pulled: Array, pack_count: int, p
         var rcolor := card_rarity_color(r)
 
         var pill := Panel.new()
-        pill.position = Vector2(800.0, row_y)
+        pill.position = Vector2(800.0, row_y)   # starts off-screen right; slides to 340
         pill.size = Vector2(600, pill_h)
         var pill_style := StyleBoxFlat.new()
         pill_style.bg_color = Color(rcolor.r, rcolor.g, rcolor.b, 0.14)
@@ -4237,6 +4293,7 @@ func _show_bulk_intro(pack_results: Array, all_pulled: Array, pack_count: int, p
 
         breakdown_pills.append(pill)
 
+    # ── Buttons ────────────────────────────────────────────────────────────────
     var on_reveal := func(): _reveal_packs_sequential(pack_results, all_pulled, pack_count, platinum_count)
     var on_skip   := func(): show_bulk_pack_results(all_pulled, pack_count, platinum_count)
     var reveal_btn := button("▶  REVEAL PACKS", Vector2(390, 562), Vector2(310, 56), on_reveal)
@@ -4244,21 +4301,25 @@ func _show_bulk_intro(pack_results: Array, all_pulled: Array, pack_count: int, p
     var skip_btn := button("SKIP TO SUMMARY", Vector2(714, 562), Vector2(230, 56), on_skip)
     skip_btn.modulate.a = 0.0
 
+    # Fire the entrance animation (fire-and-forget).
     _animate_bulk_intro(title_lbl, sub_lbl, breakdown_pills, reveal_btn, skip_btn,
                         platinum_count, leg_count, rarity_counts)
 
 func _animate_bulk_intro(title_lbl: Label, sub_lbl: Label, pills: Array,
                          reveal_btn: BaseButton, skip_btn: BaseButton,
                          platinum_count: int, leg_count: int, rarity_counts: Dictionary) -> void:
+    # Title drops in from slightly above with a back-ease overshoot.
     var title_in := create_tween().set_parallel(true)
     title_in.tween_property(title_lbl, "modulate:a", 1.0, 0.30).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
     title_in.tween_property(title_lbl, "position:y", 48.0, 0.38).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     await title_in.finished
 
+    # Subtitle fades in.
     var sub_in := create_tween()
     sub_in.tween_property(sub_lbl, "modulate:a", 1.0, 0.22)
     await sub_in.finished
 
+    # Rarity pills slide in from the right, staggered.
     for pill in pills:
         if not is_instance_valid(pill):
             continue
@@ -4269,6 +4330,7 @@ func _animate_bulk_intro(title_lbl: Label, sub_lbl: Label, pills: Array,
 
     await get_tree().create_timer(0.10).timeout
 
+    # Fanfare + sparkles for high-rarity hauls.
     if platinum_count > 0:
         play_pack_sfx("platinum_fanfare")
         spawn_reward_sparkles(Vector2(640, 340), 32, [GOLD_COLOR, Color(1, 1, 1)], 170.0)
@@ -4278,11 +4340,13 @@ func _animate_bulk_intro(title_lbl: Label, sub_lbl: Label, pills: Array,
         spawn_reward_sparkles(Vector2(640, 340), 18, [card_rarity_color("Legendary"), Color(1, 1, 1)], 130.0)
         await get_tree().create_timer(0.20).timeout
 
+    # Reveal + skip buttons fade in together.
     if is_instance_valid(reveal_btn) and is_instance_valid(skip_btn):
         var btn_in := create_tween().set_parallel(true)
         btn_in.tween_property(reveal_btn, "modulate:a", 1.0, 0.22)
         btn_in.tween_property(skip_btn,   "modulate:a", 1.0, 0.22)
         await btn_in.finished
+        # Gentle pulse on the reveal button so it draws the eye.
         var pulse := create_tween().set_loops(3).bind_node(reveal_btn)
         pulse.tween_property(reveal_btn, "modulate:a", 0.65, 0.28)
         pulse.tween_property(reveal_btn, "modulate:a", 1.00, 0.28)
@@ -4318,6 +4382,9 @@ func _show_sequential_pack_reveal(pulled: Array, platinum_hit: bool,
         root_layer.add_child(back)
         backs.append(back)
 
+    # NEXT PACK / DONE button — disabled until reveal finishes so Legendary/
+    # Platinum spotlights can't be skipped accidentally; enabled the instant
+    # animations complete, then pulses to signal it's ready.
     var next_caption: String
     if pack_num >= total_packs:
         next_caption = "VIEW SUMMARY"
@@ -4326,12 +4393,16 @@ func _show_sequential_pack_reveal(pulled: Array, platinum_hit: bool,
     var next_btn := button(next_caption, Vector2(390, 550), Vector2(390, 55), on_next)
     next_btn.disabled = true
 
+    # Skip-to-summary always available so a player opening 25 packs isn't
+    # forced through every single animation if they just want the results.
     var on_skip := func(): show_bulk_pack_results(all_pulled, pack_count, plat_total)
     button("SKIP TO SUMMARY", Vector2(793, 550), Vector2(222, 55), on_skip)
 
     _enable_next_after_reveal(pulled, backs, platinum_hit, next_btn)
 
 func _enable_next_after_reveal(pulled: Array, backs: Array, platinum_hit: bool, next_btn: BaseButton) -> void:
+    # Awaits the full reveal animation (including any spotlight sequences), then
+    # enables the next-pack button and pulses it to draw the player's eye.
     await _animate_pack_reveal(pulled, backs, platinum_hit)
     if not is_instance_valid(next_btn):
         return
@@ -4519,6 +4590,26 @@ func show_bulk_pack_results(pulled: Array, pack_count: int, platinum_count: int)
     if total_dup_vials > 0:
         subtitle += "  •  +%d VIALS FROM DUPLICATES" % total_dup_vials
     header("PACKS OPENED", subtitle); currency_bar()
+
+    # Build per-rarity counts and display them between the header and card grid
+    # so players opening large batches can see at a glance how many Epics,
+    # Legendaries, etc. they pulled without having to count badges themselves.
+    var rarity_counts := {}
+    for cd in pulled:
+        var r: String = str(cd.get("rarity", "Bronze"))
+        rarity_counts[r] = rarity_counts.get(r, 0) + 1
+    var breakdown_parts: Array = []
+    for r in BULK_RARITY_ORDER:
+        var cnt: int = rarity_counts.get(r, 0)
+        if cnt > 0:
+            breakdown_parts.append("%d %s" % [cnt, r])
+    if not breakdown_parts.is_empty():
+        var breakdown_label := label(
+            "  •  ".join(breakdown_parts),
+            Vector2(28, 112), Vector2(810, 54), 15
+        )
+        breakdown_label.add_theme_color_override("font_color", GOLD_COLOR)
+        breakdown_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 
     var sorted_pulled: Array = pulled.duplicate()
     sorted_pulled.sort_custom(func(a, b):

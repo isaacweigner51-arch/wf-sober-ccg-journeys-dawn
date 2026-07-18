@@ -1931,12 +1931,7 @@ func show_academy_lesson() -> void:
         "Nobody graduates from this alone. A Sponsor takes the hit meant for you — that's the whole bond, right there.",
         "Last stop before the real world: forty cards, your rules, your program. Get this part right and everything else takes care of itself.",
     ]
-    var mentor_line := centered_label(mentor_lines[academy_step] if academy_step < mentor_lines.size() else "", Vector2(70, 8), Vector2(950, 40), 15, board)
-    mentor_line.add_theme_color_override("font_color", accent.lightened(0.35))
-    var mentor_name_tag := centered_label("— %s, %s" % [mentor_names[academy_step], mentor_titles[academy_step]], Vector2(70, 40), Vector2(950, 18), 11, board)
-    mentor_name_tag.modulate = Color(0.7, 0.72, 0.78)
-
-    var instruction := centered_label("", Vector2(70, 60), Vector2(950, 40), 19, board)
+    var instruction := centered_label("", Vector2(70, 28), Vector2(950, 52), 22, board)
     instruction.add_theme_color_override("font_color", Color(0.96,0.93,0.82))
 
     var feedback_chip := Panel.new()
@@ -2125,37 +2120,87 @@ func lesson_complete() -> void:
         show_academy_lesson()
 
 func build_zone_lesson(board: Control) -> void:
-    # Each zone used to just report "identified" when clicked -- true, but it
-    # never said why that zone matters, so the lesson taught where things are
-    # without ever teaching what they're for. A one-line "why" per zone (shown
-    # in the feedback chip on click) turns it from a five-item scavenger hunt
-    # into an actual orientation to the board.
     var why := {
-        "leader": "This is what you're protecting. The match ends the moment it hits 0.",
-        "hand": "Your options for this turn. Anything not played by End Turn just waits for next turn.",
-        "deck": "Run out of deck and you can't draw — every card you spend now is one less later.",
-        "relapse": "Where your fallen followers go. It isn't the end for them — Recovery can bring them back.",
-        "points": "What you spend to play cards. It goes up by 1 every turn, so your options grow with it.",
+        "leader": "Your leader has 20 Defense — when it hits 0, the match is over.",
+        "hand": "Your hand holds the cards you can play this turn.",
+        "deck": "Your deck is your supply. Run out and you can't draw.",
+        "relapse": "Fallen followers go here — Recovery can bring them back.",
+        "points": "Play Points are spent to play cards. You gain 1 more each turn.",
+    }
+    var icons := {"leader":"♥", "hand":"🃏", "deck":"📦", "relapse":"💀", "points":"⚡"}
+    var labels := {"leader":"LEADER\n20 Defense", "hand":"YOUR HAND\nCards available", "deck":"YOUR DECK\nCards remaining", "relapse":"RELAPSE ZONE\nFallen followers", "points":"PLAY POINTS\n3 / 3"}
+    var zone_colors := {
+        "leader": Color(0.72, 0.18, 0.18),
+        "hand":   Color(0.20, 0.48, 0.72),
+        "deck":   Color(0.28, 0.55, 0.28),
+        "relapse":Color(0.45, 0.18, 0.55),
+        "points": Color(0.72, 0.60, 0.10),
     }
     var selected := {"leader":false, "hand":false, "deck":false, "relapse":false, "points":false}
     var counter := [0]
-    var make_zone := func(text_value: String, pos: Vector2, key: String):
-        var b: Button
-        b = button(text_value, pos, Vector2(170, 70), func():
+    # b_refs boxes each button so the callback can reference it after assignment.
+    var b_refs: Dictionary = {}
+
+    var make_zone := func(pos: Vector2, key: String):
+        var tile := Panel.new()
+        tile.position = pos
+        tile.size = Vector2(195, 88)
+        var zc: Color = zone_colors[key]
+        var sb := StyleBoxFlat.new()
+        sb.bg_color = Color(zc.r, zc.g, zc.b, 0.22)
+        sb.border_color = zc
+        sb.set_border_width_all(3)
+        sb.corner_radius_top_left = 12; sb.corner_radius_top_right = 12
+        sb.corner_radius_bottom_left = 12; sb.corner_radius_bottom_right = 12
+        tile.add_theme_stylebox_override("panel", sb)
+        tile.mouse_filter = Control.MOUSE_FILTER_STOP
+        board.add_child(tile)
+        b_refs[key] = tile
+
+        var icon_lbl := Label.new()
+        icon_lbl.text = icons[key]
+        icon_lbl.position = Vector2(10, 8)
+        icon_lbl.size = Vector2(36, 36)
+        icon_lbl.add_theme_font_size_override("font_size", 24)
+        icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        tile.add_child(icon_lbl)
+
+        var name_lbl := Label.new()
+        name_lbl.text = labels[key]
+        name_lbl.position = Vector2(46, 8)
+        name_lbl.size = Vector2(140, 72)
+        name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        name_lbl.add_theme_font_size_override("font_size", 14)
+        name_lbl.add_theme_color_override("font_color", Color(0.96, 0.93, 0.82))
+        name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        tile.add_child(name_lbl)
+
+        tile.gui_input.connect(func(ev: InputEvent):
+            if not (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT): return
             if selected[key]: return
             selected[key] = true
             counter[0] += 1
-            if is_instance_valid(b):
-                b.disabled = true
-                b.text += "  ✓"
-            academy_feedback_text("%s — %d of 5 zones found." % [str(why.get(key, "")), counter[0]])
-            if counter[0] == 5: lesson_complete()
-        , board)
-    make_zone.call("YOUR LEADER\n20 DEFENSE", Vector2(90, 130), "leader")
-    make_zone.call("YOUR HAND\nCards available", Vector2(290, 320), "hand")
-    make_zone.call("YOUR DECK\nCards remaining", Vector2(830, 130), "deck")
-    make_zone.call("RELAPSE ZONE\nFallen followers", Vector2(830, 320), "relapse")
-    make_zone.call("PLAY POINTS\n3 / 3", Vector2(90, 320), "points")
+            var t: Panel = b_refs.get(key)
+            if is_instance_valid(t):
+                var done_sb := StyleBoxFlat.new()
+                done_sb.bg_color = Color(zc.r, zc.g, zc.b, 0.65)
+                done_sb.border_color = Color(0.6, 1.0, 0.6)
+                done_sb.set_border_width_all(3)
+                done_sb.corner_radius_top_left = 12; done_sb.corner_radius_top_right = 12
+                done_sb.corner_radius_bottom_left = 12; done_sb.corner_radius_bottom_right = 12
+                t.add_theme_stylebox_override("panel", done_sb)
+                if is_instance_valid(icon_lbl): icon_lbl.text = "✓"
+            academy_feedback_text("%s  (%d / 5)" % [why.get(key, ""), counter[0]])
+            if counter[0] == 5:
+                await get_tree().create_timer(0.4).timeout
+                lesson_complete()
+        )
+
+    make_zone.call(Vector2(80,  110), "leader")
+    make_zone.call(Vector2(310, 110), "hand")
+    make_zone.call(Vector2(795, 110), "deck")
+    make_zone.call(Vector2(795, 300), "relapse")
+    make_zone.call(Vector2(80,  300), "points")
 
 func build_play_follower_lesson(board: Control) -> void:
     centered_label("PLAY POINTS: 2 / 2", Vector2(65, 122), Vector2(220, 54), 22, board)
