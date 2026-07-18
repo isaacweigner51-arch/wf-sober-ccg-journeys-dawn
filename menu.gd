@@ -2034,7 +2034,7 @@ func launch_tutorial_battle(tutorial_lesson: int) -> void:
     cfg.set_value("tutorial", "player_class", player_class)
     cfg.set_value("tutorial", "lesson_complete", false)
     cfg.save("user://battle_setup.cfg")
-    get_tree().change_scene_to_file("res://main.tscn")
+    get_tree().change_scene_to_file("res://battle.tscn")
 
 func show_academy_lesson() -> void:
     # Lessons 1-4, 6, and 9 run inside the real battle scene with followers
