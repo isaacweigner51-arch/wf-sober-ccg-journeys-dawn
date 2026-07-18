@@ -3732,7 +3732,8 @@ func _tutorial_complete() -> void:
     bs.load("user://battle_setup.cfg")
     bs.set_value("tutorial", "lesson_complete", true)
     bs.save("user://battle_setup.cfg")
-    get_tree().create_timer(1.6).timeout.connect(func(): get_tree().change_scene_to_file("res://menu.tscn"))
+    var _tree := get_tree()
+    _tree.create_timer(1.6).timeout.connect(func(): _tree.change_scene_to_file("res://menu.tscn"))
 
 # ── Per-lesson event hooks ────────────────────────────────────────────────────
 

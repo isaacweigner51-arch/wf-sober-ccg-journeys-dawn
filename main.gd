@@ -3732,7 +3732,12 @@ func _tutorial_complete() -> void:
     bs.load("user://battle_setup.cfg")
     bs.set_value("tutorial", "lesson_complete", true)
     bs.save("user://battle_setup.cfg")
-    get_tree().create_timer(1.6).timeout.connect(func(): get_tree().change_scene_to_file("res://menu.tscn"))
+    # Capture the SceneTree before the lambda so it doesn't need `self`
+    # to be valid when the timer fires — if the battle node is freed first,
+    # calling get_tree() through the implicit self would silently fail and
+    # leave the player stuck on the "Returning to the Academy…" banner.
+    var _tree := get_tree()
+    _tree.create_timer(1.6).timeout.connect(func(): _tree.change_scene_to_file("res://menu.tscn"))
 
 # ── Per-lesson event hooks ────────────────────────────────────────────────────
 
