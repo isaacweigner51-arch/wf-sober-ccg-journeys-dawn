@@ -4718,10 +4718,10 @@ func recover_from_relapse(player_side: bool, mode: String, amount: int) -> void:
 
 func clear_battlefield_except(source: Dictionary, source_player_side: bool) -> void:
     for i in range(enemy_board.size() - 1, -1, -1):
-        if not bool(enemy_board[i].get("is_amulet", false)):
+        if (source_player_side or enemy_board[i] != source) and not bool(enemy_board[i].get("is_amulet", false)):
             await destroy_unit(enemy_board, i, false)
     for i in range(player_board.size() - 1, -1, -1):
-        if player_board[i] != source and not bool(player_board[i].get("is_amulet", false)): await destroy_unit(player_board, i, true)
+        if (not source_player_side or player_board[i] != source) and not bool(player_board[i].get("is_amulet", false)): await destroy_unit(player_board, i, true)
     await show_vfx("ROCK BOTTOM", Vector2(520, 260), Color(1.0, 0.45, 0.18))
 
 func damage_all_other_followers(source: Dictionary, amount: int, source_player_side: bool) -> void:
