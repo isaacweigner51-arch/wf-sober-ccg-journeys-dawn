@@ -1822,6 +1822,88 @@ func academy_feedback_text(text_value: String, positive := true) -> void:
         academy_feedback.text = text_value
         academy_feedback.add_theme_color_override("font_color", Color(0.55, 1.0, 0.70) if positive else Color(1.0, 0.55, 0.55))
 
+func show_tutorial_class_picker(tutorial_lesson: int) -> void:
+    # Scrim behind the picker
+    var scrim := ColorRect.new()
+    scrim.color = Color(0.01, 0.02, 0.05, 0.88)
+    scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+    scrim.z_index = 900
+    root_layer.add_child(scrim)
+
+    var dialog := Panel.new()
+    dialog.position = Vector2(140, 120)
+    dialog.size = Vector2(1000, 480)
+    dialog.z_index = 901
+    dialog.add_theme_stylebox_override("panel", style(GOLD_COLOR, 20))
+    scrim.add_child(dialog)
+
+    centered_label("CHOOSE YOUR CLASS", Vector2(0, 18), Vector2(1000, 36), 26, dialog).add_theme_color_override("font_color", GOLD_COLOR)
+    centered_label("Pick a leader to play this lesson as.", Vector2(0, 54), Vector2(1000, 24), 14, dialog).modulate = Color(0.78, 0.84, 0.94)
+
+    for i in range(CLASSES.size()):
+        var c: String = CLASSES[i]
+        var col := class_color(c)
+
+        var card := Panel.new()
+        card.position = Vector2(20 + i * 242, 90)
+        card.size = Vector2(228, 360)
+        card.clip_contents = false
+        var card_sb := StyleBoxFlat.new()
+        card_sb.bg_color = Color(col.r, col.g, col.b, 0.12)
+        card_sb.border_color = col
+        card_sb.set_border_width_all(3)
+        card_sb.set_corner_radius_all(14)
+        card.add_theme_stylebox_override("panel", card_sb)
+        dialog.add_child(card)
+
+        # Leader portrait
+        var art_shell := Panel.new()
+        art_shell.position = Vector2(8, 8)
+        art_shell.size = Vector2(212, 236)
+        art_shell.clip_contents = true
+        art_shell.add_theme_stylebox_override("panel", style(col.darkened(0.55), 10))
+        card.add_child(art_shell)
+        var art := TextureRect.new()
+        art.texture = class_leader_texture(c)
+        art.position = Vector2(4, 4)
+        art.size = Vector2(204, 228)
+        art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        art.clip_contents = true
+        art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        art_shell.add_child(art)
+
+        # Class name
+        var name_lbl := centered_label(c.to_upper(), Vector2(0, 252), Vector2(228, 32), 18, card)
+        name_lbl.add_theme_color_override("font_color", col.lightened(0.3))
+
+        # Short description
+        var desc := centered_label(class_description(c), Vector2(10, 286), Vector2(208, 48), 12, card)
+        desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+        # Select button
+        var sel_sb_n := StyleBoxFlat.new()
+        sel_sb_n.bg_color = Color(col.r, col.g, col.b, 0.30)
+        sel_sb_n.border_color = col; sel_sb_n.set_border_width_all(2); sel_sb_n.set_corner_radius_all(10)
+        var sel_sb_h := StyleBoxFlat.new()
+        sel_sb_h.bg_color = Color(col.r, col.g, col.b, 0.75)
+        sel_sb_h.border_color = col.lightened(0.3); sel_sb_h.set_border_width_all(2); sel_sb_h.set_corner_radius_all(10)
+        var sel_btn := Button.new()
+        sel_btn.text = "PLAY AS %s" % c.to_upper()
+        sel_btn.position = Vector2(14, 340)
+        sel_btn.size = Vector2(200, 42)
+        sel_btn.add_theme_font_size_override("font_size", ui_font_size(13))
+        sel_btn.add_theme_stylebox_override("normal", sel_sb_n)
+        sel_btn.add_theme_stylebox_override("hover", sel_sb_h)
+        sel_btn.pressed.connect(func():
+            selected_class = c
+            scrim.queue_free()
+            launch_tutorial_battle(tutorial_lesson)
+        )
+        card.add_child(sel_btn)
+
 func launch_tutorial_battle(tutorial_lesson: int) -> void:
     stop_home_music()
     var player_class: String = selected_class if selected_class != "" else "Hope"
@@ -1838,7 +1920,11 @@ func show_academy_lesson() -> void:
     # on the field. Map academy_step → tutorial_lesson index and skip the UI.
     const BATTLE_STEPS := {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 6: 5, 9: 6}
     if BATTLE_STEPS.has(academy_step):
-        launch_tutorial_battle(BATTLE_STEPS[academy_step])
+        # Build the static lesson screen first so the class picker has something
+        # to sit on top of, then immediately show the picker as an overlay.
+        # The picker's confirm button calls launch_tutorial_battle() directly.
+        clear_screen(); add_background(0.68)
+        show_tutorial_class_picker(BATTLE_STEPS[academy_step])
         return
     clear_screen(); add_background(0.68)
     academy_action_stage = 0
