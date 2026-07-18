@@ -1525,5 +1525,104 @@
     "effect": "Ward. Bane. At the end of your turn, give all other Courage allies +1/+1 and restore 1 Defense to your leader.",
     "max_copies": 1,
     "flavor": "Broken by nothing. Forged by everything."
+  },
+  {
+    "id": "JD-141",
+    "name": "Morning Promise",
+    "class": "Hope",
+    "rarity": "Silver",
+    "cost": 3,
+    "attack": 2,
+    "health": 3,
+    "effect": "On Play: If your leader's Defense is full, draw a card and give this follower +1/+1.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-142",
+    "name": "Stand Your Ground",
+    "class": "Courage",
+    "rarity": "Silver",
+    "cost": 4,
+    "attack": 3,
+    "health": 3,
+    "effect": "On Play: Give a random Courage ally in play +1/+2.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-143",
+    "name": "Gentle Breath",
+    "class": "Serenity",
+    "rarity": "Silver",
+    "cost": 3,
+    "attack": 2,
+    "health": 4,
+    "effect": "On Play: Restore 2 Defense to your leader.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-144",
+    "name": "Sunrise Session",
+    "class": "Hope",
+    "rarity": "Gold",
+    "cost": 5,
+    "attack": 4,
+    "health": 5,
+    "effect": "On Play: Draw 2 cards. If you have 4 or more cards in hand, give all Hope allies +1/+1.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-145",
+    "name": "Battle Tested",
+    "class": "Courage",
+    "rarity": "Gold",
+    "cost": 4,
+    "attack": 4,
+    "health": 4,
+    "effect": "Rush. Whenever this follower destroys an enemy follower, give all Courage allies +1/+0.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-146",
+    "name": "Never Quit",
+    "class": "Courage",
+    "rarity": "Gold",
+    "cost": 5,
+    "attack": 3,
+    "health": 6,
+    "effect": "Ward. Whenever this follower takes damage and survives, give it +1/+0.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-147",
+    "name": "Peaceful Harbor",
+    "class": "Serenity",
+    "rarity": "Gold",
+    "cost": 4,
+    "attack": 2,
+    "health": 6,
+    "effect": "Ward. On Play: Restore 3 Defense to your leader.",
+    "max_copies": 3
+  },
+  {
+    "id": "JD-148",
+    "name": "The Believer",
+    "class": "Hope",
+    "rarity": "Legendary",
+    "cost": 7,
+    "attack": 5,
+    "health": 6,
+    "effect": "On Play: Give all Hope followers in your hand -2 cost. At the end of each turn, restore 2 Defense to your leader.",
+    "max_copies": 1
+  },
+  {
+    "id": "JD-149",
+    "name": "Finding Peace",
+    "class": "Serenity",
+    "rarity": "Legendary",
+    "cost": 6,
+    "attack": 4,
+    "health": 7,
+    "effect": "Ward. On Play: Restore 5 Defense to your leader and remove all negative effects from your leader.",
+    "max_copies": 1
   }
 ]
