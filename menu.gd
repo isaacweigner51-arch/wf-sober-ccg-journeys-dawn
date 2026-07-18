@@ -47,7 +47,7 @@ const KEYWORD_EXAMPLE_CARDS := [
     {"keyword": "Calm", "id": "JD-032", "meaning": "Rewards you for holding back and not attacking last turn."},
     {"keyword": "Inspire", "id": "JD-082", "meaning": "Triggers whenever another allied follower enters play."},
 ]
-const COPY_LIMITS := {"Bronze":3, "Silver":3, "Gold":3, "Epic":3, "Legendary":2, "Platinum":1, "Signature Gold":1, "Signature Platinum":1}
+const COPY_LIMITS := {"Bronze":3, "Silver":3, "Gold":3, "Epic":3, "Legendary":3, "Platinum":2, "Signature Gold":2, "Signature Platinum":2}
 const DUST_VALUES := {"Bronze":10, "Silver":40, "Gold":150, "Epic":275, "Legendary":600, "Platinum":1500, "Signature Platinum":1500}
 const CRAFT_COSTS := {"Bronze":50, "Silver":150, "Gold":500, "Epic":900, "Legendary":2000, "Platinum":4500, "Signature Platinum":4500}
 const DAILY_REWARDS := [
@@ -2597,6 +2597,10 @@ func launch_selected_battle(c: String, deck_mode: String, opponent_class_value: 
 
 
 func _show_battle_intro(player_class_name: String, opponent_class_name: String) -> void:
+    # Special cinematic for The Sponsor Trial.
+    if opponent_class_name == "Sponsor":
+        await _show_sponsor_cinematic()
+        return
     # Premium versus transition before the battlefield loads.
     var intro := ColorRect.new()
     intro.color = Color(0.005, 0.008, 0.018, 1.0)
@@ -2659,6 +2663,87 @@ func _show_battle_intro(player_class_name: String, opponent_class_name: String) 
     var fade := create_tween()
     fade.tween_property(intro, "modulate:a", 0.0, 0.55)
     await fade.finished
+    get_tree().change_scene_to_file("res://battle.tscn")
+
+func _show_sponsor_cinematic() -> void:
+    var intro := ColorRect.new()
+    intro.color = Color(0.0, 0.0, 0.0, 1.0)
+    intro.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    intro.z_index = 4096
+    intro.mouse_filter = Control.MOUSE_FILTER_STOP
+    add_child(intro)
+
+    var watch_label := Label.new()
+    watch_label.text = "Someone has been watching your progress..."
+    watch_label.position = Vector2(160, 230)
+    watch_label.size = Vector2(960, 56)
+    watch_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    watch_label.add_theme_font_size_override("font_size", ui_font_size(24))
+    watch_label.add_theme_color_override("font_color", Color(0.82, 0.82, 0.82))
+    watch_label.modulate.a = 0.0
+    intro.add_child(watch_label)
+
+    var t1 := create_tween()
+    t1.tween_property(watch_label, "modulate:a", 1.0, 0.9)
+    await t1.finished
+    await get_tree().create_timer(1.3).timeout
+
+    var glow := ColorRect.new()
+    glow.color = Color(0.9, 0.72, 0.20, 0.0)
+    glow.position = Vector2(400, 120)
+    glow.size = Vector2(480, 480)
+    intro.add_child(glow)
+
+    var sponsor_art := TextureRect.new()
+    sponsor_art.texture = load("res://assets/cards/full/jd-080.jpg")
+    sponsor_art.position = Vector2(420, 132)
+    sponsor_art.size = Vector2(440, 440)
+    sponsor_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    sponsor_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    sponsor_art.clip_contents = true
+    sponsor_art.modulate.a = 0.0
+    intro.add_child(sponsor_art)
+
+    var t2 := create_tween().set_parallel(true)
+    t2.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    t2.tween_property(sponsor_art, "modulate:a", 1.0, 0.75)
+    t2.tween_property(glow, "modulate:a", 0.22, 0.75)
+    t2.tween_property(watch_label, "modulate:a", 0.0, 0.45)
+    await t2.finished
+    await get_tree().create_timer(0.4).timeout
+
+    var name_label := Label.new()
+    name_label.text = "THE SPONSOR"
+    name_label.position = Vector2(160, 585)
+    name_label.size = Vector2(960, 52)
+    name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    name_label.add_theme_font_size_override("font_size", ui_font_size(38))
+    name_label.add_theme_color_override("font_color", GOLD_COLOR)
+    name_label.modulate.a = 0.0
+    intro.add_child(name_label)
+
+    var quote_label := Label.new()
+    quote_label.text = "\"Recovery isn't about walking faster. It's about never walking alone.\""
+    quote_label.position = Vector2(140, 648)
+    quote_label.size = Vector2(1000, 72)
+    quote_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    quote_label.add_theme_font_size_override("font_size", ui_font_size(19))
+    quote_label.add_theme_color_override("font_color", Color(0.88, 0.88, 0.88))
+    quote_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    quote_label.modulate.a = 0.0
+    intro.add_child(quote_label)
+
+    var t3 := create_tween().set_parallel(true)
+    t3.tween_property(name_label, "modulate:a", 1.0, 0.6)
+    t3.tween_property(quote_label, "modulate:a", 1.0, 0.9)
+    await t3.finished
+    await get_tree().create_timer(2.2).timeout
+
+    AudioManager.stop_music(0.55)
+    var fade := create_tween()
+    fade.tween_property(intro, "modulate:a", 0.0, 0.65)
+    await fade.finished
+    intro.queue_free()
     get_tree().change_scene_to_file("res://battle.tscn")
 
 func _battle_selection_set_class(class_name_value: String) -> void:
@@ -3125,6 +3210,9 @@ Avg Cost %.1f" % [int(stats.get("followers", 0)), int(stats.get("skills", 0)), f
     button("BACK HOME", Vector2(500, 630), Vector2(280, 42), show_home, root_layer)
 
 func class_leader_texture(class_name_value: String) -> Texture2D:
+    # The Sponsor has no /assets/leaders/ portrait — route straight to his card art.
+    if class_name_value.to_lower() == "sponsor":
+        return load("res://assets/cards/full/jd-080.jpg")
     # The source leader illustrations are square, full-scene paintings (podium,
     # backpack trail, lakeside, job site) with the character occupying the top
     # portion. Framed at full size with a "contain" stretch they read as tiny
