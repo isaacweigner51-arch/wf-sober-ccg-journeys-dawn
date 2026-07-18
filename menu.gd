@@ -785,8 +785,12 @@ func _ready() -> void:
         _tut_cfg.save("user://battle_setup.cfg")
         cards = load_cards()
         load_profile()
-        # profile already has the incremented step; just show it
-        show_academy_lesson()
+        # Graduated players replaying a lesson land on the overview, not
+        # the next lesson — that would loop them through the whole Academy.
+        if academy_complete:
+            show_recovery_academy()
+        else:
+            show_academy_lesson()
         return
     if not get_viewport().size_changed.is_connected(_on_viewport_size_changed):
         get_viewport().size_changed.connect(_on_viewport_size_changed)
@@ -1182,7 +1186,7 @@ func show_home() -> void:
     nav_button.call("COLLECTION", show_collection, false)
     nav_button.call("STORE", show_store, false)
     nav_group.call("LEARN")
-    nav_button.call("HOW TO PLAY", replay_how_to_play, false)
+    nav_button.call("RECOVERY ACADEMY", show_recovery_academy, false)
     var reward := Panel.new()
     reward.position = Vector2(14, nav_state.y + 6.0)
     reward.size = Vector2(190, 36)
@@ -1795,14 +1799,131 @@ func begin_academy() -> void:
     show_academy_lesson()
 
 func replay_how_to_play() -> void:
-    # Lets a graduated player revisit the core rules lessons. academy_complete
-    # is never cleared here, so if they exit mid-replay, gating elsewhere
-    # (which only checks academy_complete, not academy_step) is unaffected.
-    # Reaching the end just re-shows the graduation screen's "already
-    # claimed" branch since academy_complete stays true throughout.
-    academy_step = 0
-    academy_action_stage = 0
-    show_academy_lesson()
+    show_recovery_academy()
+
+func show_recovery_academy() -> void:
+    clear_screen(); add_background(0.64)
+    header("RECOVERY ACADEMY", "Eleven lessons — from your first card to your full strategy")
+    if academy_complete:
+        currency_bar()
+
+    const LESSON_TITLES := ["THE BATTLEFIELD", "PLAY A FOLLOWER", "COMBAT", "END YOUR TURN",
+        "SPELLS & AMULETS", "CARD EFFECTS & KEYWORDS", "RECOVERY & REVIVE",
+        "PROVING YOURSELF", "LEADER SIGNATURE CARDS", "SPONSOR & SPONSEE", "BUILDING YOUR DECK"]
+    const LESSON_SUBS := [
+        "Learn the zones — leader, hand, battlefield, and play points.",
+        "Spend Play Points to put a follower on the field.",
+        "Select a follower and strike an enemy target.",
+        "End your turn and see what changes for both players.",
+        "Cast a spell for an instant effect; place an amulet for ongoing value.",
+        "Discover what keywords like Charge, Guard, and Rush actually do.",
+        "Use the Relapse Zone, recover a card, and see Revive in action.",
+        "Spend Second Chance wisely — and use Momentum when it counts.",
+        "Every leader has one card that defines their whole game plan.",
+        "Play Sponsor, pick a Sponsee, and trigger the protective bond.",
+        "Build a legal 40-card deck before you head to the real game.",
+    ]
+    const MENTOR_CLASSES := ["Hope", "Courage", "Courage", "Courage", "Serenity",
+        "Purpose", "Hope", "Purpose", "Purpose", "Purpose", "Purpose"]
+    const MENTOR_NAMES := ["Dawn", "Marcus", "Marcus", "Marcus", "Priya",
+        "Theo", "Dawn", "Theo", "Dean Alvarez", "Theo", "Dean Alvarez"]
+
+    var cfg := ConfigFile.new(); cfg.load(SAVE_PATH)
+
+    var COLS := 4
+    var panel_w := 286.0
+    var panel_h := 172.0
+    var gap_x := 20.0
+    var gap_y := 16.0
+    var total_w := COLS * panel_w + (COLS - 1) * gap_x
+    var start_x := (1280.0 - total_w) * 0.5
+    var start_y := 104.0
+
+    for i in range(LESSON_TITLES.size()):
+        var row := i / COLS
+        var col := i % COLS
+
+        var row_count_in_row := mini(COLS, LESSON_TITLES.size() - row * COLS)
+        var row_w := row_count_in_row * panel_w + (row_count_in_row - 1) * gap_x
+        var row_x := (1280.0 - row_w) * 0.5
+
+        var px := row_x + col * (panel_w + gap_x)
+        var py := start_y + row * (panel_h + gap_y)
+
+        var lesson_done := academy_step > i or academy_complete
+        var lesson_available := academy_step >= i or academy_complete
+        var mentor_c: String = MENTOR_CLASSES[i]
+        var accent := class_color(mentor_c)
+
+        var panel := Panel.new()
+        panel.position = Vector2(px, py)
+        panel.size = Vector2(panel_w, panel_h)
+        var sb := StyleBoxFlat.new()
+        sb.bg_color = Color(accent.r, accent.g, accent.b, 0.10) if lesson_available else Color(0.06, 0.07, 0.10)
+        sb.border_color = accent if lesson_available else Color(0.28, 0.30, 0.36)
+        sb.set_border_width_all(3 if lesson_done else 2)
+        sb.set_corner_radius_all(14)
+        panel.add_theme_stylebox_override("panel", sb)
+        root_layer.add_child(panel)
+
+        # Lesson number + done badge
+        var badge_text := "LESSON %d  ✓" % (i + 1) if lesson_done else "LESSON %d" % (i + 1)
+        var badge_color := GOLD_COLOR if lesson_done else (Color(0.80, 0.86, 0.94) if lesson_available else Color(0.48, 0.50, 0.56))
+        var badge := label(badge_text, Vector2(12, 10), Vector2(200, 20), 12, panel)
+        badge.add_theme_color_override("font_color", badge_color)
+
+        # Small mentor portrait circle
+        var portrait_shell := Panel.new()
+        portrait_shell.position = Vector2(panel_w - 48.0, 8.0)
+        portrait_shell.size = Vector2(36, 36)
+        portrait_shell.clip_contents = true
+        portrait_shell.add_theme_stylebox_override("panel", style(accent.darkened(0.4), 18))
+        panel.add_child(portrait_shell)
+        if lesson_available:
+            var port := TextureRect.new()
+            port.texture = class_leader_texture(mentor_c)
+            port.position = Vector2(2, 2)
+            port.size = Vector2(32, 32)
+            port.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+            port.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+            port.clip_contents = true
+            port.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            portrait_shell.add_child(port)
+
+        # Title
+        var title_lbl := label(LESSON_TITLES[i], Vector2(12, 32), Vector2(panel_w - 24.0, 30), 16, panel)
+        title_lbl.add_theme_color_override("font_color", accent.lightened(0.35) if lesson_available else Color(0.50, 0.52, 0.58))
+
+        # Subtitle
+        var sub := label(LESSON_SUBS[i], Vector2(12, 66), Vector2(panel_w - 24.0, 52), 12, panel)
+        sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        sub.add_theme_color_override("font_color", Color(0.72, 0.76, 0.84) if lesson_available else Color(0.40, 0.42, 0.48))
+
+        # Mentor credit
+        var mentor_lbl := label(MENTOR_NAMES[i], Vector2(12, panel_h - 38.0), Vector2(140, 18), 11, panel)
+        mentor_lbl.add_theme_color_override("font_color", accent.lightened(0.2) if lesson_available else Color(0.38, 0.40, 0.46))
+
+        # Action button
+        var btn_text := "REPLAY" if lesson_done else ("START" if lesson_available else "🔒 LOCKED")
+        var i_capture := i
+        var btn := button(btn_text, Vector2(panel_w - 118.0, panel_h - 42.0), Vector2(106, 34), func():
+            academy_step = i_capture
+            academy_action_stage = 0
+            show_academy_lesson()
+        , panel)
+        btn.disabled = not lesson_available
+        btn.add_theme_font_size_override("font_size", ui_font_size(13))
+        if lesson_available:
+            var btn_sb := StyleBoxFlat.new()
+            btn_sb.bg_color = Color(accent.r, accent.g, accent.b, 0.30)
+            btn_sb.border_color = accent; btn_sb.set_border_width_all(2); btn_sb.set_corner_radius_all(9)
+            var btn_sb_h := StyleBoxFlat.new()
+            btn_sb_h.bg_color = Color(accent.r, accent.g, accent.b, 0.65)
+            btn_sb_h.border_color = accent.lightened(0.3); btn_sb_h.set_border_width_all(2); btn_sb_h.set_corner_radius_all(9)
+            btn.add_theme_stylebox_override("normal", btn_sb)
+            btn.add_theme_stylebox_override("hover", btn_sb_h)
+
+    button("HOME", Vector2(40, 650), Vector2(180, 48), show_home)
 
 func centered_label(text_value: String, pos: Vector2, size_value: Vector2, font_size := 18, parent: Control = root_layer) -> Label:
     var l := label(text_value, pos, size_value, font_size, parent)
