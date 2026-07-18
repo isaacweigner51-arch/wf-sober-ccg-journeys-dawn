@@ -208,6 +208,12 @@ var training_spent_resource := false
 var training_destroyed_enemy := false
 var training_survived_combat := false
 var training_progress_trigger_count := 0
+var tutorial_mode := false
+var tutorial_lesson := 0
+var tutorial_step := 0
+var tutorial_overlay: Panel
+var tutorial_instruction_label: Label
+var tutorial_heading_label: Label
 var battle_setup_loaded := false
 var battlefield_background: TextureRect
 
@@ -269,6 +275,9 @@ func _ready() -> void:
     elif training_mode:
         start_game()
         call_deferred("show_class_training_panel")
+    elif tutorial_mode:
+        start_game()
+        call_deferred("_build_tutorial_overlay")
     else:
         if battle_setup_loaded:
             start_game()
@@ -306,6 +315,16 @@ func load_battle_setup() -> void:
             enemy_class = str(cfg.get_value("battle", "opponent_class", "Courage"))
             player_deck_mode = "prebuilt"
             enemy_deck_mode = "prebuilt"
+        elif mode == "tutorial":
+            tutorial_mode = true
+            tutorial_lesson = int(cfg.get_value("tutorial", "lesson", 1))
+            selected_class = str(cfg.get_value("tutorial", "player_class", "Hope"))
+            enemy_class = "Courage"
+            player_deck_mode = "prebuilt"
+            enemy_deck_mode = "prebuilt"
+            story_mode_battle = false
+            trial_mode_battle = false
+            practice_mode = false
         elif mode == "story":
             story_mode_battle = true
             trial_mode_battle = false
@@ -3378,6 +3397,7 @@ func _on_training_resource_input(event: InputEvent) -> void:
     refresh_ui()
 
 func training_on_card_played(card_data: Dictionary) -> void:
+    _tutorial_on_card_played(card_data)
     if not training_mode:
         return
     var faction := str(card_data.get("faction", ""))
@@ -3420,6 +3440,7 @@ func training_on_heal(amount: int) -> void:
             training_advance(3, "Sanctuary permanently strengthened an ally.", 1)
 
 func training_on_attack(target_index: int, attacker_survived: bool, enemy_destroyed: bool) -> void:
+    _tutorial_on_attack(target_index, attacker_survived, enemy_destroyed)
     if not training_mode:
         return
     training_attacked_this_turn = true
@@ -3436,12 +3457,14 @@ func training_on_attack(target_index: int, attacker_survived: bool, enemy_destro
             training_advance(3, "Defeating an enemy earned more Resolve. Spend 2 Resolve.")
 
 func training_on_follower_lost(player_side: bool) -> void:
+    _tutorial_on_follower_lost(player_side)
     if not training_mode or not player_side:
         return
     if training_class == "Hope" and training_objective_index == 2:
         training_advance(2, "The follower entered the Relapse Zone. Recover it now.")
 
 func training_on_recovered(player_side: bool) -> void:
+    _tutorial_on_recovered(player_side)
     if not training_mode or not player_side:
         return
     training_recovered = true
@@ -3467,6 +3490,228 @@ func training_on_end_turn() -> void:
             training_advance(3, "3 Progress earned an extra maximum Play Point. Build toward Walking Free.")
     training_attacked_this_turn = false
     update_training_panel()
+
+func _tut_card(name_v:String,cost_v:int,atk_v:int,hp_v:int,faction_v:String,ability_v:String,text_v:String,icon_v:String,art_v:String="") -> Dictionary:
+    if art_v != "":
+        return card(name_v,cost_v,atk_v,hp_v,faction_v,"Training",ability_v,0,text_v,icon_v,art_v)
+    return card(name_v,cost_v,atk_v,hp_v,faction_v,"Training",ability_v,0,text_v,icon_v)
+
+func _setup_tutorial_lesson() -> void:
+    player_board.clear(); enemy_board.clear()
+    match tutorial_lesson:
+        1:
+            player_mana = 3; player_max_mana = 3
+            player_hand.append(_tut_card("Newcomer",1,1,2,"Universal","none","Play this to put a follower on the field.","road"))
+            player_hand.append(_tut_card("Forward Vanguard",3,4,2,"Courage","charge","Charge — attacks the same turn it enters play.","flame"))
+        2:
+            player_mana = 2; player_max_mana = 2
+            player_hand.append(_tut_card("Spark Runner",1,2,1,"Courage","charge","Charge.","flame"))
+            var trainee := _tut_card("Academy Trainee",2,4,5,"Hope","none","Select this follower, then click an enemy target to attack.","hands")
+            trainee["can_attack"] = true; trainee["summoned_turn"] = -1
+            player_board.append(trainee)
+            var guard := _tut_card("Enemy Guard",2,2,4,"Courage","guard","Guard — must be attacked before the enemy Leader.","shield")
+            guard["can_attack"] = true; guard["summoned_turn"] = -1
+            enemy_board.append(guard)
+        3:
+            player_mana = 3; player_max_mana = 3
+            player_hand.append(_tut_card("Newcomer",1,1,2,"Universal","none","Play this follower, then click End Turn.","road"))
+            player_hand.append(_tut_card("Patient Listener",2,2,4,"Serenity","none","On Play: Draw a card.","hands"))
+        4:
+            player_mana = 6; player_max_mana = 6
+            var spell_card := card("Step Study",3,0,0,"Universal","Silver","draw_reduce",1,"Spell — Play: Draw a card, then reduce the highest-cost card in hand by 1.","road")
+            spell_card["is_spell"] = true
+            player_hand.append(spell_card)
+            var found_amulet := _find_card_by_name(build_class_cards("Purpose"), "Daily Progress")
+            if not found_amulet.is_empty():
+                player_hand.append(found_amulet)
+            else:
+                var amulet_card := _tut_card("Recovery Amulet",2,0,0,"Universal","none","Amulet — stays on the board and generates an effect each turn.","star")
+                amulet_card["is_amulet"] = true
+                player_hand.append(amulet_card)
+        5:
+            player_mana = 3; player_max_mana = 3
+            var ally := _tut_card("Academy Rookie",2,2,3,"Hope","none","Your follower on the field.","hands")
+            ally["can_attack"] = false; ally["summoned_turn"] = turn_number
+            player_board.append(ally)
+            player_hand.append(_tut_card("Recovery Call",3,2,3,"Hope","revive","On Play: Recover the most recent follower from your Relapse Zone.","star"))
+            var punisher := _tut_card("Aggressive Trainer",3,4,4,"Courage","none","Scripted — will attack your follower this turn.","flame")
+            punisher["can_attack"] = true; punisher["summoned_turn"] = -1
+            enemy_board.append(punisher)
+        6:
+            player_mana = 8; player_max_mana = 8
+            var sponsor_card := _find_card_by_name(build_universal_cards(), "The Sponsor")
+            if not sponsor_card.is_empty():
+                player_hand.append(sponsor_card)
+            else:
+                player_hand.append(card("The Sponsor",8,5,9,"Universal","Platinum","sponsor",0,"SIGNATURE PLATINUM — Arrival: Summon 2 Sponsees.","star"))
+
+func _build_tutorial_overlay() -> void:
+    if is_instance_valid(tutorial_overlay):
+        tutorial_overlay.queue_free()
+    tutorial_overlay = Panel.new()
+    tutorial_overlay.position = Vector2(0, 0)
+    tutorial_overlay.size = Vector2(1280, 106)
+    tutorial_overlay.z_index = 3500
+    tutorial_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var st := StyleBoxFlat.new()
+    st.bg_color = Color(0.01, 0.02, 0.06, 0.97)
+    st.border_color = Color(0.95, 0.78, 0.34)
+    st.border_width_bottom = 3
+    tutorial_overlay.add_theme_stylebox_override("panel", st)
+    safe_add_child(self, tutorial_overlay)
+    var bar := ColorRect.new(); bar.color = class_accent_color(selected_class)
+    bar.position = Vector2(0, 0); bar.size = Vector2(6, 106)
+    bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    tutorial_overlay.add_child(bar)
+    tutorial_heading_label = Label.new()
+    tutorial_heading_label.position = Vector2(16, 7)
+    tutorial_heading_label.size = Vector2(1240, 22)
+    tutorial_heading_label.add_theme_font_size_override("font_size", ui_font(13))
+    tutorial_heading_label.add_theme_color_override("font_color", Color(0.95, 0.78, 0.34))
+    var lesson_names := ["Play a Follower","Combat","End Your Turn","Spells & Amulets","Recovery & Revive","Sponsor & Sponsee"]
+    var mentor_names := ["Dawn","Marcus","Marcus","Priya","Dawn","Theo"]
+    var safe_idx := clampi(tutorial_lesson - 1, 0, lesson_names.size() - 1)
+    tutorial_heading_label.text = "RECOVERY ACADEMY  •  %s  •  %s" % [lesson_names[safe_idx], mentor_names[safe_idx]]
+    tutorial_overlay.add_child(tutorial_heading_label)
+    var sep := ColorRect.new(); sep.color = Color(1,1,1,0.08)
+    sep.position = Vector2(16,32); sep.size = Vector2(1248,1)
+    sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    tutorial_overlay.add_child(sep)
+    tutorial_instruction_label = Label.new()
+    tutorial_instruction_label.position = Vector2(16, 38)
+    tutorial_instruction_label.size = Vector2(1248, 62)
+    tutorial_instruction_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    tutorial_instruction_label.add_theme_font_size_override("font_size", ui_font(18))
+    tutorial_instruction_label.add_theme_color_override("font_color", Color(0.94, 0.96, 1.0))
+    tutorial_overlay.add_child(tutorial_instruction_label)
+    _tutorial_set_instruction(_tutorial_opening_text())
+
+func _tutorial_opening_text() -> String:
+    match tutorial_lesson:
+        1: return "You have 3 Play Points. Click a card in your hand to select it, then click 'Play Card' to put a follower on the battlefield."
+        2: return "Your follower is already on the field. Click it to select it, then click the Enemy Guard to attack."
+        3: return "You have 3 Play Points. Play a follower from your hand, then click 'End Turn' to pass."
+        4: return "You have 6 Play Points. Spells resolve immediately — play Step Study from your hand first."
+        5: return "You have a follower on the field. Click 'End Turn' — watch what the opponent does."
+        6: return "You have 8 Play Points. Play The Sponsor — it summons Sponsees to fight alongside you."
+    return ""
+
+func _tutorial_set_instruction(text: String) -> void:
+    if is_instance_valid(tutorial_instruction_label):
+        tutorial_instruction_label.text = text
+
+func _tutorial_advance(next_text: String) -> void:
+    tutorial_step += 1
+    safe_set_text(status_label, next_text)
+    _tutorial_set_instruction(next_text)
+
+func _tutorial_complete() -> void:
+    if not is_instance_valid(self): return
+    show_vfx("LESSON COMPLETE  ✓", Vector2(440, 300), class_accent_color(selected_class))
+    _tutorial_set_instruction("Lesson complete! Returning to the Academy…")
+    var cfg := _load_shared_profile_cfg_for_partial_write()
+    if cfg != null:
+        var cur := int(cfg.get_value("academy", "step", 0))
+        cfg.set_value("academy", "step", cur + 1)
+        cfg.save("user://journeys_dawn_profile.cfg")
+    var bs := ConfigFile.new()
+    bs.load("user://battle_setup.cfg")
+    bs.set_value("tutorial", "lesson_complete", true)
+    bs.save("user://battle_setup.cfg")
+    get_tree().create_timer(1.6).timeout.connect(func(): get_tree().change_scene_to_file("res://menu.tscn"))
+
+func _tutorial_on_card_played(card_data: Dictionary) -> void:
+    if not tutorial_mode: return
+    var is_spell := bool(card_data.get("is_spell", false))
+    var is_amulet := bool(card_data.get("is_amulet", false))
+    var ability := str(card_data.get("ability", ""))
+    match tutorial_lesson:
+        1:
+            if tutorial_step == 0:
+                _tutorial_advance("Your follower is on the battlefield! Now click 'End Turn' to finish your turn.")
+        3:
+            if tutorial_step == 0 and not is_spell and not is_amulet:
+                _tutorial_advance("Your follower is on the field. Now click 'End Turn' to pass to the opponent.")
+        4:
+            if tutorial_step == 0 and is_spell:
+                _tutorial_advance("The spell resolved instantly! Now play the Amulet (Daily Progress) to see how it stays on the board.")
+            elif tutorial_step == 1 and is_amulet:
+                _tutorial_advance("Amulets persist and keep ticking. End your turn to see it resolve again next turn.")
+        5:
+            if tutorial_step == 1 and ability == "revive":
+                _tutorial_advance("Your follower is back from the Relapse Zone! Recovery is core to the Hope path. Lesson complete.")
+                await get_tree().create_timer(1.2).timeout
+                _tutorial_complete()
+        6:
+            if tutorial_step == 0 and ability == "sponsor":
+                _tutorial_advance("Two Sponsees entered the field! Click 'End Turn' to see a third arrive automatically.")
+
+func _tutorial_on_end_turn() -> void:
+    if not tutorial_mode: return
+    match tutorial_lesson:
+        1:
+            if tutorial_step == 1:
+                _tutorial_advance("Turn ended — your Play Points will refresh next turn. Lesson complete!")
+                await get_tree().create_timer(0.9).timeout
+                _tutorial_complete()
+        3:
+            if tutorial_step == 1:
+                _tutorial_advance("Your Play Points refreshed and you drew a new card. Each turn your maximum grows by 1. Lesson complete!")
+                await get_tree().create_timer(0.9).timeout
+                _tutorial_complete()
+        4:
+            if tutorial_step == 2:
+                _tutorial_advance("The Amulet triggered at end of turn. Lesson complete!")
+                await get_tree().create_timer(0.9).timeout
+                _tutorial_complete()
+        5:
+            if tutorial_step == 0:
+                _tutorial_advance("Your follower was defeated and sent to the Relapse Zone. Play Recovery Call to bring it back.")
+        6:
+            if tutorial_step == 1:
+                _tutorial_advance("A third Sponsee arrived automatically! The Sponsor keeps building your board every turn. Lesson complete!")
+                await get_tree().create_timer(1.1).timeout
+                _tutorial_complete()
+
+func _tutorial_on_attack(target_index: int, _survived: bool, enemy_destroyed: bool) -> void:
+    if not tutorial_mode: return
+    match tutorial_lesson:
+        2:
+            if tutorial_step == 0 and target_index >= 0:
+                if enemy_destroyed or enemy_board.is_empty():
+                    _tutorial_advance("Guard cleared! Now attack the enemy Leader — click your follower, then click the enemy Leader portrait.")
+                else:
+                    _tutorial_advance("You struck the Guard — keep attacking it until it falls, then go for the Leader.")
+            elif tutorial_step == 1 and target_index < 0:
+                _tutorial_advance("Direct hit! That's combat — clear the path, then strike the Leader. Lesson complete!")
+                await get_tree().create_timer(0.9).timeout
+                _tutorial_complete()
+
+func _tutorial_on_follower_lost(player_side: bool) -> void:
+    if not tutorial_mode or not player_side: return
+    if tutorial_lesson == 5 and tutorial_step == 0:
+        _tutorial_advance("Your follower was defeated and sent to the Relapse Zone. Play Recovery Call from your hand to bring it back.")
+        tutorial_step = 1
+
+func _tutorial_on_recovered(_player_side: bool) -> void:
+    if not tutorial_mode: return
+
+func _run_tutorial_enemy_turn() -> void:
+    await get_tree().create_timer(0.55).timeout
+    if game_over: return
+    if tutorial_lesson == 5 and tutorial_step == 0:
+        safe_set_text(status_label, "Opponent's turn — your follower is under attack!")
+        if not enemy_board.is_empty() and not player_board.is_empty():
+            var target_index := -1
+            for i in range(player_board.size()):
+                if not bool(player_board[i].get("is_amulet", false)):
+                    target_index = i; break
+            if target_index >= 0:
+                await animate_enemy_attack(0, target_index)
+                await get_tree().create_timer(0.3).timeout
+    else:
+        safe_set_text(status_label, "Opponent passes — your turn.")
+        await get_tree().create_timer(0.4).timeout
 
 # main.gd and menu.gd share one profile file (user://journeys_dawn_profile.cfg).
 # Several functions here only set a handful of keys before saving it straight
@@ -3532,6 +3777,8 @@ func start_game() -> void:
         training_destroyed_enemy = false
         training_survived_combat = false
         training_progress_trigger_count = 0
+    if tutorial_mode:
+        tutorial_step = 0
     player_evolutions_used = [false, false, false, false]; enemy_evolutions_used = [false, false, false, false]
     player_health = STARTING_HEALTH; enemy_health = STARTING_HEALTH
     player_mana = 0; player_max_mana = 0; enemy_mana = 0; enemy_max_mana = 0; turn_number = 0
@@ -3545,7 +3792,7 @@ func start_game() -> void:
         draw_card(player_deck, player_hand)
         draw_card(enemy_deck, enemy_hand)
     prepare_training_hand()
-    player_goes_first = true if training_mode else randi() % 2 == 0
+    player_goes_first = true if (training_mode or tutorial_mode) else randi() % 2 == 0
     if not hotseat_mode:
         if player_goes_first:
             enemy_momentum = 1
@@ -3567,6 +3814,11 @@ func add_training_card_to_hand(card_data: Dictionary) -> void:
     player_hand.append(card_data)
 
 func prepare_training_hand() -> void:
+    if tutorial_mode:
+        player_hand.clear()
+        enemy_hand.clear()
+        _setup_tutorial_lesson()
+        return
     if not training_mode:
         return
     match training_class:
@@ -3651,6 +3903,9 @@ func spawn_sparkle_burst(origin: Vector2, count: int, colors: Array, layer: Node
         sparkle_tween.finished.connect(sparkle.queue_free)
 
 func show_second_chance() -> void:
+    if tutorial_mode:
+        call_deferred("start_player_turn")
+        return
     if is_instance_valid(second_chance_overlay):
         second_chance_overlay.queue_free()
     second_chance_selected.clear()
@@ -4082,6 +4337,7 @@ func sponsor_end_turn(player_side: bool) -> void:
 func end_player_turn() -> void:
     if game_over or busy: return
     training_on_end_turn()
+    _tutorial_on_end_turn()
     await trigger_calm_heal(true)
     player_attacked_this_turn = false
     await trigger_daily_progress_end_turn(true)
@@ -4137,6 +4393,11 @@ func show_pass_device_overlay(title_text: String, message: String, callback: Cal
     var ready := Button.new(); ready.text="I'M READY"; ready.position=Vector2(175,290); ready.size=Vector2(280,72); ready.add_theme_font_size_override("font_size",ui_font(24)); ready.pressed.connect(func(): overlay.visible=false; busy=false; callback.call()); panel.add_child(ready)
 
 func enemy_turn() -> void:
+    if tutorial_mode:
+        await _run_tutorial_enemy_turn()
+        if not game_over:
+            start_player_turn()
+        return
     clear_daily_progress_temporary_buffs(false)
     if phoenix_pending_enemy and not game_over:
         phoenix_pending_enemy = false

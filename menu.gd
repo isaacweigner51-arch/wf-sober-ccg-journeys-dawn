@@ -774,6 +774,20 @@ func safe_set_text(node: Object, value: String) -> void:
 func _ready() -> void:
     randomize()
     ensure_home_music()
+    # Fast-path back into the Academy when returning from a tutorial battle —
+    # reads the flag that _tutorial_complete() writes, skips the launch screen,
+    # and shows the next lesson immediately.
+    var _tut_cfg := ConfigFile.new()
+    if _tut_cfg.load("user://battle_setup.cfg") == OK \
+            and str(_tut_cfg.get_value("battle","mode","")) == "tutorial" \
+            and bool(_tut_cfg.get_value("tutorial","lesson_complete",false)):
+        _tut_cfg.set_value("tutorial","lesson_complete",false)
+        _tut_cfg.save("user://battle_setup.cfg")
+        cards = load_cards()
+        load_profile()
+        # profile already has the incremented step; just show it
+        show_academy_lesson()
+        return
     if not get_viewport().size_changed.is_connected(_on_viewport_size_changed):
         get_viewport().size_changed.connect(_on_viewport_size_changed)
     if not AccessManager.authentication_finished.is_connected(_on_access_authentication_finished):
@@ -1792,7 +1806,24 @@ func academy_feedback_text(text_value: String, positive := true) -> void:
         academy_feedback.text = text_value
         academy_feedback.add_theme_color_override("font_color", Color(0.55, 1.0, 0.70) if positive else Color(1.0, 0.55, 0.55))
 
+func launch_tutorial_battle(tutorial_lesson: int) -> void:
+    stop_home_music()
+    var player_class: String = selected_class if selected_class != "" else "Hope"
+    var cfg := ConfigFile.new()
+    cfg.set_value("battle", "mode", "tutorial")
+    cfg.set_value("tutorial", "lesson", tutorial_lesson)
+    cfg.set_value("tutorial", "player_class", player_class)
+    cfg.set_value("tutorial", "lesson_complete", false)
+    cfg.save("user://battle_setup.cfg")
+    get_tree().change_scene_to_file("res://main.tscn")
+
 func show_academy_lesson() -> void:
+    # Lessons 1-4, 6, and 9 run inside the real battle scene with followers
+    # on the field. Map academy_step → tutorial_lesson index and skip the UI.
+    const BATTLE_STEPS := {1: 1, 2: 2, 3: 3, 4: 4, 6: 5, 9: 6}
+    if BATTLE_STEPS.has(academy_step):
+        launch_tutorial_battle(BATTLE_STEPS[academy_step])
+        return
     clear_screen(); add_background(0.68)
     academy_action_stage = 0
     # Lesson order used to open with "Proving Yourself" (Second Chance +
