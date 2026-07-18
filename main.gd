@@ -3526,6 +3526,8 @@ func _tut_card(name_v:String,cost_v:int,atk_v:int,hp_v:int,faction_v:String,abil
 func _setup_tutorial_lesson() -> void:
     player_board.clear(); enemy_board.clear()
     match tutorial_lesson:
+        0: # Zone orientation — empty board so the real UI is unobstructed
+            player_mana = 3; player_max_mana = 3
         1: # Play a Follower
             player_mana = 3; player_max_mana = 3
             player_hand.append(_tut_card("Newcomer",1,1,2,"Universal","none","Play this to put a follower on the field.","road"))
@@ -3621,9 +3623,82 @@ func _build_tutorial_overlay() -> void:
     tutorial_overlay.add_child(tutorial_instruction_label)
 
     _tutorial_set_instruction(_tutorial_opening_text())
+    if tutorial_lesson == 0:
+        call_deferred("_build_zone_highlights")
+
+func _build_zone_highlights() -> void:
+    # Zone data: [label, why, position, size, color]
+    var zones := [
+        ["YOUR LEADER", "20 Defense — when it hits 0 you lose.", Vector2(1062, 335), Vector2(195, 185), Color(0.90, 0.22, 0.22)],
+        ["YOUR HAND", "Cards you can play this turn.", Vector2(150, 600), Vector2(880, 115), Color(0.22, 0.52, 0.90)],
+        ["PLAY POINTS", "Spent to play cards. Grows by 1 each turn.", Vector2(1028, 548), Vector2(232, 100), Color(0.95, 0.78, 0.10)],
+        ["BATTLEFIELD", "Where your followers fight.", Vector2(245, 365), Vector2(790, 165), Color(0.22, 0.72, 0.38)],
+        ["ENEMY LEADER", "What you're trying to bring to zero.", Vector2(24, 92), Vector2(195, 185), Color(0.75, 0.28, 0.82)],
+    ]
+    var tapped := [0]
+    var total := zones.size()
+    for zone_data in zones:
+        var zone_label: String = zone_data[0]
+        var zone_why: String = zone_data[1]
+        var zone_pos: Vector2 = zone_data[2]
+        var zone_size: Vector2 = zone_data[3]
+        var zone_color: Color = zone_data[4]
+
+        var glow := Panel.new()
+        glow.position = zone_pos
+        glow.size = zone_size
+        glow.z_index = 3400
+        glow.mouse_filter = Control.MOUSE_FILTER_STOP
+        var sb := StyleBoxFlat.new()
+        sb.bg_color = Color(zone_color.r, zone_color.g, zone_color.b, 0.18)
+        sb.border_color = zone_color
+        sb.set_border_width_all(4)
+        sb.set_corner_radius_all(14)
+        glow.add_theme_stylebox_override("panel", sb)
+        safe_add_child(self, glow)
+
+        # Pulsing glow tween
+        var pulse := create_tween()
+        pulse.set_loops()
+        pulse.tween_property(glow, "modulate:a", 0.55, 0.7).set_trans(Tween.TRANS_SINE)
+        pulse.tween_property(glow, "modulate:a", 1.0, 0.7).set_trans(Tween.TRANS_SINE)
+
+        # Label inside
+        var name_lbl := Label.new()
+        name_lbl.text = zone_label
+        name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        name_lbl.position = Vector2(0, 0)
+        name_lbl.size = zone_size
+        name_lbl.add_theme_font_size_override("font_size", ui_font(18))
+        name_lbl.add_theme_color_override("font_color", zone_color.lightened(0.5))
+        name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        glow.add_child(name_lbl)
+
+        # Tap to confirm
+        var tapped_zone := [false]
+        glow.gui_input.connect(func(ev: InputEvent):
+            if not (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT): return
+            if tapped_zone[0]: return
+            tapped_zone[0] = true
+            pulse.kill()
+            var done_sb := StyleBoxFlat.new()
+            done_sb.bg_color = Color(zone_color.r, zone_color.g, zone_color.b, 0.45)
+            done_sb.border_color = Color(0.5, 1.0, 0.5)
+            done_sb.set_border_width_all(4)
+            done_sb.set_corner_radius_all(14)
+            glow.add_theme_stylebox_override("panel", done_sb)
+            safe_set_text(name_lbl, zone_label + " ✓")
+            name_lbl.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
+            _tutorial_set_instruction("%s — %s  (%d / %d)" % [zone_label, zone_why, tapped[0] + 1, total])
+            tapped[0] += 1
+            if tapped[0] >= total:
+                get_tree().create_timer(0.6).timeout.connect(_tutorial_complete)
+        )
 
 func _tutorial_opening_text() -> String:
     match tutorial_lesson:
+        0: return "Tap each glowing zone to learn what it does."
         1: return "You have 3 Play Points. Click a card in your hand to select it, then click 'Play Card' to put a follower on the battlefield."
         2: return "Your follower is already on the field. Click it to select it, then click the Enemy Guard to attack."
         3: return "You have 3 Play Points. Play a follower from your hand, then click 'End Turn' to pass."

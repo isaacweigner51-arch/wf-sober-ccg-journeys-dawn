@@ -208,12 +208,17 @@ var training_spent_resource := false
 var training_destroyed_enemy := false
 var training_survived_combat := false
 var training_progress_trigger_count := 0
+# ── TUTORIAL MODE ─────────────────────────────────────────────────────────────
+# Separate from training_mode (class-specific post-tutorial).
+# tutorial_lesson  1-6 map to the six battle-based Academy lessons.
+# tutorial_step    tracks progress within the current lesson.
 var tutorial_mode := false
 var tutorial_lesson := 0
 var tutorial_step := 0
 var tutorial_overlay: Panel
 var tutorial_instruction_label: Label
 var tutorial_heading_label: Label
+# ──────────────────────────────────────────────────────────────────────────────
 var battle_setup_loaded := false
 var battlefield_background: TextureRect
 
@@ -3507,6 +3512,12 @@ func training_on_end_turn() -> void:
     training_attacked_this_turn = false
     update_training_panel()
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  TUTORIAL MODE — followers-on-the-field Academy lessons
+#  Each of the six battle lessons is driven by tutorial_lesson (1-6) and a
+#  tutorial_step counter incremented by the validation hooks below.
+# ══════════════════════════════════════════════════════════════════════════════
+
 func _tut_card(name_v:String,cost_v:int,atk_v:int,hp_v:int,faction_v:String,ability_v:String,text_v:String,icon_v:String,art_v:String="") -> Dictionary:
     if art_v != "":
         return card(name_v,cost_v,atk_v,hp_v,faction_v,"Training",ability_v,0,text_v,icon_v,art_v)
@@ -3515,11 +3526,13 @@ func _tut_card(name_v:String,cost_v:int,atk_v:int,hp_v:int,faction_v:String,abil
 func _setup_tutorial_lesson() -> void:
     player_board.clear(); enemy_board.clear()
     match tutorial_lesson:
-        1:
+        0: # Zone orientation — empty board so the real UI is unobstructed
+            player_mana = 3; player_max_mana = 3
+        1: # Play a Follower
             player_mana = 3; player_max_mana = 3
             player_hand.append(_tut_card("Newcomer",1,1,2,"Universal","none","Play this to put a follower on the field.","road"))
             player_hand.append(_tut_card("Forward Vanguard",3,4,2,"Courage","charge","Charge — attacks the same turn it enters play.","flame"))
-        2:
+        2: # Combat
             player_mana = 2; player_max_mana = 2
             player_hand.append(_tut_card("Spark Runner",1,2,1,"Courage","charge","Charge.","flame"))
             var trainee := _tut_card("Academy Trainee",2,4,5,"Hope","none","Select this follower, then click an enemy target to attack.","hands")
@@ -3528,11 +3541,11 @@ func _setup_tutorial_lesson() -> void:
             var guard := _tut_card("Enemy Guard",2,2,4,"Courage","guard","Guard — must be attacked before the enemy Leader.","shield")
             guard["can_attack"] = true; guard["summoned_turn"] = -1
             enemy_board.append(guard)
-        3:
+        3: # End Your Turn
             player_mana = 3; player_max_mana = 3
             player_hand.append(_tut_card("Newcomer",1,1,2,"Universal","none","Play this follower, then click End Turn.","road"))
             player_hand.append(_tut_card("Patient Listener",2,2,4,"Serenity","none","On Play: Draw a card.","hands"))
-        4:
+        4: # Spells & Amulets
             player_mana = 6; player_max_mana = 6
             var spell_card := card("Step Study",3,0,0,"Universal","Silver","draw_reduce",1,"Spell — Play: Draw a card, then reduce the highest-cost card in hand by 1.","road")
             spell_card["is_spell"] = true
@@ -3544,7 +3557,7 @@ func _setup_tutorial_lesson() -> void:
                 var amulet_card := _tut_card("Recovery Amulet",2,0,0,"Universal","none","Amulet — stays on the board and generates an effect each turn.","star")
                 amulet_card["is_amulet"] = true
                 player_hand.append(amulet_card)
-        5:
+        5: # Recovery & Revive
             player_mana = 3; player_max_mana = 3
             var ally := _tut_card("Academy Rookie",2,2,3,"Hope","none","Your follower on the field.","hands")
             ally["can_attack"] = false; ally["summoned_turn"] = turn_number
@@ -3553,7 +3566,7 @@ func _setup_tutorial_lesson() -> void:
             var punisher := _tut_card("Aggressive Trainer",3,4,4,"Courage","none","Scripted — will attack your follower this turn.","flame")
             punisher["can_attack"] = true; punisher["summoned_turn"] = -1
             enemy_board.append(punisher)
-        6:
+        6: # Sponsor & Sponsee
             player_mana = 8; player_max_mana = 8
             var sponsor_card := _find_card_by_name(build_universal_cards(), "The Sponsor")
             if not sponsor_card.is_empty():
@@ -3575,10 +3588,14 @@ func _build_tutorial_overlay() -> void:
     st.border_width_bottom = 3
     tutorial_overlay.add_theme_stylebox_override("panel", st)
     safe_add_child(self, tutorial_overlay)
+
+    # Mentor accent bar
     var bar := ColorRect.new(); bar.color = class_accent_color(selected_class)
     bar.position = Vector2(0, 0); bar.size = Vector2(6, 106)
     bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
     tutorial_overlay.add_child(bar)
+
+    # Lesson / mentor label
     tutorial_heading_label = Label.new()
     tutorial_heading_label.position = Vector2(16, 7)
     tutorial_heading_label.size = Vector2(1240, 22)
@@ -3589,10 +3606,14 @@ func _build_tutorial_overlay() -> void:
     var safe_idx := clampi(tutorial_lesson - 1, 0, lesson_names.size() - 1)
     tutorial_heading_label.text = "RECOVERY ACADEMY  •  %s  •  %s" % [lesson_names[safe_idx], mentor_names[safe_idx]]
     tutorial_overlay.add_child(tutorial_heading_label)
+
+    # Step separator
     var sep := ColorRect.new(); sep.color = Color(1,1,1,0.08)
     sep.position = Vector2(16,32); sep.size = Vector2(1248,1)
     sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
     tutorial_overlay.add_child(sep)
+
+    # Instruction label
     tutorial_instruction_label = Label.new()
     tutorial_instruction_label.position = Vector2(16, 38)
     tutorial_instruction_label.size = Vector2(1248, 62)
@@ -3600,10 +3621,84 @@ func _build_tutorial_overlay() -> void:
     tutorial_instruction_label.add_theme_font_size_override("font_size", ui_font(18))
     tutorial_instruction_label.add_theme_color_override("font_color", Color(0.94, 0.96, 1.0))
     tutorial_overlay.add_child(tutorial_instruction_label)
+
     _tutorial_set_instruction(_tutorial_opening_text())
+    if tutorial_lesson == 0:
+        call_deferred("_build_zone_highlights")
+
+func _build_zone_highlights() -> void:
+    # Zone data: [label, why, position, size, color]
+    var zones := [
+        ["YOUR LEADER", "20 Defense — when it hits 0 you lose.", Vector2(1062, 335), Vector2(195, 185), Color(0.90, 0.22, 0.22)],
+        ["YOUR HAND", "Cards you can play this turn.", Vector2(150, 600), Vector2(880, 115), Color(0.22, 0.52, 0.90)],
+        ["PLAY POINTS", "Spent to play cards. Grows by 1 each turn.", Vector2(1028, 548), Vector2(232, 100), Color(0.95, 0.78, 0.10)],
+        ["BATTLEFIELD", "Where your followers fight.", Vector2(245, 365), Vector2(790, 165), Color(0.22, 0.72, 0.38)],
+        ["ENEMY LEADER", "What you're trying to bring to zero.", Vector2(24, 92), Vector2(195, 185), Color(0.75, 0.28, 0.82)],
+    ]
+    var tapped := [0]
+    var total := zones.size()
+    for zone_data in zones:
+        var zone_label: String = zone_data[0]
+        var zone_why: String = zone_data[1]
+        var zone_pos: Vector2 = zone_data[2]
+        var zone_size: Vector2 = zone_data[3]
+        var zone_color: Color = zone_data[4]
+
+        var glow := Panel.new()
+        glow.position = zone_pos
+        glow.size = zone_size
+        glow.z_index = 3400
+        glow.mouse_filter = Control.MOUSE_FILTER_STOP
+        var sb := StyleBoxFlat.new()
+        sb.bg_color = Color(zone_color.r, zone_color.g, zone_color.b, 0.18)
+        sb.border_color = zone_color
+        sb.set_border_width_all(4)
+        sb.set_corner_radius_all(14)
+        glow.add_theme_stylebox_override("panel", sb)
+        safe_add_child(self, glow)
+
+        # Pulsing glow tween
+        var pulse := create_tween()
+        pulse.set_loops()
+        pulse.tween_property(glow, "modulate:a", 0.55, 0.7).set_trans(Tween.TRANS_SINE)
+        pulse.tween_property(glow, "modulate:a", 1.0, 0.7).set_trans(Tween.TRANS_SINE)
+
+        # Label inside
+        var name_lbl := Label.new()
+        name_lbl.text = zone_label
+        name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        name_lbl.position = Vector2(0, 0)
+        name_lbl.size = zone_size
+        name_lbl.add_theme_font_size_override("font_size", ui_font(18))
+        name_lbl.add_theme_color_override("font_color", zone_color.lightened(0.5))
+        name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        glow.add_child(name_lbl)
+
+        # Tap to confirm
+        var tapped_zone := [false]
+        glow.gui_input.connect(func(ev: InputEvent):
+            if not (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT): return
+            if tapped_zone[0]: return
+            tapped_zone[0] = true
+            pulse.kill()
+            var done_sb := StyleBoxFlat.new()
+            done_sb.bg_color = Color(zone_color.r, zone_color.g, zone_color.b, 0.45)
+            done_sb.border_color = Color(0.5, 1.0, 0.5)
+            done_sb.set_border_width_all(4)
+            done_sb.set_corner_radius_all(14)
+            glow.add_theme_stylebox_override("panel", done_sb)
+            safe_set_text(name_lbl, zone_label + " ✓")
+            name_lbl.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
+            _tutorial_set_instruction("%s — %s  (%d / %d)" % [zone_label, zone_why, tapped[0] + 1, total])
+            tapped[0] += 1
+            if tapped[0] >= total:
+                get_tree().create_timer(0.6).timeout.connect(_tutorial_complete)
+        )
 
 func _tutorial_opening_text() -> String:
     match tutorial_lesson:
+        0: return "Tap each glowing zone to learn what it does."
         1: return "You have 3 Play Points. Click a card in your hand to select it, then click 'Play Card' to put a follower on the battlefield."
         2: return "Your follower is already on the field. Click it to select it, then click the Enemy Guard to attack."
         3: return "You have 3 Play Points. Play a follower from your hand, then click 'End Turn' to pass."
@@ -3623,18 +3718,23 @@ func _tutorial_advance(next_text: String) -> void:
 
 func _tutorial_complete() -> void:
     if not is_instance_valid(self): return
-    show_vfx("LESSON COMPLETE  ✓", Vector2(440, 300), class_accent_color(selected_class))
+    var vfx_color := class_accent_color(selected_class)
+    show_vfx("LESSON COMPLETE  ✓", Vector2(440, 300), vfx_color)
     _tutorial_set_instruction("Lesson complete! Returning to the Academy…")
+    # Save incremented step to the shared profile so menu.gd picks it up
     var cfg := _load_shared_profile_cfg_for_partial_write()
     if cfg != null:
         var cur := int(cfg.get_value("academy", "step", 0))
         cfg.set_value("academy", "step", cur + 1)
         cfg.save("user://journeys_dawn_profile.cfg")
+    # Also flag battle_setup.cfg so menu.gd can fast-path back to the Academy
     var bs := ConfigFile.new()
     bs.load("user://battle_setup.cfg")
     bs.set_value("tutorial", "lesson_complete", true)
     bs.save("user://battle_setup.cfg")
     get_tree().create_timer(1.6).timeout.connect(func(): get_tree().change_scene_to_file("res://menu.tscn"))
+
+# ── Per-lesson event hooks ────────────────────────────────────────────────────
 
 func _tutorial_on_card_played(card_data: Dictionary) -> void:
     if not tutorial_mode: return
@@ -3650,7 +3750,7 @@ func _tutorial_on_card_played(card_data: Dictionary) -> void:
                 _tutorial_advance("Your follower is on the field. Now click 'End Turn' to pass to the opponent.")
         4:
             if tutorial_step == 0 and is_spell:
-                _tutorial_advance("The spell resolved instantly! Now play the Amulet (Daily Progress) to see how it stays on the board.")
+                _tutorial_advance("The spell resolved instantly — no follower placed! Now play the Amulet (Daily Progress) to see how it stays on the board.")
             elif tutorial_step == 1 and is_amulet:
                 _tutorial_advance("Amulets persist and keep ticking. End your turn to see it resolve again next turn.")
         5:
@@ -3707,14 +3807,18 @@ func _tutorial_on_follower_lost(player_side: bool) -> void:
     if not tutorial_mode or not player_side: return
     if tutorial_lesson == 5 and tutorial_step == 0:
         _tutorial_advance("Your follower was defeated and sent to the Relapse Zone. Play Recovery Call from your hand to bring it back.")
-        tutorial_step = 1
+        tutorial_step = 1  # mark that we're now waiting for revive
 
 func _tutorial_on_recovered(_player_side: bool) -> void:
     if not tutorial_mode: return
+    # Revive completion is handled in _tutorial_on_card_played for the revive ability card
+    pass
 
 func _run_tutorial_enemy_turn() -> void:
     await get_tree().create_timer(0.55).timeout
     if game_over: return
+    # Lesson 5: enemy attacks the player's first follower to kill it,
+    # demonstrating the Relapse Zone for the Recovery lesson.
     if tutorial_lesson == 5 and tutorial_step == 0:
         safe_set_text(status_label, "Opponent's turn — your follower is under attack!")
         if not enemy_board.is_empty() and not player_board.is_empty():
@@ -3860,7 +3964,7 @@ func second_chance_momentum(card_count: int) -> int:
         return 1
     return 2
 
-# resolve_card_full_art() and second_chance_card_art() removed.
+# CardArt.resolve() and second_chance_card_art() removed.
 # All art resolution goes through CardArt.resolve(cd) — the shared autoload.
 
 # A framed portrait panel built from real card art, used by every evolution

@@ -1836,7 +1836,7 @@ func launch_tutorial_battle(tutorial_lesson: int) -> void:
 func show_academy_lesson() -> void:
     # Lessons 1-4, 6, and 9 run inside the real battle scene with followers
     # on the field. Map academy_step → tutorial_lesson index and skip the UI.
-    const BATTLE_STEPS := {1: 1, 2: 2, 3: 3, 4: 4, 6: 5, 9: 6}
+    const BATTLE_STEPS := {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 6: 5, 9: 6}
     if BATTLE_STEPS.has(academy_step):
         launch_tutorial_battle(BATTLE_STEPS[academy_step])
         return
