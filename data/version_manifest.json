@@ -1,5 +1,5 @@
 {
-  "version": "0.8.31",
+  "version": "0.8.32",
   "build": "Shiny Horizons",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
@@ -8,9 +8,10 @@
   "required": false,
   "version_code": "0.8.30",
   "build_name": "Shiny Horizons",
-  "card_count": 147,
+  "card_count": 195,
   "version_name": "0.8.30",
   "fixes": [
+    "Reduced Legendaries to 3 per class; added 7 Bronze and 5 Silver per class",
     "Academy Lesson 1 redesigned \u2014 visual zone tiles, no walls of text, progression fixed.",
     "Recovery Academy rebuilt \u2014 6 lessons now run inside real battles with live followers.",
     "Class balance complete \u2014 all 4 classes now even: 6 Bronze / 5 Silver / 7 Gold / 6 Epic / 5 Legendary / 1 Platinum each (147 cards total).",
