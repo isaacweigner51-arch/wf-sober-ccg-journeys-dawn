@@ -1589,16 +1589,28 @@ func show_whats_new_popup(version: String, fixes: Array, features: Array, new_ca
 
     var _dismiss := func():
         if not is_instance_valid(scrim): return
+        # Hide immediately so touch-up / lingering pointer events can't fall
+        # through to whatever nav button is underneath (the classic tap-through
+        # bug on touchscreens where tap-down dismisses the overlay and tap-up
+        # hits the Collection button behind it).
+        scrim.hide()
         last_seen_whats_new_version = version
         save_profile()
         scrim.queue_free()
 
-    # Clicking the dark background dismisses the popup, same as GOT IT
-    scrim.gui_input.connect(func(event: InputEvent):
-        if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-            _dismiss.call()
-    )
+    # ── DO NOT connect gui_input on the scrim. ────────────────────────────────
+    # A background-tap-to-dismiss handler on a touchscreen fires on the
+    # press half of the touch event, frees the scrim, and then the release
+    # half lands on the nav button behind it — sending the player to
+    # Collection every time they dismiss this popup. Only explicit buttons
+    # should close it.
 
+    # ✕ button — top-right corner of the dialog, always reachable.
+    var x_btn := button("✕", Vector2(648, 8), Vector2(44, 36), _dismiss, dialog)
+    x_btn.add_theme_font_size_override("font_size", ui_font_size(18))
+    x_btn.add_theme_color_override("font_color", Color(0.8, 0.8, 0.9))
+
+    # GOT IT — bottom-centre of the dialog.
     var close_btn := button("GOT IT  ✓", Vector2(270, 480), Vector2(160, 48), _dismiss, dialog)
     close_btn.add_theme_font_size_override("font_size", ui_font_size(16))
 
