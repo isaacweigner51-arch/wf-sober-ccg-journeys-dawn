@@ -153,41 +153,57 @@ func _load_account_profile() -> void:
     account_role = "player"
     account_profile = {}
     if user_id.is_empty() or access_token.is_empty():
+        push_warning("CLOUD: no user_id/token — skipping profile load")
         account_role_loaded.emit(account_role, account_profile)
         cloud_save_loaded.emit({})
         return
+
+    # ── 1. Fetch existing profile row ─────────────────────────────────────────
     var path := "/rest/v1/player_profiles?select=user_id,display_name,app_role,recovery_vials,save_data&user_id=eq.%s&limit=1" % user_id.uri_encode()
     var result := await _request(HTTPClient.METHOD_GET, path, null, true)
-    if result.ok and result.data is Array:
+    if not result.ok:
+        push_error("CLOUD: GET player_profiles failed (HTTP %d): %s" % [result.status, result.text])
+    elif result.data is Array:
         if result.data.is_empty():
-            # New email-signup account — create the profile row so the player
-            # has a persistent identity and save_data can be stored later.
-            await _request(HTTPClient.METHOD_POST, "/rest/v1/player_profiles",
+            # ── 2. No row yet — UPSERT a new profile (idempotent) ────────────
+            print("CLOUD: no profile row found — creating for user_id=%s" % user_id)
+            var ins := await _request(HTTPClient.METHOD_POST, "/rest/v1/player_profiles",
                 {"user_id": user_id, "display_name": "", "app_role": "player", "recovery_vials": 0},
                 true, "resolution=merge-duplicates,return=minimal")
+            if not ins.ok:
+                push_error("CLOUD: INSERT player_profiles failed (HTTP %d): %s — check RLS policies" % [ins.status, ins.text])
+            else:
+                print("CLOUD: profile row created OK")
         elif result.data[0] is Dictionary:
             account_profile = Dictionary(result.data[0])
             account_role = str(account_profile.get("app_role", "player")).to_lower()
+            print("CLOUD: profile loaded (role=%s, has_save_data=%s)" % [account_role, account_profile.has("save_data")])
+
     account_role_loaded.emit(account_role, account_profile)
     if get_node_or_null("/root/AccessManager") != null:
         get_node("/root/AccessManager").apply_authenticated_role(account_role, access_token, user_id)
-    # Emit any cloud-saved profile data so menu.gd can restore it before the
-    # account_authenticated signal fires and the home screen is shown.
+
+    # ── 3. Emit cloud save data so menu.gd can merge before home is shown ─────
     var cloud_data: Dictionary = {}
     if account_profile.has("save_data") and account_profile["save_data"] is Dictionary:
         cloud_data = account_profile["save_data"]
+        print("CLOUD: save_data found (%d sections)" % cloud_data.size())
+    else:
+        print("CLOUD: no save_data in profile — will upload local save after login")
     cloud_save_loaded.emit(cloud_data)
 
 func upload_save_data(data: Dictionary) -> void:
     if user_id.is_empty() or access_token.is_empty():
+        push_warning("CLOUD: upload skipped — not authenticated")
         return
-    # PATCH the player's own profile row with the serialized game state.
-    # Fails silently if the save_data column hasn't been added yet — add it
-    # in the Supabase SQL editor:
-    #   ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS save_data JSONB;
-    await _request(HTTPClient.METHOD_PATCH,
+    print("CLOUD: uploading save_data for user_id=%s (%d sections)" % [user_id, data.size()])
+    var result := await _request(HTTPClient.METHOD_PATCH,
         "/rest/v1/player_profiles?user_id=eq.%s" % user_id.uri_encode(),
         {"save_data": data}, true, "return=minimal")
+    if not result.ok:
+        push_error("CLOUD: PATCH save_data failed (HTTP %d): %s — check RLS policies and that save_data column exists" % [result.status, result.text])
+    else:
+        print("CLOUD: save_data uploaded OK (HTTP %d)" % result.status)
 
 func clear_saved_session() -> void:
     access_token = ""
