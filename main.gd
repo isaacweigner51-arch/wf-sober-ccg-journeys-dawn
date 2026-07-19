@@ -3564,15 +3564,33 @@ func _setup_tutorial_lesson() -> void:
                 var amulet_card := _tut_card("Recovery Amulet",2,0,0,"Universal","none","Amulet — stays on the board and generates an effect each turn.","star")
                 amulet_card["is_amulet"] = true
                 player_hand.append(amulet_card)
-        5: # Recovery & Revive
-            player_mana = 3; player_max_mana = 3
-            var ally := _tut_card("Academy Rookie",2,2,3,"Hope","none","Your follower on the field.","hands")
-            ally["can_attack"] = false; ally["summoned_turn"] = turn_number
-            player_board.append(ally)
-            player_hand.append(_tut_card("Recovery Call",3,2,3,"Hope","revive","On Play: Recover the most recent follower from your Relapse Zone.","star"))
-            var punisher := _tut_card("Aggressive Trainer",3,4,4,"Courage","none","Scripted — will attack your follower this turn.","flame")
-            punisher["can_attack"] = true; punisher["summoned_turn"] = -1
-            enemy_board.append(punisher)
+        5: # Recovery Skill — class-aware (Hope, Courage, Serenity, Purpose each see
+           #                their own mechanic rather than a generic revive lesson)
+            match selected_class:
+                "Courage":
+                    player_mana = 4; player_max_mana = 4
+                    var cour_ally := _tut_card("Frontline Fighter",2,3,3,"Courage","none","Your follower. After playing the amulet, select it and attack the enemy leader directly.","flame")
+                    cour_ally["can_attack"] = true; cour_ally["summoned_turn"] = -1
+                    player_board.append(cour_ally)
+                    player_hand.append(_tut_card("Face It Head-On",2,0,0,"Courage","standing_ground","Amulet — Gain Progress whenever you attack the enemy leader directly. At 3 Progress, all allies gain permanent +1 Attack.","flame"))
+                "Serenity":
+                    player_mana = 5; player_max_mana = 5
+                    player_hand.append(_tut_card("Sanctuary of Serenity",2,0,0,"Serenity","sanctuary_serenity","Amulet — Whenever your leader's Defense is restored, permanently give an allied follower +1/+1.","shield"))
+                    # Guiding Light uses heal_leader with value 3, which needs the
+                    # ability_param slot — use card() directly instead of _tut_card().
+                    player_hand.append(card("Guiding Light",1,1,2,"Serenity","Training","heal_leader",3,"Arrival: Restore 3 Defense. Use this to trigger Sanctuary of Serenity's buff.","hands"))
+                "Purpose":
+                    player_mana = 2; player_max_mana = 2
+                    player_hand.append(_tut_card("Daily Progress",2,0,0,"Purpose","daily_progress","Amulet — End a turn with 0 Play Points to gain Progress. At 3, gain +1 maximum PP.","road"))
+                _: # Hope (and any unexpected value — keep the original revive lesson)
+                    player_mana = 3; player_max_mana = 3
+                    var hope_ally := _tut_card("Academy Rookie",2,2,3,"Hope","none","Your follower on the field.","hands")
+                    hope_ally["can_attack"] = false; hope_ally["summoned_turn"] = turn_number
+                    player_board.append(hope_ally)
+                    player_hand.append(_tut_card("Recovery Call",3,2,3,"Hope","revive","On Play: Recover the most recent follower from your Relapse Zone.","star"))
+                    var punisher := _tut_card("Aggressive Trainer",3,4,4,"Courage","none","Scripted — will attack your follower this turn.","flame")
+                    punisher["can_attack"] = true; punisher["summoned_turn"] = -1
+                    enemy_board.append(punisher)
         6: # Sponsor & Sponsee
             player_mana = 8; player_max_mana = 8
             var sponsor_card := _find_card_by_name(build_universal_cards(), "The Sponsor")
@@ -3710,7 +3728,12 @@ func _tutorial_opening_text() -> String:
         2: return "Your follower is already on the field. Click it to select it, then click the Enemy Guard to attack."
         3: return "You have 3 Play Points. Play a follower from your hand, then click 'End Turn' to pass."
         4: return "You have 6 Play Points. Spells resolve immediately — play Step Study from your hand first."
-        5: return "You have a follower on the field. Click 'End Turn' — watch what the opponent does."
+        5:
+            match selected_class:
+                "Courage": return "Play Face It Head-On from your hand, then select your follower and attack the enemy leader directly to earn your first Recovery Progress."
+                "Serenity": return "Play Sanctuary of Serenity first, then play Guiding Light — restoring your leader's Defense will trigger Sanctuary's ally buff."
+                "Purpose": return "Play Daily Progress (costs exactly 2 PP — all you have). Then click End Turn to trigger its first Progress."
+                _: return "You have a follower on the field. Click 'End Turn' — watch what the opponent does."
         6: return "You have 8 Play Points. Play The Sponsor — it summons Sponsees to fight alongside you."
     return ""
 
@@ -3770,12 +3793,28 @@ func _tutorial_on_card_played(card_data: Dictionary) -> void:
             elif tutorial_step == 1 and is_amulet:
                 _tutorial_advance("Amulets persist and keep ticking. End your turn to see it resolve again next turn.")
         5:
-            if tutorial_step == 1 and ability == "revive":
-                print("TUTORIAL[L5,S1]: revive card played — timer 1.2s then complete")
-                _tutorial_advance("Your follower is back from the Relapse Zone! Recovery is core to the Hope path. Lesson complete.")
-                await get_tree().create_timer(1.2).timeout
-                print("TUTORIAL[L5]: revive timer done → _tutorial_complete")
-                _tutorial_complete()
+            match selected_class:
+                "Courage":
+                    if tutorial_step == 0 and is_amulet:
+                        _tutorial_advance("Face It Head-On is on the board! Select your follower and click the enemy leader portrait to attack directly and earn Recovery Progress.")
+                "Serenity":
+                    if tutorial_step == 0 and is_amulet:
+                        _tutorial_advance("Sanctuary of Serenity is live. Now play Guiding Light to restore your leader's Defense and trigger Sanctuary's buff.")
+                    elif tutorial_step == 1 and not is_amulet and not is_spell:
+                        print("TUTORIAL[L5,Serenity,S1]: healer played → Sanctuary triggers → complete")
+                        _tutorial_advance("Sanctuary triggered — an allied follower gained +1/+1! Each time your Defense is restored, Sanctuary buffs another ally. Lesson complete.")
+                        await get_tree().create_timer(1.2).timeout
+                        _tutorial_complete()
+                "Purpose":
+                    if tutorial_step == 0 and is_amulet:
+                        _tutorial_advance("Daily Progress is tracking. You have 0 Play Points left — click End Turn to trigger your first Progress.")
+                _: # Hope default
+                    if tutorial_step == 1 and ability == "revive":
+                        print("TUTORIAL[L5,Hope,S1]: revive card played — timer 1.2s then complete")
+                        _tutorial_advance("Your follower is back from the Relapse Zone! Recovery is core to the Hope path. Lesson complete.")
+                        await get_tree().create_timer(1.2).timeout
+                        print("TUTORIAL[L5]: revive timer done → _tutorial_complete")
+                        _tutorial_complete()
         6:
             if tutorial_step == 0 and ability == "sponsor":
                 _tutorial_advance("Two Sponsees entered the field! Click 'End Turn' to see a third arrive automatically.")
@@ -3805,14 +3844,22 @@ func _tutorial_on_end_turn() -> void:
                 await get_tree().create_timer(0.9).timeout
                 print("TUTORIAL[L4]: 0.9s timer done → _tutorial_complete")
                 _tutorial_complete()
-        # LESSON 5 — do NOT handle end_turn here.
+        # LESSON 5 — Hope path: do NOT advance on end_turn.
         # _tutorial_on_end_turn fires synchronously at the TOP of end_player_turn(),
         # BEFORE enemy_turn() runs. Advancing tutorial_step here (0 → 1) causes
         # _run_tutorial_enemy_turn to see step=1 instead of 0, so the enemy never
         # attacks the player's follower, nothing enters the Relapse Zone, the revive
         # card can never complete, and the lesson freezes permanently.
-        # The step advancement belongs in _tutorial_on_follower_lost, which fires
-        # AFTER the enemy attack animation actually destroys the follower.
+        # The step advancement for Hope belongs in _tutorial_on_follower_lost.
+        # Purpose is handled here at step=1, which is AFTER the amulet is played
+        # (step 0→1 happens in _tutorial_on_card_played), so the race condition
+        # described above does not apply.
+        5:
+            if selected_class == "Purpose" and tutorial_step == 1:
+                print("TUTORIAL[L5,Purpose,S1]: end_turn → complete")
+                _tutorial_advance("Daily Progress triggered! Spend all your Play Points every turn to earn Progress and power up the Purpose path. Lesson complete.")
+                await get_tree().create_timer(0.9).timeout
+                _tutorial_complete()
         6:
             if tutorial_step == 1:
                 print("TUTORIAL[L6,S1]: end_turn → complete, awaiting 1.1s timer")
@@ -3837,6 +3884,14 @@ func _tutorial_on_attack(target_index: int, _survived: bool, enemy_destroyed: bo
                 await get_tree().create_timer(0.9).timeout
                 print("TUTORIAL[L2]: 0.9s timer done → _tutorial_complete")
                 _tutorial_complete()
+        5:
+            # Courage only: a direct leader hit (target_index < 0) while
+            # Face It Head-On is on the board earns the first Progress counter.
+            if selected_class == "Courage" and tutorial_step == 1 and target_index < 0:
+                print("TUTORIAL[L5,Courage,S1]: leader hit → complete")
+                _tutorial_advance("Face It Head-On gained its first Recovery Progress! Attack the leader 3 times total to evolve it into Unbreakable Resolve. Lesson complete.")
+                await get_tree().create_timer(1.2).timeout
+                _tutorial_complete()
 
 func _tutorial_on_follower_lost(player_side: bool) -> void:
     if not tutorial_mode or not player_side: return
@@ -3858,15 +3913,23 @@ func _run_tutorial_enemy_turn() -> void:
     # Lesson 5: enemy attacks the player's first follower to kill it,
     # demonstrating the Relapse Zone for the Recovery lesson.
     if tutorial_lesson == 5 and tutorial_step == 0:
-        safe_set_text(status_label, "Opponent's turn — your follower is under attack!")
-        if not enemy_board.is_empty() and not player_board.is_empty():
-            var target_index := -1
-            for i in range(player_board.size()):
-                if not bool(player_board[i].get("is_amulet", false)):
-                    target_index = i; break
-            if target_index >= 0:
-                await animate_enemy_attack(0, target_index)
-                await get_tree().create_timer(0.3).timeout
+        if selected_class != "Hope" and not selected_class.is_empty():
+            # Non-Hope classes don't need the enemy to attack to set up their
+            # lesson — the enemy simply passes so the player can act freely.
+            safe_set_text(status_label, "Opponent passes — your turn.")
+            await get_tree().create_timer(0.4).timeout
+        else:
+            # Hope path: the enemy destroys the player's follower so it enters
+            # the Relapse Zone, setting up the Recovery Call revive demo.
+            safe_set_text(status_label, "Opponent's turn — your follower is under attack!")
+            if not enemy_board.is_empty() and not player_board.is_empty():
+                var target_index := -1
+                for i in range(player_board.size()):
+                    if not bool(player_board[i].get("is_amulet", false)):
+                        target_index = i; break
+                if target_index >= 0:
+                    await animate_enemy_attack(0, target_index)
+                    await get_tree().create_timer(0.3).timeout
     else:
         safe_set_text(status_label, "Opponent passes — your turn.")
         await get_tree().create_timer(0.4).timeout

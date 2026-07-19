@@ -1,16 +1,26 @@
 {
-  "version": "0.8.32",
+  "version": "0.8.33",
   "build": "Shiny Horizons",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Class balance pass \u2014 all four classes now even at Bronze 6, Silver 5, Gold 7, Epic 6, Legendary 5, Platinum 1.",
+  "notes": "Cloud save, class-aware recovery tutorial, and Collection screen layout polish.",
   "required": false,
-  "version_code": "0.8.30",
+  "version_code": "0.8.33",
   "build_name": "Shiny Horizons",
   "card_count": 195,
-  "version_name": "0.8.30",
+  "version_name": "0.8.33",
   "fixes": [
+    "Cloud save — signing into your account now restores your full collection, deck, academy progress, and Vials on any device.",
+    "New account profile rows are created automatically on first email sign-in — no more silent failures after account creation.",
+    "Recovery Academy lesson 6 (Recovery & Revive) now shows your class's own recovery skill instead of always using Hope's revive — Courage learns Face It Head-On, Serenity learns Sanctuary of Serenity, Purpose learns Daily Progress.",
+    "Evolution blocked until Turn 4 — orbs are greyed out and an error message appears if you try earlier.",
+    "Tutorial lesson 6 (Recovery & Revive) freeze fixed — Hope path now correctly waits for the enemy to attack before prompting the revive.",
+    "Collection screen layout rebuilt — craft-cost guide and currency panel no longer overlap; search, filters, and card binder each sit in their own row.",
+    "Epic craft cost updated to 2,500 Vials. Legendary craft cost updated to 3,500 Vials.",
+    "CREATE buttons throughout Collection and Deck Builder now show formatted costs with commas (e.g. 2,500)."
+  ],
+  "features": [
     "Reduced Legendaries to 3 per class; added 7 Bronze and 5 Silver per class",
     "Academy Lesson 1 redesigned \u2014 visual zone tiles, no walls of text, progression fixed.",
     "Recovery Academy rebuilt \u2014 6 lessons now run inside real battles with live followers.",
@@ -24,6 +34,8 @@
     "Lesson progression \u2014 completing a battle lesson auto-returns you to the Academy."
   ],
   "features": [
+    "CLOUD SAVE \u2014 Your account now backs up your full game state to the cloud automatically after every save. Sign in on any device to restore your collection, deck, academy progress, and Vials exactly where you left off.",
+    "CLASS RECOVERY TUTORIAL \u2014 Academy lesson 6 is now personalised to your chosen class. Courage players learn Face It Head-On (attack the leader to gain Progress). Serenity players learn Sanctuary of Serenity (heal your leader to buff allies). Purpose players learn Daily Progress (spend all Play Points then End Turn). Hope players see the original Recovery Call revive lesson.",
     "Academy zone lesson redesigned \u2014 visual zone tiles, no long text, fixed progression bug so players can advance past Lesson 1.",
     "The Undaunted (JD-140) art corrected \u2014 clean chest, no tattoos.",
     "CLASS BALANCE COMPLETE \u2014 All four classes (Hope, Courage, Serenity, Purpose) are now perfectly even across every rarity tier: 6 Bronze, 5 Silver, 7 Gold, 6 Epic, 5 Legendary, 1 Platinum each.",

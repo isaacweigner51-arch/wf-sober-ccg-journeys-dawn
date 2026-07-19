@@ -10,6 +10,7 @@ signal game_message(payload: Dictionary)
 signal network_error(message: String)
 signal account_authenticated(success: bool, message: String)
 signal account_role_loaded(role: String, profile: Dictionary)
+signal cloud_save_loaded(data: Dictionary)
 
 const SUPABASE_URL := "https://zlsbznebcmprfxngyogg.supabase.co"
 const SUPABASE_KEY := "sb_publishable_U8LP7Qgg-2nZIfeb7CTp3g_YLQaOXAx"
@@ -153,17 +154,40 @@ func _load_account_profile() -> void:
     account_profile = {}
     if user_id.is_empty() or access_token.is_empty():
         account_role_loaded.emit(account_role, account_profile)
+        cloud_save_loaded.emit({})
         return
-    var path := "/rest/v1/player_profiles?select=user_id,display_name,app_role,recovery_vials&user_id=eq.%s&limit=1" % user_id.uri_encode()
+    var path := "/rest/v1/player_profiles?select=user_id,display_name,app_role,recovery_vials,save_data&user_id=eq.%s&limit=1" % user_id.uri_encode()
     var result := await _request(HTTPClient.METHOD_GET, path, null, true)
-    if result.ok and result.data is Array and not result.data.is_empty() and result.data[0] is Dictionary:
-        account_profile = Dictionary(result.data[0])
-        account_role = str(account_profile.get("app_role", "player")).to_lower()
+    if result.ok and result.data is Array:
+        if result.data.is_empty():
+            # New email-signup account — create the profile row so the player
+            # has a persistent identity and save_data can be stored later.
+            await _request(HTTPClient.METHOD_POST, "/rest/v1/player_profiles",
+                {"user_id": user_id, "display_name": "", "app_role": "player", "recovery_vials": 0},
+                true, "resolution=merge-duplicates,return=minimal")
+        elif result.data[0] is Dictionary:
+            account_profile = Dictionary(result.data[0])
+            account_role = str(account_profile.get("app_role", "player")).to_lower()
     account_role_loaded.emit(account_role, account_profile)
-    if Engine.has_singleton("AccessManager"):
-        pass
     if get_node_or_null("/root/AccessManager") != null:
         get_node("/root/AccessManager").apply_authenticated_role(account_role, access_token, user_id)
+    # Emit any cloud-saved profile data so menu.gd can restore it before the
+    # account_authenticated signal fires and the home screen is shown.
+    var cloud_data: Dictionary = {}
+    if account_profile.has("save_data") and account_profile["save_data"] is Dictionary:
+        cloud_data = account_profile["save_data"]
+    cloud_save_loaded.emit(cloud_data)
+
+func upload_save_data(data: Dictionary) -> void:
+    if user_id.is_empty() or access_token.is_empty():
+        return
+    # PATCH the player's own profile row with the serialized game state.
+    # Fails silently if the save_data column hasn't been added yet — add it
+    # in the Supabase SQL editor:
+    #   ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS save_data JSONB;
+    await _request(HTTPClient.METHOD_PATCH,
+        "/rest/v1/player_profiles?user_id=eq.%s" % user_id.uri_encode(),
+        {"save_data": data}, true, "return=minimal")
 
 func clear_saved_session() -> void:
     access_token = ""

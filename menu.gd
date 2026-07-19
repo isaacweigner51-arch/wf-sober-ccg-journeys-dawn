@@ -818,6 +818,8 @@ func _ready() -> void:
         NetworkManager.network_error.connect(_on_online_error)
     if not NetworkManager.account_authenticated.is_connected(_on_launch_auth_result):
         NetworkManager.account_authenticated.connect(_on_launch_auth_result)
+    if not NetworkManager.cloud_save_loaded.is_connected(_on_cloud_save_loaded):
+        NetworkManager.cloud_save_loaded.connect(_on_cloud_save_loaded)
     cards = load_cards()
     load_profile()
     show_launch_screen()
@@ -1007,6 +1009,61 @@ func save_profile() -> void:
     cfg.set_value("trials", "selected_leader_skin", selected_leader_skin)
     cfg.set_value("meta", "last_seen_whats_new_version", last_seen_whats_new_version)
     cfg.save(SAVE_PATH)
+    # Fire-and-forget cloud backup. Runs after this frame so the local save
+    # always lands first; silently skipped when not signed in.
+    _queue_cloud_upload.call_deferred()
+
+# ── Cloud save helpers ────────────────────────────────────────────────────────
+
+func _queue_cloud_upload() -> void:
+    if NetworkManager.user_id.is_empty():
+        return
+    await NetworkManager.upload_save_data(_serialize_profile_for_cloud())
+
+func _serialize_profile_for_cloud() -> Dictionary:
+    saved_decks[selected_deck_class] = saved_deck.duplicate()
+    return {
+        "economy": {"gold": gold_balance, "dust": dust_balance, "packs": pack_inventory},
+        "packs": {"opened": packs_opened, "platinum_pity": platinum_pity},
+        "profile": {"class": selected_class},
+        "collection": {"owned": collection_owned, "shiny_owned": collection_shiny_owned},
+        "deck": {"class": selected_deck_class, "cards": saved_deck},
+        "decks": {"by_class": saved_decks},
+        "academy": {"complete": academy_complete, "step": academy_step, "reward_claimed": academy_reward_claimed},
+        "daily": {"reward_day": daily_reward_day, "last_claim_day": daily_last_claim_day},
+        "challenge": {"recovery_progress": recovery_challenge_progress},
+        "trials": {
+            "cleared": trials_cleared,
+            "sponsor_leader_unlocked": sponsor_leader_unlocked,
+            "sponsor_sleeve_unlocked": sponsor_sleeve_unlocked,
+            "sponsor_defeated": sponsor_defeated,
+            "selected_leader_skin": selected_leader_skin
+        },
+        "meta": {"last_seen_whats_new_version": last_seen_whats_new_version}
+    }
+
+func _apply_cloud_profile(data: Dictionary) -> void:
+    # Write each section/key from the cloud blob into the local ConfigFile so
+    # that the next load_profile() call picks it all up fresh.
+    if data.is_empty():
+        return
+    var cfg := ConfigFile.new()
+    cfg.load(SAVE_PATH) # Load existing local data (may be empty on fresh install).
+    for section in data.keys():
+        var sec_data: Variant = data[section]
+        if not (sec_data is Dictionary):
+            continue
+        for key in sec_data.keys():
+            cfg.set_value(section, key, sec_data[key])
+    cfg.save(SAVE_PATH)
+    print("CLOUD: applied save data from Supabase")
+
+func _on_cloud_save_loaded(data: Dictionary) -> void:
+    if data.is_empty():
+        return
+    _apply_cloud_profile(data)
+    load_profile() # Re-read local file now that cloud data has been written.
+    print("CLOUD: profile restored (%d sections)" % data.size())
 
 func clear_screen() -> void:
     for child in get_children(): child.queue_free()
