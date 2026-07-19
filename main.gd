@@ -2295,6 +2295,9 @@ func suppress_orb_click(orb: Button) -> void:
 func _finish_evolution_drag(cost: int, release_global: Vector2) -> void:
     if game_over or busy or not player_turn_active:
         return
+    if turn_number < 4:
+        status_label.text = "Evolution is not available until Turn 4."
+        return
     if cost < 1 or cost > 4 or player_evolutions_used[cost - 1]:
         return
     if player_mana < cost:
@@ -2320,6 +2323,9 @@ func _finish_evolution_drag(cost: int, release_global: Vector2) -> void:
 
 func choose_evolution(cost: int) -> void:
     if game_over or busy:
+        return
+    if turn_number < 4:
+        status_label.text = "Evolution is not available until Turn 4."
         return
     var used_index: int = cost - 1
     if used_index < 0 or used_index >= player_evolutions_used.size() or player_evolutions_used[used_index]:
@@ -3750,6 +3756,7 @@ func _tutorial_on_card_played(card_data: Dictionary) -> void:
     var is_spell := bool(card_data.get("is_spell", false))
     var is_amulet := bool(card_data.get("is_amulet", false))
     var ability := str(card_data.get("ability", ""))
+    print("TUTORIAL[L%d,S%d]: card_played ability=%s spell=%s amulet=%s" % [tutorial_lesson, tutorial_step, ability, str(is_spell), str(is_amulet)])
     match tutorial_lesson:
         1:
             if tutorial_step == 0:
@@ -3764,8 +3771,10 @@ func _tutorial_on_card_played(card_data: Dictionary) -> void:
                 _tutorial_advance("Amulets persist and keep ticking. End your turn to see it resolve again next turn.")
         5:
             if tutorial_step == 1 and ability == "revive":
+                print("TUTORIAL[L5,S1]: revive card played — timer 1.2s then complete")
                 _tutorial_advance("Your follower is back from the Relapse Zone! Recovery is core to the Hope path. Lesson complete.")
                 await get_tree().create_timer(1.2).timeout
+                print("TUTORIAL[L5]: revive timer done → _tutorial_complete")
                 _tutorial_complete()
         6:
             if tutorial_step == 0 and ability == "sponsor":
@@ -3773,33 +3782,48 @@ func _tutorial_on_card_played(card_data: Dictionary) -> void:
 
 func _tutorial_on_end_turn() -> void:
     if not tutorial_mode: return
+    print("TUTORIAL[L%d,S%d]: end_turn fired" % [tutorial_lesson, tutorial_step])
     match tutorial_lesson:
         1:
             if tutorial_step == 1:
+                print("TUTORIAL[L1,S1]: end_turn → complete, awaiting 0.9s timer")
                 _tutorial_advance("Turn ended — your Play Points will refresh next turn. Lesson complete!")
                 await get_tree().create_timer(0.9).timeout
+                print("TUTORIAL[L1]: 0.9s timer done → _tutorial_complete")
                 _tutorial_complete()
         3:
             if tutorial_step == 1:
+                print("TUTORIAL[L3,S1]: end_turn → complete, awaiting 0.9s timer")
                 _tutorial_advance("Your Play Points refreshed and you drew a new card. Each turn your maximum grows by 1. Lesson complete!")
                 await get_tree().create_timer(0.9).timeout
+                print("TUTORIAL[L3]: 0.9s timer done → _tutorial_complete")
                 _tutorial_complete()
         4:
             if tutorial_step == 2:
+                print("TUTORIAL[L4,S2]: end_turn → complete, awaiting 0.9s timer")
                 _tutorial_advance("The Amulet triggered at end of turn. Lesson complete!")
                 await get_tree().create_timer(0.9).timeout
+                print("TUTORIAL[L4]: 0.9s timer done → _tutorial_complete")
                 _tutorial_complete()
-        5:
-            if tutorial_step == 0:
-                _tutorial_advance("Your follower was defeated and sent to the Relapse Zone. Play Recovery Call to bring it back.")
+        # LESSON 5 — do NOT handle end_turn here.
+        # _tutorial_on_end_turn fires synchronously at the TOP of end_player_turn(),
+        # BEFORE enemy_turn() runs. Advancing tutorial_step here (0 → 1) causes
+        # _run_tutorial_enemy_turn to see step=1 instead of 0, so the enemy never
+        # attacks the player's follower, nothing enters the Relapse Zone, the revive
+        # card can never complete, and the lesson freezes permanently.
+        # The step advancement belongs in _tutorial_on_follower_lost, which fires
+        # AFTER the enemy attack animation actually destroys the follower.
         6:
             if tutorial_step == 1:
+                print("TUTORIAL[L6,S1]: end_turn → complete, awaiting 1.1s timer")
                 _tutorial_advance("A third Sponsee arrived automatically! The Sponsor keeps building your board every turn. Lesson complete!")
                 await get_tree().create_timer(1.1).timeout
+                print("TUTORIAL[L6]: 1.1s timer done → _tutorial_complete")
                 _tutorial_complete()
 
 func _tutorial_on_attack(target_index: int, _survived: bool, enemy_destroyed: bool) -> void:
     if not tutorial_mode: return
+    print("TUTORIAL[L%d,S%d]: attack fired target=%d destroyed=%s" % [tutorial_lesson, tutorial_step, target_index, str(enemy_destroyed)])
     match tutorial_lesson:
         2:
             if tutorial_step == 0 and target_index >= 0:
@@ -3808,15 +3832,19 @@ func _tutorial_on_attack(target_index: int, _survived: bool, enemy_destroyed: bo
                 else:
                     _tutorial_advance("You struck the Guard — keep attacking it until it falls, then go for the Leader.")
             elif tutorial_step == 1 and target_index < 0:
+                print("TUTORIAL[L2,S1]: leader hit → complete, awaiting 0.9s timer")
                 _tutorial_advance("Direct hit! That's combat — clear the path, then strike the Leader. Lesson complete!")
                 await get_tree().create_timer(0.9).timeout
+                print("TUTORIAL[L2]: 0.9s timer done → _tutorial_complete")
                 _tutorial_complete()
 
 func _tutorial_on_follower_lost(player_side: bool) -> void:
     if not tutorial_mode or not player_side: return
+    print("TUTORIAL[L%d,S%d]: follower_lost player_side=%s" % [tutorial_lesson, tutorial_step, str(player_side)])
     if tutorial_lesson == 5 and tutorial_step == 0:
+        print("TUTORIAL[L5,S0]: follower entered Relapse Zone → step→1, waiting for revive")
         _tutorial_advance("Your follower was defeated and sent to the Relapse Zone. Play Recovery Call from your hand to bring it back.")
-        tutorial_step = 1  # mark that we're now waiting for revive
+        tutorial_step = 1  # _tutorial_advance already set it to 1; explicit for clarity
 
 func _tutorial_on_recovered(_player_side: bool) -> void:
     if not tutorial_mode: return
@@ -3826,6 +3854,7 @@ func _tutorial_on_recovered(_player_side: bool) -> void:
 func _run_tutorial_enemy_turn() -> void:
     await get_tree().create_timer(0.55).timeout
     if game_over: return
+    print("TUTORIAL[L%d,S%d]: enemy_turn starting (player_board=%d enemy_board=%d)" % [tutorial_lesson, tutorial_step, player_board.size(), enemy_board.size()])
     # Lesson 5: enemy attacks the player's first follower to kill it,
     # demonstrating the Relapse Zone for the Recovery lesson.
     if tutorial_lesson == 5 and tutorial_step == 0:
@@ -4617,6 +4646,8 @@ func enemy_turn() -> void:
 
 func enemy_use_evolution() -> void:
     if enemy_board.is_empty():
+        return
+    if turn_number < 4:
         return
     var chosen_cost: int = 0
     for cost in [4, 3, 2, 1]:
@@ -6035,7 +6066,7 @@ func refresh_ui(animate_new: bool = false, new_index: int = -1, new_player_side:
         var evolution_button: Button = evolution_buttons[i]
         if not is_instance_valid(evolution_button):
             continue
-        evolution_button.disabled = game_over or busy or player_evolutions_used[i] or player_mana < (i + 1) or player_board.is_empty() or not player_turn_active
+        evolution_button.disabled = game_over or busy or player_evolutions_used[i] or player_mana < (i + 1) or player_board.is_empty() or not player_turn_active or turn_number < 4
         if player_evolutions_used[i]:
             # Spent rune: gone cold — checkmark stays, glow and scale drop out.
             evolution_button.text = "✓\n%d" % (i + 1)
