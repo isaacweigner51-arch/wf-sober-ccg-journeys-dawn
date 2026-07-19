@@ -4545,7 +4545,7 @@ func _roll_one_pack() -> Dictionary:
     pack_inventory -= 1; packs_opened += 1; platinum_pity += 1
     # Platinum can appear on any card via the 0.2% random roll, or is
     # guaranteed on card 7 once the pity counter reaches 80.
-    # Legendary is guaranteed once legendary_pity reaches 21 cards drawn.
+    # Legendary is guaranteed once legendary_pity reaches 49 cards drawn (7 packs).
     var guaranteed_platinum := platinum_pity >= 80
     var pulled: Array = []
     var got_platinum := false
@@ -4553,7 +4553,7 @@ func _roll_one_pack() -> Dictionary:
         legendary_pity += 1
         var rarity := roll_rarity(i == 6, guaranteed_platinum and i == 6)
         # Upgrade to Legendary if pity threshold hit and card isn't already Legendary+.
-        if legendary_pity >= 21 and rarity not in ["Legendary", "Platinum"]:
+        if legendary_pity >= 49 and rarity not in ["Legendary", "Platinum"]:
             rarity = "Legendary"
         # Reset legendary pity on any Legendary-or-better pull.
         if rarity in ["Legendary", "Platinum"]:
@@ -4810,7 +4810,7 @@ func show_pack_odds(return_screen: Callable) -> void:
     clear_screen(); add_background(0.80); header("PULL ODDS", "Odds are identical for every pack, whether earned free or bought with cash")
     var p := Panel.new(); p.position = Vector2(140, 118); p.size = Vector2(1000, 470)
     p.add_theme_stylebox_override("panel", style()); root_layer.add_child(p)
-    label("Every pack = 7 cards. Cards 1-6 roll independently. Card 7 is Silver-or-better. Legendary guaranteed within 21 cards drawn. Platinum pity at 80 packs.", Vector2(30, 14), Vector2(940, 40), 16, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    label("Every pack = 7 cards. Cards 1-6 roll independently. Card 7 is Silver-or-better. Legendary guaranteed within 7 packs drawn. Platinum pity at 80 packs.", Vector2(30, 14), Vector2(940, 40), 16, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
     label("CARDS 1-6  (EACH ROLLED INDEPENDENTLY)", Vector2(30, 66), Vector2(460, 26), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     var rows_common := [["Platinum", 0.2], ["Legendary", 0.8], ["Epic", 3.5], ["Gold", 11.0], ["Silver", 27.0], ["Bronze", 57.5]]
@@ -4837,7 +4837,7 @@ func show_pack_odds(return_screen: Callable) -> void:
     var pity_panel := Panel.new(); pity_panel.position = Vector2(30, 268); pity_panel.size = Vector2(940, 104)
     pity_panel.add_theme_stylebox_override("panel", solid_style(Color(0.18, 0.14, 0.05), 10)); p.add_child(pity_panel)
     label("PITY GUARANTEES", Vector2(20, 8), Vector2(900, 24), 16, pity_panel).add_theme_color_override("font_color", GOLD_COLOR)
-    label("Legendary: guaranteed within 21 cards drawn (across packs). Currently at %d / 21 cards since your last one." % legendary_pity, Vector2(20, 34), Vector2(900, 26), 15, pity_panel)
+    label("Legendary: guaranteed within 7 packs (49 cards) drawn. Currently at %d / 49 cards since your last one." % legendary_pity, Vector2(20, 34), Vector2(900, 26), 15, pity_panel)
     label("Signature Platinum: guaranteed within 80 packs. Currently at %d / 80 packs since your last one." % platinum_pity, Vector2(20, 62), Vector2(900, 26), 15, pity_panel)
 
     var shiny_panel := Panel.new(); shiny_panel.position = Vector2(30, 360); shiny_panel.size = Vector2(940, 52)
