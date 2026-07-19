@@ -1104,38 +1104,43 @@ func _apply_cloud_profile(data: Dictionary) -> void:
     print("CLOUD: merged save data (progress-safe)")
 
 func _on_cloud_save_loaded(data: Dictionary) -> void:
-    # ── Log local save state before any merge so Stephen's migration is visible ─
-    var local_gold   := gold_balance
-    var local_dust   := dust_balance
-    var local_packs  := pack_inventory
-    var local_cards  := collection_owned.size()
-    var local_trials := trials_cleared.size()
-    var local_challenge := recovery_challenge_progress.size()
-    var local_academy := academy_complete
-    print("CLOUD SYNC ── local  : gold=%d vials=%d packs=%d cards=%d trials=%d challenge=%d academy_complete=%s" % [
-        local_gold, local_dust, local_packs, local_cards, local_trials, local_challenge, local_academy])
-    print("CLOUD SYNC ── remote : %s" % ("empty (no cloud save)" if data.is_empty() else "%d sections" % data.size()))
+    # ── Log local save state before any merge ─────────────────────────────────
+    print("CLOUD SYNC ── local  : gold=%d vials=%d packs=%d cards=%d trials=%d challenge=%d academy=%s" % [
+        gold_balance, dust_balance, pack_inventory, collection_owned.size(),
+        trials_cleared.size(), recovery_challenge_progress.size(), academy_complete])
+    print("CLOUD SYNC ── remote : %s" % ("EMPTY (no cloud save found)" if data.is_empty()
+        else "%d sections" % data.size()))
 
     if data.is_empty():
-        # No remote save — local progress is authoritative.
-        # Upload it now so any other device can download it after login.
-        # Never touch the local file; it is already loaded and correct.
-        if not NetworkManager.user_id.is_empty():
+        # No remote save was found. Before uploading local data, check that
+        # there is something worth uploading — a completely fresh install has
+        # gold=0, cards=0, etc. and uploading that would overwrite real progress
+        # on the server if the save_data fetch failed silently.
+        var local_has_progress := (gold_balance > 0 or dust_balance > 0
+            or pack_inventory > 1 or collection_owned.size() > 0
+            or academy_complete or trials_cleared.size() > 0)
+        if not NetworkManager.user_id.is_empty() and local_has_progress:
             _queue_cloud_upload.call_deferred()
-            print("CLOUD SYNC ── action : uploading local save to Supabase (first sync)")
+            print("CLOUD SYNC ── action : local has progress — uploading to Supabase (first sync)")
+        elif not NetworkManager.user_id.is_empty():
+            print("CLOUD SYNC ── action : local save is empty — NOT uploading (avoids overwriting real server data)")
         else:
             print("CLOUD SYNC ── action : guest session — skipping upload")
         return
 
     # Remote save found — merge with local, local wins on all progress fields.
-    print("CLOUD SYNC ── action : merging (local wins on progress, cloud wins on config)")
+    print("CLOUD SYNC ── action : applying cloud save (local wins on progress)")
     _apply_cloud_profile(data)
     load_profile() # Re-read merged result from disk into memory.
     print("CLOUD SYNC ── after  : gold=%d vials=%d packs=%d cards=%d trials=%d" % [
         gold_balance, dust_balance, pack_inventory, collection_owned.size(),
         trials_cleared.size()])
     _queue_cloud_upload.call_deferred()
-    print("CLOUD SYNC ── pushing merged state back to Supabase")
+    print("CLOUD SYNC ── re-uploading merged state to Supabase")
+    # Refresh the home screen if it is already visible (e.g. a viewport-size
+    # change fired show_home() before this callback completed).
+    if not launch_screen_active:
+        show_home()
 
 func clear_screen() -> void:
     for child in get_children(): child.queue_free()

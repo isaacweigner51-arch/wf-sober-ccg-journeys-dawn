@@ -119,8 +119,8 @@ func _complete_account_auth(result: Dictionary, success_message: String) -> void
 
     connected = true
     connecting = false
-    _save_session()
     await _load_account_profile()
+    _save_session() # Save AFTER profile load so session file contains real save_data.
     account_authenticated.emit(true, success_message)
 
 func validate_saved_session() -> void:
@@ -159,37 +159,69 @@ func _load_account_profile() -> void:
         return
 
     # ── 1. Fetch existing profile row ─────────────────────────────────────────
+    print("CLOUD FETCH ── GET player_profiles for user_id=%s" % user_id)
     var path := "/rest/v1/player_profiles?select=user_id,display_name,app_role,recovery_vials,save_data&user_id=eq.%s&limit=1" % user_id.uri_encode()
     var result := await _request(HTTPClient.METHOD_GET, path, null, true)
+    print("CLOUD FETCH ── HTTP %d  ok=%s  data_type=%d  body_len=%d" % [
+        result.status, result.ok, typeof(result.data), result.text.length()])
+    # Print enough of the raw body to see save_data type (but not the whole 4 KB).
+    if not result.text.is_empty():
+        print("CLOUD FETCH ── body (first 600): %s" % result.text.left(600))
+
     if not result.ok:
-        push_error("CLOUD: GET player_profiles failed (HTTP %d): %s" % [result.status, result.text])
+        push_error("CLOUD FETCH ── GET player_profiles failed (HTTP %d): %s" % [result.status, result.text])
     elif result.data is Array:
         if result.data.is_empty():
             # ── 2. No row yet — UPSERT a new profile (idempotent) ────────────
-            print("CLOUD: no profile row found — creating for user_id=%s" % user_id)
+            print("CLOUD FETCH ── no profile row — creating for user_id=%s" % user_id)
             var ins := await _request(HTTPClient.METHOD_POST, "/rest/v1/player_profiles",
                 {"user_id": user_id, "display_name": "", "app_role": "player", "recovery_vials": 0},
                 true, "resolution=merge-duplicates,return=minimal")
             if not ins.ok:
-                push_error("CLOUD: INSERT player_profiles failed (HTTP %d): %s — check RLS policies" % [ins.status, ins.text])
+                push_error("CLOUD FETCH ── INSERT player_profiles failed (HTTP %d): %s — check RLS policies" % [ins.status, ins.text])
             else:
-                print("CLOUD: profile row created OK")
+                print("CLOUD FETCH ── profile row created OK")
         elif result.data[0] is Dictionary:
             account_profile = Dictionary(result.data[0])
             account_role = str(account_profile.get("app_role", "player")).to_lower()
-            print("CLOUD: profile loaded (role=%s, has_save_data=%s)" % [account_role, account_profile.has("save_data")])
+            var raw_sd: Variant = account_profile.get("save_data")
+            print("CLOUD FETCH ── profile row loaded  role=%s  save_data type=%d  has_key=%s" % [
+                account_role, typeof(raw_sd), account_profile.has("save_data")])
+        else:
+            push_error("CLOUD FETCH ── result.data[0] is not a Dictionary (type=%d)" % typeof(result.data[0]))
+    else:
+        push_error("CLOUD FETCH ── response data is not an Array (type=%d) status=%d body=%s" % [
+            typeof(result.data), result.status, result.text.left(300)])
 
     account_role_loaded.emit(account_role, account_profile)
     if get_node_or_null("/root/AccessManager") != null:
         get_node("/root/AccessManager").apply_authenticated_role(account_role, access_token, user_id)
 
-    # ── 3. Emit cloud save data so menu.gd can merge before home is shown ─────
+    # ── 3. Extract save_data — handle Dictionary, JSON-String, and null ────────
+    # PostgREST returns JSONB columns as parsed objects. If the column type is
+    # TEXT or if there is a double-encode issue, it arrives as a String instead.
+    # We accept both forms here so neither silently loses the player's progress.
     var cloud_data: Dictionary = {}
-    if account_profile.has("save_data") and account_profile["save_data"] is Dictionary:
-        cloud_data = account_profile["save_data"]
-        print("CLOUD: save_data found (%d sections)" % cloud_data.size())
+    var raw_save: Variant = account_profile.get("save_data")
+    if raw_save is Dictionary:
+        cloud_data = raw_save
+        print("CLOUD FETCH ── save_data loaded (Dictionary, %d sections)" % cloud_data.size())
+    elif raw_save is String and not (raw_save as String).is_empty():
+        var parsed: Variant = JSON.parse_string(raw_save)
+        if parsed is Dictionary:
+            cloud_data = parsed
+            print("CLOUD FETCH ── save_data decoded from JSON String (%d sections)" % cloud_data.size())
+        else:
+            push_error("CLOUD FETCH ── save_data is String but not valid JSON (first 120): %s" % (raw_save as String).left(120))
+    elif raw_save != null:
+        push_error("CLOUD FETCH ── save_data has unexpected type=%d value=%s" % [typeof(raw_save), str(raw_save).left(120)])
     else:
-        print("CLOUD: no save_data in profile — will upload local save after login")
+        print("CLOUD FETCH ── save_data is null/missing — no cloud save to apply")
+
+    if cloud_data.is_empty():
+        print("CLOUD FETCH ── emitting EMPTY cloud data (local save will be uploaded as first sync)")
+    else:
+        print("CLOUD FETCH ── emitting cloud data (%d sections) — will merge into local save" % cloud_data.size())
     cloud_save_loaded.emit(cloud_data)
 
 func upload_save_data(data: Dictionary) -> void:
