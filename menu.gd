@@ -1235,9 +1235,13 @@ func show_home() -> void:
     top.add_child(avatar)
     label("WALKING FREE CCG", Vector2(70, 8), Vector2(330, 28), 21, top).add_theme_color_override("font_color", GOLD_COLOR)
     label("Journey's Dawn  •  " + active_class + " Leader", Vector2(70, 35), Vector2(390, 21), 13, top)
-    var wallet := label("GOLD %d     VIALS %d     PACKS %d" % [gold_balance, dust_balance, pack_inventory], Vector2(680, 17), Vector2(450, 30), 16, top)
+    var wallet := label("GOLD %d     VIALS %d     PACKS %d" % [gold_balance, dust_balance, pack_inventory], Vector2(750, 17), Vector2(375, 30), 16, top)
     wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    button("SUPPORT", Vector2(500, 10), Vector2(120, 44), show_contact_support, top)
+    button("SUPPORT", Vector2(500, 10), Vector2(110, 44), show_contact_support, top)
+    button("SIGN IN", Vector2(622, 10), Vector2(110, 44), func():
+        NetworkManager.sign_out_account()
+        show_launch_screen()
+    , top)
     button("SETTINGS", Vector2(1140, 10), Vector2(96, 44), show_test_tools if AccessManager.role_at_least(AccessManager.ROLE_TESTER) else show_launch_screen, top)
 
     maybe_show_whats_new()
