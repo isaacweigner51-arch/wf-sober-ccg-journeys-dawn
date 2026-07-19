@@ -789,11 +789,7 @@ func _ready() -> void:
         load_profile()
         # Graduated players replaying a lesson land on the overview, not
         # the next lesson — that would loop them through the whole Academy.
-        if academy_complete:
-            show_recovery_academy()
-        else:
-            print("ACADEMY: returning from battle [step=%d]" % academy_step)
-            complete_academy_lesson_once(academy_step)
+        show_home()
         return
     if not get_viewport().size_changed.is_connected(_on_viewport_size_changed):
         get_viewport().size_changed.connect(_on_viewport_size_changed)
@@ -897,10 +893,8 @@ func _on_launch_auth_result(success: bool, message: String) -> void:
     # Players never need to visit a separate daily-reward menu.
     if can_claim_daily_reward():
         auto_claim_daily_reward_after_login()
-    elif academy_complete:
-        show_home()
     else:
-        begin_academy()
+        show_home()
 
 func _on_viewport_size_changed() -> void:
     # Keep the account launch screen active during rotation/resizing.
