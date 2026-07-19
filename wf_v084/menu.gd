@@ -49,7 +49,7 @@ const KEYWORD_EXAMPLE_CARDS := [
 ]
 const COPY_LIMITS := {"Bronze":3, "Silver":3, "Gold":3, "Epic":3, "Legendary":3, "Platinum":2, "Signature Gold":2, "Signature Platinum":2}
 const DUST_VALUES := {"Bronze":10, "Silver":40, "Gold":150, "Epic":275, "Legendary":600, "Platinum":1500, "Signature Platinum":1500}
-const CRAFT_COSTS := {"Bronze":50, "Silver":150, "Gold":500, "Epic":900, "Legendary":2000, "Platinum":4500, "Signature Platinum":4500}
+const CRAFT_COSTS := {"Bronze":50, "Silver":150, "Gold":500, "Epic":2500, "Legendary":3500, "Platinum":4500, "Signature Platinum":4500}
 const DAILY_REWARDS := [
     {"packs":1, "vials":0},
     {"packs":2, "vials":0},
@@ -5531,41 +5531,50 @@ func _collection_set_search(text: String) -> void:
     show_collection()
 
 func show_collection() -> void:
-    # Previously a single unsorted, unfilterable grid of all 121 cards in raw
-    # data order -- finding one specific card meant scrolling past every
-    # class and rarity mixed together. Class/rarity tabs plus a stable sort
-    # (class, then rarity, then cost, then name) turn it into something you
-    # can actually navigate, and an owned-count summary up top replaces
-    # having to scroll the whole binder just to gauge collection progress.
     clear_screen(); add_background(0.82)
     header("COLLECTION & CRAFTING", "Showing cards you're missing" if collection_missing_only else "Craft any card from any class • Deck class only matters when building")
-    currency_bar()
-    var guide := label("CREATE: Bronze 50  •  Silver 150  •  Gold 500  •  Epic 900  •  Legendary 2,000  •  Platinum 4,500",Vector2(90,118),Vector2(1100,26),15)
-    guide.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    guide.add_theme_color_override("font_color", Color(0.78,0.90,1.0))
 
+    # ── Row 1 (y=106-148): Craft-cost guide (left) + currency panel (right) ──
+    # currency_bar() is NOT called here — its hard-coded position overlaps the
+    # guide label. Instead both live on the same row in non-overlapping x-ranges.
+    var guide := label(
+        "CREATE:  Bronze 50  •  Silver 150  •  Gold 500  •  Epic 2,500  •  Legendary 3,500  •  Platinum 4,500",
+        Vector2(24, 112), Vector2(818, 28), 14)
+    guide.add_theme_color_override("font_color", Color(0.78, 0.90, 1.0))
+
+    var cur_panel := Panel.new()
+    cur_panel.position = Vector2(848, 106)
+    cur_panel.size = Vector2(428, 40)
+    cur_panel.add_theme_stylebox_override("panel", style(Color(0.32, 0.72, 0.95)))
+    root_layer.add_child(cur_panel)
+    var cur_lbl := label(
+        "GOLD %d   •   VIALS %d   •   PACKS %d" % [gold_balance, dust_balance, pack_inventory],
+        Vector2(6, 8), Vector2(416, 24), 15, cur_panel)
+    cur_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+    # ── Row 2 (y=150-172): Ownership summary ─────────────────────────────────
     var filtered_preview: Array = _collection_filtered_sorted_cards()
     var owned_count := 0
     for cd in filtered_preview:
         if int(collection_owned.get(str(cd["id"]), 0)) > 0:
             owned_count += 1
-    var summary := label("Showing %d/%d cards • %d owned in this view" % [filtered_preview.size(), cards.size(), owned_count], Vector2(90,144),Vector2(1100,22),13)
+    var summary := label(
+        "Showing %d/%d cards  •  %d owned in this view" % [filtered_preview.size(), cards.size(), owned_count],
+        Vector2(24, 150), Vector2(1232, 22), 13)
     summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    summary.add_theme_color_override("font_color", Color(0.6,0.66,0.78))
+    summary.add_theme_color_override("font_color", Color(0.6, 0.66, 0.78))
 
-    # Search sits alongside the class/rarity tabs rather than replacing them --
-    # with over a hundred cards, scrolling past every class/rarity to find one
-    # specific card by memory was the actual pain point search needed to fix.
+    # ── Row 3 (y=176-208): Search box + Missing Only toggle ───────────────────
     var search_box := LineEdit.new()
-    search_box.position = Vector2(390, 172)
-    search_box.size = Vector2(400, 28)
+    search_box.position = Vector2(24, 176)
+    search_box.size = Vector2(548, 30)
     search_box.placeholder_text = "Search by name or keyword..."
     search_box.text = collection_search_query
     search_box.add_theme_font_size_override("font_size", 14)
     search_box.text_changed.connect(_collection_set_search)
     root_layer.add_child(search_box)
     if not collection_search_query.is_empty():
-        var clear_search := button("✕", Vector2(798, 172), Vector2(28, 28), _collection_set_search.bind(""))
+        var clear_search := button("✕", Vector2(580, 176), Vector2(30, 30), _collection_set_search.bind(""))
         clear_search.add_theme_font_size_override("font_size", 12)
     if _collection_focus_search_next:
         search_box.grab_focus()
@@ -5574,7 +5583,7 @@ func show_collection() -> void:
 
     var missing_toggle := button(
         "✓ MISSING ONLY" if collection_missing_only else "MISSING ONLY",
-        Vector2(858, 172), Vector2(180, 28),
+        Vector2(624, 176), Vector2(188, 30),
         _collection_set_missing_only.bind(not collection_missing_only)
     )
     missing_toggle.add_theme_font_size_override("font_size", 12)
@@ -5584,27 +5593,19 @@ func show_collection() -> void:
         missing_toggle.add_theme_color_override("font_color", Color(0.08, 0.06, 0.02))
         missing_toggle.add_theme_color_override("font_hover_color", Color(0.08, 0.06, 0.02))
 
+    # ── Row 4 (y=212-248): Class filter tabs — uniform height & spacing ────────
     var class_tabs := ["All"] + CLASSES + ["Neutral"]
-    var tab_w: float = 1224.0 / float(class_tabs.size())
+    var tab_w: float = 1232.0 / float(class_tabs.size())
     for i in range(class_tabs.size()):
         var c: String = class_tabs[i]
-        var tab_btn := button(c.to_upper(), Vector2(28 + i * tab_w, 206), Vector2(tab_w - 6, 34), _collection_set_class_filter.bind(c))
+        var tab_btn := button(c.to_upper(), Vector2(24 + i * tab_w, 212), Vector2(tab_w - 6, 34), _collection_set_class_filter.bind(c))
         if c == collection_filter_class:
-            # The active tab used to just tint its own text gold, which
-            # collided with the button's default hover border (also gold):
-            # hovering the already-selected tab turned the outline and the
-            # label the exact same color, so it read as a hollow gold
-            # bubble instead of a clearly "selected" chip. A solid filled
-            # highlight with dark text reads as selected in every state.
             tab_btn.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 8))
             tab_btn.add_theme_stylebox_override("hover", solid_style(GOLD_COLOR.lightened(0.15), 8))
             tab_btn.add_theme_color_override("font_color", Color(0.08, 0.06, 0.02))
             tab_btn.add_theme_color_override("font_hover_color", Color(0.08, 0.06, 0.02))
 
-    # RARITIES includes tiers ("Signature Platinum") that don't actually
-    # exist in data/cards.json yet, so build tabs from what's really on cards
-    # (Bronze/Silver/Gold/Epic/Legendary/Platinum) instead of the const --
-    # otherwise a tab would show up that always renders "no cards match".
+    # ── Row 5 (y=252-284): Rarity filter tabs — only present rarities ─────────
     var rarity_order := ["Bronze", "Silver", "Gold", "Epic", "Legendary", "Platinum", "Signature Gold", "Signature Platinum"]
     var present_rarities: Array = []
     for cd in cards:
@@ -5613,10 +5614,10 @@ func show_collection() -> void:
             present_rarities.append(r)
     present_rarities.sort_custom(func(a, b): return rarity_order.find(a) < rarity_order.find(b))
     var rarity_tabs := ["All"] + present_rarities
-    var rtab_w: float = 1224.0 / float(rarity_tabs.size())
+    var rtab_w: float = 1232.0 / float(rarity_tabs.size())
     for i in range(rarity_tabs.size()):
         var r: String = rarity_tabs[i]
-        var rtab_btn := button(r.to_upper(), Vector2(28 + i * rtab_w, 244), Vector2(rtab_w - 6, 30), _collection_set_rarity_filter.bind(r))
+        var rtab_btn := button(r.to_upper(), Vector2(24 + i * rtab_w, 252), Vector2(rtab_w - 6, 30), _collection_set_rarity_filter.bind(r))
         rtab_btn.add_theme_font_size_override("font_size", 11)
         if r == collection_filter_rarity:
             rtab_btn.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 6))
@@ -5624,79 +5625,83 @@ func show_collection() -> void:
             rtab_btn.add_theme_color_override("font_color", Color(0.08, 0.06, 0.02))
             rtab_btn.add_theme_color_override("font_hover_color", Color(0.08, 0.06, 0.02))
 
+    # ── Card binder (y=288 → bottom) — more vertical room than before ─────────
     var binder := Panel.new()
-    binder.position = Vector2(28,282)
-    binder.size = Vector2(1224,394)
+    binder.position = Vector2(24, 288)
+    binder.size = Vector2(1232, 424)
     var binder_style := StyleBoxFlat.new()
-    binder_style.bg_color = Color(0.01,0.02,0.045,0.78)
+    binder_style.bg_color = Color(0.01, 0.02, 0.045, 0.78)
     binder_style.border_color = GOLD_COLOR
     binder_style.set_border_width_all(2)
     binder_style.corner_radius_top_left = 14
     binder_style.corner_radius_top_right = 14
     binder_style.corner_radius_bottom_left = 14
     binder_style.corner_radius_bottom_right = 14
-    binder.add_theme_stylebox_override("panel",binder_style)
+    binder.add_theme_stylebox_override("panel", binder_style)
     root_layer.add_child(binder)
     var scroll := ScrollContainer.new()
-    scroll.position=Vector2(12,12)
-    scroll.size=Vector2(1200,370)
+    scroll.position = Vector2(10, 10)
+    scroll.size = Vector2(1212, 404)
     binder.add_child(scroll)
     if filtered_preview.is_empty():
-        centered_label("No cards match this filter.", Vector2(0,180), Vector2(1200,30), 16, scroll)
+        centered_label("No cards match this filter.", Vector2(0, 180), Vector2(1212, 30), 16, scroll)
         return
     var grid := GridContainer.new()
-    grid.columns=6
-    grid.add_theme_constant_override("h_separation",16)
-    grid.add_theme_constant_override("v_separation",18)
+    grid.columns = 6
+    grid.add_theme_constant_override("h_separation", 20)
+    grid.add_theme_constant_override("v_separation", 20)
     scroll.add_child(grid)
     for cd in filtered_preview:
         var id := str(cd["id"])
         var rarity := str(cd["rarity"])
-        var owned := int(collection_owned.get(id,0))
-        var limit := int(COPY_LIMITS.get(rarity,1))
+        var owned := int(collection_owned.get(id, 0))
+        var limit := int(COPY_LIMITS.get(rarity, 1))
         var wrap := VBoxContainer.new()
-        wrap.custom_minimum_size=Vector2(180,348)
-        var cp := card_panel(cd,Vector2.ZERO,Vector2(174,248))
+        wrap.custom_minimum_size = Vector2(182, 352)
+        var cp := card_panel(cd, Vector2.ZERO, Vector2(178, 248))
         wrap.add_child(cp)
         if owned <= 0:
-            cp.modulate = Color(0.48,0.52,0.60,0.90)
+            cp.modulate = Color(0.48, 0.52, 0.60, 0.90)
             var lock_badge := Label.new()
             lock_badge.text = "LOCKED"
-            lock_badge.position = Vector2(36,102)
-            lock_badge.size = Vector2(102,30)
+            lock_badge.position = Vector2(36, 102)
+            lock_badge.size = Vector2(106, 30)
             lock_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-            lock_badge.add_theme_font_size_override("font_size",12)
-            lock_badge.add_theme_color_override("font_color",Color.WHITE)
-            lock_badge.add_theme_color_override("font_shadow_color",Color.BLACK)
-            lock_badge.add_theme_constant_override("shadow_offset_x",2)
-            lock_badge.add_theme_constant_override("shadow_offset_y",2)
+            lock_badge.add_theme_font_size_override("font_size", 12)
+            lock_badge.add_theme_color_override("font_color", Color.WHITE)
+            lock_badge.add_theme_color_override("font_shadow_color", Color.BLACK)
+            lock_badge.add_theme_constant_override("shadow_offset_x", 2)
+            lock_badge.add_theme_constant_override("shadow_offset_y", 2)
             lock_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
             cp.add_child(lock_badge)
-        var own := label("Owned %d/%d" % [owned,limit], Vector2.ZERO, Vector2(174,22), 13, wrap)
+        var own := label("Owned %d/%d" % [owned, limit], Vector2.ZERO, Vector2(178, 22), 13, wrap)
         own.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         if rarity in ["Bronze", "Silver"]:
             var vial := Button.new()
-            vial.text = "VIAL +%d" % int(DUST_VALUES.get(rarity,0))
+            vial.text = "VIAL +%d" % int(DUST_VALUES.get(rarity, 0))
             vial.disabled = owned <= count_in_deck(id)
             vial.tooltip_text = "Copies currently used in your saved deck are protected."
             vial.pressed.connect(dust_card.bind(id))
             wrap.add_child(vial)
         elif rarity in ["Gold", "Epic", "Legendary"]:
-            var auto_note := label("Extras auto-vial", Vector2.ZERO, Vector2(174,18), 11, wrap)
+            var auto_note := label("Extras auto-vial", Vector2.ZERO, Vector2(178, 18), 11, wrap)
             auto_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-            auto_note.add_theme_color_override("font_color", Color(0.6,0.66,0.78))
+            auto_note.add_theme_color_override("font_color", Color(0.6, 0.66, 0.78))
         else:
-            var protected_note := label("Signature — pack only", Vector2.ZERO, Vector2(174,18), 11, wrap)
+            var protected_note := label("Signature — pack only", Vector2.ZERO, Vector2(178, 18), 11, wrap)
             protected_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-            protected_note.add_theme_color_override("font_color", Color(0.6,0.66,0.78))
+            protected_note.add_theme_color_override("font_color", Color(0.6, 0.66, 0.78))
         if CRAFT_COSTS.has(rarity):
             var craft := Button.new()
             var cost := int(CRAFT_COSTS[rarity])
-            craft.text = "CREATE %d" % cost
+            craft.text = "CREATE %s" % _fmt_vial_cost(cost)
             craft.disabled = owned >= limit or dust_balance < cost
             craft.pressed.connect(craft_card.bind(id))
             wrap.add_child(craft)
         grid.add_child(wrap)
+
+func _fmt_vial_cost(n: int) -> String:
+    return "%d,%03d" % [n / 1000, n % 1000] if n >= 1000 else "%d" % n
 
 func _collection_filtered_sorted_cards() -> Array:
     var out: Array = []
@@ -5864,7 +5869,7 @@ func show_deck_builder() -> void:
         elif CRAFT_COSTS.has(rarity):
             var craft := Button.new()
             var cost := int(CRAFT_COSTS[rarity])
-            craft.text = "CREATE %d" % cost
+            craft.text = "CREATE %s" % _fmt_vial_cost(cost)
             craft.disabled = dust_balance < cost
             craft.pressed.connect(craft_from_deck_builder.bind(id))
             box.add_child(craft)
