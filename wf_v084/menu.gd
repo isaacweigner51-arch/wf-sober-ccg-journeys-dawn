@@ -1096,11 +1096,18 @@ func _apply_cloud_profile(data: Dictionary) -> void:
 
 func _on_cloud_save_loaded(data: Dictionary) -> void:
     if data.is_empty():
+        # No remote save exists yet for this account. Upload local progress now
+        # so other devices (or future logins) can download it. Only do this if
+        # actually authenticated — guests and offline sessions have no user_id.
+        if not NetworkManager.user_id.is_empty():
+            _queue_cloud_upload.call_deferred()
+            print("CLOUD: no remote save found — uploading local progress to Supabase")
         return
+    # Remote save found — merge it with local (local always wins on progress),
+    # re-read the merged result, then push the canonical merged state back up.
     _apply_cloud_profile(data)
     load_profile() # Re-read local file now that cloud data has been written.
-    # Immediately re-upload the merged (correct) state so Supabase is never
-    # stale again — this is what fixes the loop on subsequent logins.
+    # Re-upload the merged state so Supabase is always up to date.
     _queue_cloud_upload.call_deferred()
     print("CLOUD: profile merged and re-uploaded (%d sections)" % data.size())
 
