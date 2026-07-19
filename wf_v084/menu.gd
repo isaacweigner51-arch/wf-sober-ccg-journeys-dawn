@@ -1068,7 +1068,14 @@ func _apply_cloud_profile(data: Dictionary) -> void:
                 cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
                 continue
             if section == "challenge" and key == "recovery_progress":
-                cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
+                # recovery_challenge_progress is a Dictionary {class_name: int}.
+                # Merge per-key, keeping the higher progress value.
+                var local_dict: Dictionary = local_val if local_val is Dictionary else {}
+                var cloud_dict: Dictionary = cloud_val if cloud_val is Dictionary else {}
+                var merged_dict := local_dict.duplicate()
+                for cls in cloud_dict.keys():
+                    merged_dict[cls] = maxi(int(merged_dict.get(cls, 0)), int(cloud_dict[cls]))
+                cfg.set_value(section, key, merged_dict)
                 continue
 
             # ── Never regress earned currency or pack inventory ───────────────
