@@ -3737,7 +3737,7 @@ func _tutorial_complete() -> void:
     # calling get_tree() through the implicit self would silently fail and
     # leave the player stuck on the "Returning to the Academy…" banner.
     var _tree := get_tree()
-    _tree.create_timer(1.6).timeout.connect(func(): _tree.change_scene_to_file("res://menu.tscn"))
+    _tree.create_timer(1.6).timeout.connect(func(): _tree.change_scene_to_file("res://main.tscn"))
 
 # ── Per-lesson event hooks ────────────────────────────────────────────────────
 

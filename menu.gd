@@ -1491,11 +1491,19 @@ func show_whats_new_popup(version: String, fixes: Array, features: Array, new_ca
         for entry in upcoming:
             _add_bullet.call(str(entry), Color(0.94, 0.95, 1.0))
 
-    var close_btn := button("GOT IT", Vector2(270, 480), Vector2(160, 48), func():
+    var _dismiss := func():
+        if not is_instance_valid(scrim): return
         last_seen_whats_new_version = version
         save_profile()
         scrim.queue_free()
-    , dialog)
+
+    # Clicking the dark background dismisses the popup, same as GOT IT
+    scrim.gui_input.connect(func(event: InputEvent):
+        if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+            _dismiss.call()
+    )
+
+    var close_btn := button("GOT IT  ✓", Vector2(270, 480), Vector2(160, 48), _dismiss, dialog)
     close_btn.add_theme_font_size_override("font_size", ui_font_size(16))
 
 func show_online_vs_setup() -> void:
