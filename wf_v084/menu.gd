@@ -729,6 +729,7 @@ var academy_complete := false
 var academy_step := 0
 var academy_reward_claimed := false
 var academy_action_stage := 0
+var academy_transition_in_progress := false
 var academy_feedback: Label
 var academy_feedback_chip: Panel
 var access_status: Label
@@ -790,7 +791,8 @@ func _ready() -> void:
         if academy_complete:
             show_recovery_academy()
         else:
-            show_academy_lesson()
+            print("ACADEMY: returning from battle [step=%d]" % academy_step)
+            complete_academy_lesson_once(academy_step)
         return
     if not get_viewport().size_changed.is_connected(_on_viewport_size_changed):
         get_viewport().size_changed.connect(_on_viewport_size_changed)
@@ -931,7 +933,7 @@ func load_profile() -> void:
                 saved_decks[selected_deck_class] = saved_deck.duplicate()
         saved_deck = Array(saved_decks.get(selected_deck_class, []))
         academy_complete = bool(cfg.get_value("academy", "complete", false))
-        academy_step = int(cfg.get_value("academy", "step", 0))
+        academy_step = clampi(int(cfg.get_value("academy", "step", 0)), 0, ACADEMY_LESSON_COUNT)
         academy_reward_claimed = bool(cfg.get_value("academy", "reward_claimed", false))
         daily_reward_day = int(cfg.get_value("daily", "reward_day", 0))
         daily_last_claim_day = int(cfg.get_value("daily", "last_claim_day", -1))
@@ -2316,7 +2318,15 @@ const ACADEMY_CLOSING_LINES := [
 ]
 
 func lesson_complete() -> void:
-    var closing_line: String = ACADEMY_CLOSING_LINES[academy_step] if academy_step < ACADEMY_CLOSING_LINES.size() else "Lesson complete — moving forward."
+    print("ACADEMY: lesson_complete called [step=%d, in_progress=%s]" % [academy_step, str(academy_transition_in_progress)])
+    if academy_transition_in_progress:
+        print("ACADEMY: duplicate completion ignored [step=%d]" % academy_step)
+        return
+    # Snapshot the step NOW before any await — a second call arriving during
+    # the animation delay will be blocked by academy_transition_in_progress
+    # (set inside complete_academy_lesson_once), so completing_step stays valid.
+    var completing_step := academy_step
+    var closing_line: String = ACADEMY_CLOSING_LINES[completing_step] if completing_step < ACADEMY_CLOSING_LINES.size() else "Lesson complete — moving forward."
     academy_feedback_text("✓ %s" % closing_line)
 
     # A quick gold pulse on the feedback chip itself turns "the text changed"
@@ -2342,13 +2352,41 @@ func lesson_complete() -> void:
         lesson_out.tween_property(root_layer, "modulate:a", 0.0, 0.22)
     await get_tree().create_timer(0.22).timeout
 
-    academy_step += 1
+    complete_academy_lesson_once(completing_step)
+
+# Single authoritative function that owns Academy step advancement.
+# All completion paths — UI lessons and battle-lesson returns — must call
+# this instead of touching academy_step or save_profile() directly.
+# The guard prevents double-advancement if a button fires twice or if
+# lesson_complete() is called while a transition is already in flight.
+func complete_academy_lesson_once(completed_step: int) -> void:
+    if academy_transition_in_progress:
+        print("ACADEMY: duplicate completion ignored [step=%d]" % completed_step)
+        return
+    if completed_step != academy_step:
+        print("ACADEMY: completion rejected — step mismatch (completed=%d academy_step=%d)" % [completed_step, academy_step])
+        return
+    academy_transition_in_progress = true
+    print("ACADEMY: completion accepted [step=%d]" % completed_step)
+
+    academy_step = clampi(completed_step + 1, 0, ACADEMY_LESSON_COUNT)
     academy_action_stage = 0
     save_profile()
+    print("ACADEMY: progress saved [next_step=%d]" % academy_step)
+
+    # Ensure the screen is fully visible before building the next lesson —
+    # lesson_complete() fades it to 0; the battle-return path never touched it.
+    if is_instance_valid(root_layer):
+        root_layer.modulate.a = 1.0
+
     if academy_step >= ACADEMY_LESSON_COUNT:
+        print("ACADEMY: graduation loaded")
         show_academy_graduation()
     else:
+        print("ACADEMY: next lesson loaded [step=%d]" % academy_step)
         show_academy_lesson()
+
+    academy_transition_in_progress = false
 
 func build_zone_lesson(board: Control) -> void:
     var why := {

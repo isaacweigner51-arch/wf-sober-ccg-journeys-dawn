@@ -215,6 +215,7 @@ var training_progress_trigger_count := 0
 var tutorial_mode := false
 var tutorial_lesson := 0
 var tutorial_step := 0
+var _tutorial_complete_called := false
 var tutorial_overlay: Panel
 var tutorial_instruction_label: Label
 var tutorial_heading_label: Label
@@ -3718,16 +3719,19 @@ func _tutorial_advance(next_text: String) -> void:
 
 func _tutorial_complete() -> void:
     if not is_instance_valid(self): return
+    # Guard: this function may be wired to a timer via .connect() AND called
+    # directly — without this check a double-fire would increment the saved
+    # step twice and change scene twice, corrupting Academy progress.
+    if _tutorial_complete_called: return
+    _tutorial_complete_called = true
     var vfx_color := class_accent_color(selected_class)
     show_vfx("LESSON COMPLETE  ✓", Vector2(440, 300), vfx_color)
     _tutorial_set_instruction("Lesson complete! Returning to the Academy…")
-    # Save incremented step to the shared profile so menu.gd picks it up
-    var cfg := _load_shared_profile_cfg_for_partial_write()
-    if cfg != null:
-        var cur := int(cfg.get_value("academy", "step", 0))
-        cfg.set_value("academy", "step", cur + 1)
-        cfg.save("user://journeys_dawn_profile.cfg")
-    # Also flag battle_setup.cfg so menu.gd can fast-path back to the Academy
+    # Do NOT increment academy.step here. menu.gd is the sole owner of
+    # Academy progression. Writing step+1 here would cause a double-advance
+    # because menu.gd reads the profile on return and then also increments
+    # through complete_academy_lesson_once(). Only flag the battle_setup.cfg
+    # so menu.gd's _ready() can detect the return and advance exactly once.
     var bs := ConfigFile.new()
     bs.load("user://battle_setup.cfg")
     bs.set_value("tutorial", "lesson_complete", true)
