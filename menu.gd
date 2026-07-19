@@ -4219,7 +4219,7 @@ func show_store() -> void:
     button("PULL ODDS",Vector2(945,265),Vector2(105,58),func(): show_pack_odds(show_store),p)
     var billing_text := "Google Play Billing connected" if BillingManager.is_available() else "Cash purchases activate in an installed Google Play test/release build"
     label(billing_text,Vector2(150,345),Vector2(800,34),16,p).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    status_label = label("Next guaranteed Signature Platinum: %d packs" % (40-platinum_pity),Vector2(300,610),Vector2(680,44),20); status_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    status_label = label("Next guaranteed Signature Platinum: %d packs" % (80-platinum_pity),Vector2(300,610),Vector2(680,44),20); status_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 
 func buy_gold() -> void:
     if gold_balance < 200:
@@ -4437,7 +4437,7 @@ func show_pack_opening() -> void:
     tap_catcher.pressed.connect(func(): _begin_pack_open(pack_visual, tap_catcher))
     pack_visual.add_child(tap_catcher)
     label("TAP THE PACK TO OPEN IT", Vector2(390, 545), Vector2(500, 30), 17).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    label("Platinum pity: %d / 40   •   Average pull target: 1 in 11 packs" % platinum_pity,Vector2(310,580),Vector2(660,30),16).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    label("Signature Platinum pity: %d / 80 packs" % platinum_pity,Vector2(310,580),Vector2(660,30),16).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     button("VIEW PULL ODDS", Vector2(1055, 172), Vector2(170, 40), func(): show_pack_odds(show_pack_opening))
 
     # Bulk-open row: skips the one-at-a-time tap-and-watch flow for players
@@ -4540,8 +4540,10 @@ func _roll_one_pack() -> Dictionary:
     # loop for a "fast path" would be exactly how the two silently drift out
     # of sync with each other over time.
     pack_inventory -= 1; packs_opened += 1; platinum_pity += 1
-    var guaranteed_platinum := platinum_pity >= 40
-    var platinum_hit := guaranteed_platinum or randi_range(1,11) == 1
+    # Platinum is pity-only — no random chance per pack.
+    # Every 80 packs without one the 5th card is guaranteed Platinum.
+    var guaranteed_platinum := platinum_pity >= 80
+    var platinum_hit := guaranteed_platinum
     var pulled: Array = []
     for i in range(5):
         var rarity := roll_rarity(i == 4, platinum_hit and i == 4)
@@ -4795,7 +4797,7 @@ func show_pack_odds(return_screen: Callable) -> void:
     clear_screen(); add_background(0.80); header("PULL ODDS", "Odds are identical for every pack, whether earned free or bought with cash")
     var p := Panel.new(); p.position = Vector2(140, 118); p.size = Vector2(1000, 470)
     p.add_theme_stylebox_override("panel", style()); root_layer.add_child(p)
-    label("Every pack = 5 cards. Cards 1-4 roll independently; card 5 is a guaranteed Silver-or-better, with a separate chance to be Signature Platinum.", Vector2(30, 14), Vector2(940, 40), 16, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    label("Every pack = 5 cards. Cards 1-4 roll independently. Card 5 is guaranteed Silver-or-better. Signature Platinum is pity-only — guaranteed within 80 packs.", Vector2(30, 14), Vector2(940, 40), 16, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
     label("CARDS 1-4 (EACH ROLLED INDEPENDENTLY)", Vector2(30, 66), Vector2(460, 26), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     var rows_common := [["Legendary", 2.5], ["Epic", 4.0], ["Gold", 7.5], ["Silver", 18.0], ["Bronze", 68.0]]
@@ -4823,7 +4825,7 @@ func show_pack_odds(return_screen: Callable) -> void:
     var pity_panel := Panel.new(); pity_panel.position = Vector2(30, 268); pity_panel.size = Vector2(940, 84)
     pity_panel.add_theme_stylebox_override("panel", solid_style(Color(0.18, 0.14, 0.05), 10)); p.add_child(pity_panel)
     label("PITY GUARANTEE", Vector2(20, 8), Vector2(900, 24), 16, pity_panel).add_theme_color_override("font_color", GOLD_COLOR)
-    label("If you haven't pulled a Signature Platinum in 40 packs, your next pack's card 5 is guaranteed Signature Platinum. You are currently at %d / 40 packs since your last one." % platinum_pity, Vector2(20, 32), Vector2(900, 46), 15, pity_panel)
+    label("If you haven't pulled a Signature Platinum in 80 packs, your next pack's card 5 is guaranteed Signature Platinum. You are currently at %d / 80 packs since your last one." % platinum_pity, Vector2(20, 32), Vector2(900, 46), 15, pity_panel)
 
     var shiny_panel := Panel.new(); shiny_panel.position = Vector2(30, 360); shiny_panel.size = Vector2(940, 52)
     shiny_panel.add_theme_stylebox_override("panel", solid_style(Color(0.10, 0.06, 0.18), 10)); p.add_child(shiny_panel)
@@ -4837,10 +4839,16 @@ func show_pack_odds(return_screen: Callable) -> void:
 func roll_rarity(guaranteed_silver: bool, force_platinum: bool) -> String:
     if force_platinum: return "Platinum"
     var r := randi_range(1,1000)
-    if r <= 25: return "Legendary"
-    if r <= 65: return "Epic"
-    if r <= 140: return "Gold"
-    if guaranteed_silver or r <= 320: return "Silver"
+    # Rates (per card):
+    #   Legendary  0.8%   ~1 in 25 packs to see one
+    #   Epic       2.2%
+    #   Gold      10.0%
+    #   Silver    28.0%   card 5 is always Silver-or-better
+    #   Bronze    59.0%
+    if r <= 8:  return "Legendary"
+    if r <= 30: return "Epic"
+    if r <= 130: return "Gold"
+    if guaranteed_silver or r <= 410: return "Silver"
     return "Bronze"
 
 func random_card_of_rarity(rarity: String) -> Dictionary:
