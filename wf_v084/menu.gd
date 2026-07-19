@@ -48,7 +48,7 @@ const KEYWORD_EXAMPLE_CARDS := [
     {"keyword": "Inspire", "id": "JD-082", "meaning": "Triggers whenever another allied follower enters play."},
 ]
 const COPY_LIMITS := {"Bronze":3, "Silver":3, "Gold":3, "Epic":3, "Legendary":3, "Platinum":2, "Signature Gold":2, "Signature Platinum":2}
-const DUST_VALUES := {"Bronze":10, "Silver":40, "Gold":150, "Epic":275, "Legendary":600, "Platinum":1500, "Signature Platinum":1500}
+const DUST_VALUES := {"Bronze":25, "Silver":75, "Gold":250, "Epic":1250, "Legendary":1750, "Platinum":2250, "Signature Platinum":2250}
 const CRAFT_COSTS := {"Bronze":50, "Silver":150, "Gold":500, "Epic":2500, "Legendary":3500, "Platinum":4500, "Signature Platinum":4500}
 const DAILY_REWARDS := [
     {"packs":1, "vials":0},
