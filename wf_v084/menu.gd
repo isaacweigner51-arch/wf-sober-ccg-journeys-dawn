@@ -1056,16 +1056,18 @@ func _apply_cloud_profile(data: Dictionary) -> void:
             var local_val: Variant = cfg.get_value(section, key, null)
 
             # ── Never regress boolean progress flags ──────────────────────────
-            if section == "academy" and key == "complete":
-                # Once true locally, it stays true regardless of cloud.
+            if section == "academy" and key in ["complete", "reward_claimed"]:
                 cfg.set_value(section, key, bool(local_val) or bool(cloud_val))
                 continue
-            if section == "academy" and key == "reward_claimed":
+            if section == "trials" and key in ["sponsor_leader_unlocked", "sponsor_sleeve_unlocked", "sponsor_defeated"]:
                 cfg.set_value(section, key, bool(local_val) or bool(cloud_val))
                 continue
 
             # ── Never regress numeric progress counters ───────────────────────
             if section == "academy" and key == "step":
+                cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
+                continue
+            if section == "challenge" and key == "recovery_progress":
                 cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
                 continue
 
@@ -1079,8 +1081,8 @@ func _apply_cloud_profile(data: Dictionary) -> void:
                 cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
                 continue
 
-            # ── Never regress collection (union of both arrays) ───────────────
-            if section == "collection" and cloud_val is Array:
+            # ── Never regress array progress (union of both) ──────────────────
+            if cloud_val is Array:
                 var merged: Array = (local_val.duplicate() if local_val is Array else [])
                 for entry in cloud_val:
                     if not merged.has(entry):
@@ -1095,21 +1097,38 @@ func _apply_cloud_profile(data: Dictionary) -> void:
     print("CLOUD: merged save data (progress-safe)")
 
 func _on_cloud_save_loaded(data: Dictionary) -> void:
+    # ── Log local save state before any merge so Stephen's migration is visible ─
+    var local_gold   := gold_balance
+    var local_dust   := dust_balance
+    var local_packs  := pack_inventory
+    var local_cards  := collection_owned.size()
+    var local_trials := trials_cleared.size()
+    var local_challenge := recovery_challenge_progress.size()
+    var local_academy := academy_complete
+    print("CLOUD SYNC ── local  : gold=%d vials=%d packs=%d cards=%d trials=%d challenge=%d academy_complete=%s" % [
+        local_gold, local_dust, local_packs, local_cards, local_trials, local_challenge, local_academy])
+    print("CLOUD SYNC ── remote : %s" % ("empty (no cloud save)" if data.is_empty() else "%d sections" % data.size()))
+
     if data.is_empty():
-        # No remote save exists yet for this account. Upload local progress now
-        # so other devices (or future logins) can download it. Only do this if
-        # actually authenticated — guests and offline sessions have no user_id.
+        # No remote save — local progress is authoritative.
+        # Upload it now so any other device can download it after login.
+        # Never touch the local file; it is already loaded and correct.
         if not NetworkManager.user_id.is_empty():
             _queue_cloud_upload.call_deferred()
-            print("CLOUD: no remote save found — uploading local progress to Supabase")
+            print("CLOUD SYNC ── action : uploading local save to Supabase (first sync)")
+        else:
+            print("CLOUD SYNC ── action : guest session — skipping upload")
         return
-    # Remote save found — merge it with local (local always wins on progress),
-    # re-read the merged result, then push the canonical merged state back up.
+
+    # Remote save found — merge with local, local wins on all progress fields.
+    print("CLOUD SYNC ── action : merging (local wins on progress, cloud wins on config)")
     _apply_cloud_profile(data)
-    load_profile() # Re-read local file now that cloud data has been written.
-    # Re-upload the merged state so Supabase is always up to date.
+    load_profile() # Re-read merged result from disk into memory.
+    print("CLOUD SYNC ── after  : gold=%d vials=%d packs=%d cards=%d trials=%d" % [
+        gold_balance, dust_balance, pack_inventory, collection_owned.size(),
+        trials_cleared.size()])
     _queue_cloud_upload.call_deferred()
-    print("CLOUD: profile merged and re-uploaded (%d sections)" % data.size())
+    print("CLOUD SYNC ── pushing merged state back to Supabase")
 
 func clear_screen() -> void:
     for child in get_children(): child.queue_free()
