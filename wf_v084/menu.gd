@@ -4540,13 +4540,14 @@ func _roll_one_pack() -> Dictionary:
     # loop for a "fast path" would be exactly how the two silently drift out
     # of sync with each other over time.
     pack_inventory -= 1; packs_opened += 1; platinum_pity += 1
-    # Platinum is pity-only — no random chance per pack.
-    # Every 80 packs without one the 7th card is guaranteed Platinum.
+    # Platinum can appear on any card via the 0.2% random roll, or is
+    # guaranteed on card 7 once the pity counter reaches 80.
     var guaranteed_platinum := platinum_pity >= 80
-    var platinum_hit := guaranteed_platinum
     var pulled: Array = []
+    var got_platinum := false
     for i in range(7):
-        var rarity := roll_rarity(i == 6, platinum_hit and i == 6)
+        var rarity := roll_rarity(i == 6, guaranteed_platinum and i == 6)
+        if rarity == "Platinum": got_platinum = true
         var cd := random_card_of_rarity(rarity)
         var dup_info := add_card_to_collection(cd)
         # Duplicate/vial info is stamped onto a *copy* of the card dict, not
@@ -4561,8 +4562,9 @@ func _roll_one_pack() -> Dictionary:
             pulled_cd["is_shiny"] = true
             pulled_cd["_shiny_dup_info"] = add_shiny_to_collection(pulled_cd)
         pulled.append(pulled_cd)
-    if platinum_hit: platinum_pity = 0
-    return {"pulled": pulled, "platinum_hit": platinum_hit}
+    # Reset pity whenever a Platinum lands, whether random or pity-triggered.
+    if got_platinum: platinum_pity = 0
+    return {"pulled": pulled, "platinum_hit": got_platinum}
 
 func open_pack() -> void:
     if pack_inventory <= 0: return
@@ -4797,10 +4799,10 @@ func show_pack_odds(return_screen: Callable) -> void:
     clear_screen(); add_background(0.80); header("PULL ODDS", "Odds are identical for every pack, whether earned free or bought with cash")
     var p := Panel.new(); p.position = Vector2(140, 118); p.size = Vector2(1000, 470)
     p.add_theme_stylebox_override("panel", style()); root_layer.add_child(p)
-    label("Every pack = 7 cards. Cards 1-6 roll independently. Card 7 is guaranteed Silver-or-better. Signature Platinum is pity-only — guaranteed within 80 packs.", Vector2(30, 14), Vector2(940, 40), 16, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    label("Every pack = 7 cards. Cards 1-6 roll independently. Card 7 is guaranteed Silver-or-better. Platinum can appear on any card — pity guarantees one within 80 packs.", Vector2(30, 14), Vector2(940, 40), 16, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-    label("CARDS 1-4 (EACH ROLLED INDEPENDENTLY)", Vector2(30, 66), Vector2(460, 26), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    var rows_common := [["Legendary", 2.5], ["Epic", 4.0], ["Gold", 7.5], ["Silver", 18.0], ["Bronze", 68.0]]
+    label("CARDS 1-6  (EACH ROLLED INDEPENDENTLY)", Vector2(30, 66), Vector2(460, 26), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    var rows_common := [["Platinum", 0.2], ["Legendary", 0.8], ["Epic", 3.5], ["Gold", 11.0], ["Silver", 27.0], ["Bronze", 57.5]]
     var y := 98
     for row in rows_common:
         var rarity: String = row[0]
@@ -4810,16 +4812,15 @@ func show_pack_odds(return_screen: Callable) -> void:
         label("%.1f%%" % pct, Vector2(280, y), Vector2(180, 28), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
         y += 34
 
-    label("CARD 5 (GUARANTEED SILVER-OR-BETTER)", Vector2(520, 66), Vector2(460, 26), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    var rows_slot5 := [["Signature Platinum", 9.09], ["Legendary", 2.27], ["Epic", 3.64], ["Gold", 6.82], ["Silver", 78.18]]
+    label("CARD 7  (GUARANTEED SILVER-OR-BETTER)", Vector2(520, 66), Vector2(460, 26), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    var rows_slot7 := [["Platinum", 0.2], ["Legendary", 0.8], ["Epic", 3.5], ["Gold", 11.0], ["Silver", 84.5]]
     y = 98
-    for row in rows_slot5:
+    for row in rows_slot7:
         var rarity: String = row[0]
         var pct: float = row[1]
-        var display_rarity := "Platinum" if rarity == "Signature Platinum" else rarity
-        var l2 := label(display_rarity, Vector2(520, y), Vector2(220, 28), 17, p)
-        l2.add_theme_color_override("font_color", card_rarity_color(display_rarity))
-        label("~%.2f%%" % pct, Vector2(770, y), Vector2(180, 28), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+        var l2 := label(rarity, Vector2(520, y), Vector2(220, 28), 17, p)
+        l2.add_theme_color_override("font_color", card_rarity_color(rarity))
+        label("%.1f%%" % pct, Vector2(770, y), Vector2(180, 28), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
         y += 34
 
     var pity_panel := Panel.new(); pity_panel.position = Vector2(30, 268); pity_panel.size = Vector2(940, 84)
@@ -4840,15 +4841,17 @@ func roll_rarity(guaranteed_silver: bool, force_platinum: bool) -> String:
     if force_platinum: return "Platinum"
     var r := randi_range(1,1000)
     # Rates (per card):
-    #   Legendary  0.8%   ~1 in 25 packs to see one
-    #   Epic       2.2%
-    #   Gold      10.0%
-    #   Silver    28.0%   card 7 is always Silver-or-better
-    #   Bronze    59.0%
-    if r <= 8:  return "Legendary"
-    if r <= 30: return "Epic"
-    if r <= 130: return "Gold"
-    if guaranteed_silver or r <= 410: return "Silver"
+    #   Platinum   0.2%   rare random pull; pity backstop at 80 packs
+    #   Legendary  0.8%   ~1 in 18 packs to see one across 7 cards
+    #   Epic       3.5%   noticeably more common than Legendary
+    #   Gold      11.0%
+    #   Silver    27.0%   card 7 always Silver-or-better (Bronze impossible there)
+    #   Bronze    57.5%
+    if r <= 2:   return "Platinum"
+    if r <= 10:  return "Legendary"
+    if r <= 45:  return "Epic"
+    if r <= 155: return "Gold"
+    if guaranteed_silver or r <= 425: return "Silver"
     return "Bronze"
 
 func random_card_of_rarity(rarity: String) -> Dictionary:
