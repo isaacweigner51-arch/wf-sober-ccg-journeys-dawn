@@ -1075,8 +1075,13 @@ func _apply_cloud_profile(data: Dictionary) -> void:
                 cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
                 continue
 
-            # ── Never regress earned currency ────────────────────────────────
-            if section == "economy" and key in ["gold", "dust"]:
+            # ── Never regress earned currency or pack inventory ───────────────
+            if section == "economy" and key in ["gold", "dust", "packs"]:
+                cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
+                continue
+
+            # ── Pity counters: keep whichever is higher (more progress) ───────
+            if section == "packs" and key in ["platinum_pity", "legendary_pity"]:
                 cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
                 continue
 
