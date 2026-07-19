@@ -48,7 +48,7 @@ const KEYWORD_EXAMPLE_CARDS := [
     {"keyword": "Inspire", "id": "JD-082", "meaning": "Triggers whenever another allied follower enters play."},
 ]
 const COPY_LIMITS := {"Bronze":3, "Silver":3, "Gold":3, "Epic":3, "Legendary":3, "Platinum":2, "Signature Gold":2, "Signature Platinum":2}
-const DUST_VALUES := {"Bronze":25, "Silver":75, "Gold":250, "Epic":1250, "Legendary":1750, "Platinum":2250, "Signature Platinum":2250}
+const DUST_VALUES := {"Bronze":12, "Silver":37, "Gold":125, "Epic":625, "Legendary":875, "Platinum":1125, "Signature Platinum":1125}
 const CRAFT_COSTS := {"Bronze":50, "Silver":150, "Gold":500, "Epic":2500, "Legendary":3500, "Platinum":4500, "Signature Platinum":4500}
 const DAILY_REWARDS := [
     {"packs":1, "vials":0},
@@ -688,6 +688,7 @@ var dust_balance := 0
 var pack_inventory := 0
 var packs_opened := 0
 var platinum_pity := 0
+var legendary_pity := 0   # cards drawn since last Legendary-or-better; resets on Legendary/Platinum
 var selected_class := ""
 var collection_owned: Dictionary = {}
 var collection_shiny_owned: Dictionary = {}  # card_id -> shiny copy count (draw-only, no crafting)
@@ -923,6 +924,7 @@ func load_profile() -> void:
         pack_inventory = int(cfg.get_value("economy", "packs", 0))
         packs_opened = int(cfg.get_value("packs", "opened", 0))
         platinum_pity = int(cfg.get_value("packs", "platinum_pity", 0))
+        legendary_pity = int(cfg.get_value("packs", "legendary_pity", 0))
         selected_class = str(cfg.get_value("profile", "class", ""))
         collection_owned = cfg.get_value("collection", "owned", {})
         collection_shiny_owned = cfg.get_value("collection", "shiny_owned", {})
@@ -989,6 +991,7 @@ func save_profile() -> void:
     cfg.set_value("economy", "packs", pack_inventory)
     cfg.set_value("packs", "opened", packs_opened)
     cfg.set_value("packs", "platinum_pity", platinum_pity)
+    cfg.set_value("packs", "legendary_pity", legendary_pity)
     cfg.set_value("profile", "class", selected_class)
     cfg.set_value("collection", "owned", collection_owned)
     cfg.set_value("collection", "shiny_owned", collection_shiny_owned)
@@ -1024,7 +1027,7 @@ func _serialize_profile_for_cloud() -> Dictionary:
     saved_decks[selected_deck_class] = saved_deck.duplicate()
     return {
         "economy": {"gold": gold_balance, "dust": dust_balance, "packs": pack_inventory},
-        "packs": {"opened": packs_opened, "platinum_pity": platinum_pity},
+        "packs": {"opened": packs_opened, "platinum_pity": platinum_pity, "legendary_pity": legendary_pity},
         "profile": {"class": selected_class},
         "collection": {"owned": collection_owned, "shiny_owned": collection_shiny_owned},
         "deck": {"class": selected_deck_class, "cards": saved_deck},
@@ -4542,11 +4545,19 @@ func _roll_one_pack() -> Dictionary:
     pack_inventory -= 1; packs_opened += 1; platinum_pity += 1
     # Platinum can appear on any card via the 0.2% random roll, or is
     # guaranteed on card 7 once the pity counter reaches 80.
+    # Legendary is guaranteed once legendary_pity reaches 21 cards drawn.
     var guaranteed_platinum := platinum_pity >= 80
     var pulled: Array = []
     var got_platinum := false
     for i in range(7):
+        legendary_pity += 1
         var rarity := roll_rarity(i == 6, guaranteed_platinum and i == 6)
+        # Upgrade to Legendary if pity threshold hit and card isn't already Legendary+.
+        if legendary_pity >= 21 and rarity not in ["Legendary", "Platinum"]:
+            rarity = "Legendary"
+        # Reset legendary pity on any Legendary-or-better pull.
+        if rarity in ["Legendary", "Platinum"]:
+            legendary_pity = 0
         if rarity == "Platinum": got_platinum = true
         var cd := random_card_of_rarity(rarity)
         var dup_info := add_card_to_collection(cd)
@@ -4799,7 +4810,7 @@ func show_pack_odds(return_screen: Callable) -> void:
     clear_screen(); add_background(0.80); header("PULL ODDS", "Odds are identical for every pack, whether earned free or bought with cash")
     var p := Panel.new(); p.position = Vector2(140, 118); p.size = Vector2(1000, 470)
     p.add_theme_stylebox_override("panel", style()); root_layer.add_child(p)
-    label("Every pack = 7 cards. Cards 1-6 roll independently. Card 7 is guaranteed Silver-or-better. Platinum can appear on any card — pity guarantees one within 80 packs.", Vector2(30, 14), Vector2(940, 40), 16, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    label("Every pack = 7 cards. Cards 1-6 roll independently. Card 7 is Silver-or-better. Legendary guaranteed within 21 cards drawn. Platinum pity at 80 packs.", Vector2(30, 14), Vector2(940, 40), 16, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
     label("CARDS 1-6  (EACH ROLLED INDEPENDENTLY)", Vector2(30, 66), Vector2(460, 26), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     var rows_common := [["Platinum", 0.2], ["Legendary", 0.8], ["Epic", 3.5], ["Gold", 11.0], ["Silver", 27.0], ["Bronze", 57.5]]
@@ -4823,10 +4834,11 @@ func show_pack_odds(return_screen: Callable) -> void:
         label("%.1f%%" % pct, Vector2(770, y), Vector2(180, 28), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
         y += 34
 
-    var pity_panel := Panel.new(); pity_panel.position = Vector2(30, 268); pity_panel.size = Vector2(940, 84)
+    var pity_panel := Panel.new(); pity_panel.position = Vector2(30, 268); pity_panel.size = Vector2(940, 104)
     pity_panel.add_theme_stylebox_override("panel", solid_style(Color(0.18, 0.14, 0.05), 10)); p.add_child(pity_panel)
-    label("PITY GUARANTEE", Vector2(20, 8), Vector2(900, 24), 16, pity_panel).add_theme_color_override("font_color", GOLD_COLOR)
-    label("If you haven't pulled a Signature Platinum in 80 packs, your next pack's card 7 is guaranteed Signature Platinum. You are currently at %d / 80 packs since your last one." % platinum_pity, Vector2(20, 32), Vector2(900, 46), 15, pity_panel)
+    label("PITY GUARANTEES", Vector2(20, 8), Vector2(900, 24), 16, pity_panel).add_theme_color_override("font_color", GOLD_COLOR)
+    label("Legendary: guaranteed within 21 cards drawn (across packs). Currently at %d / 21 cards since your last one." % legendary_pity, Vector2(20, 34), Vector2(900, 26), 15, pity_panel)
+    label("Signature Platinum: guaranteed within 80 packs. Currently at %d / 80 packs since your last one." % platinum_pity, Vector2(20, 62), Vector2(900, 26), 15, pity_panel)
 
     var shiny_panel := Panel.new(); shiny_panel.position = Vector2(30, 360); shiny_panel.size = Vector2(940, 52)
     shiny_panel.add_theme_stylebox_override("panel", solid_style(Color(0.10, 0.06, 0.18), 10)); p.add_child(shiny_panel)
