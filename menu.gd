@@ -4207,7 +4207,7 @@ func show_store() -> void:
     clear_screen(); add_background(0.72); header("JOURNEY'S DAWN STORE","Buy packs with earned Gold or securely through Google Play"); currency_bar()
     var p := Panel.new(); p.position=Vector2(90,145); p.size=Vector2(1100,440); p.add_theme_stylebox_override("panel",style(Color(0.72,0.46,0.95),18)); root_layer.add_child(p)
     label("BOOSTER PACKS",Vector2(25,18),Vector2(1050,45),32,p).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    label("Every pack contains 5 cards • Duplicate protection • Signature Platinum guaranteed by pack 40",Vector2(70,62),Vector2(960,35),17,p).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    label("Every pack contains 7 cards • Duplicate protection • Signature Platinum guaranteed by pack 80",Vector2(70,62),Vector2(960,35),17,p).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     button("5 PACKS\n200 GOLD",Vector2(35,120),Vector2(190,92),buy_gold,p)
     button("5 PACKS\n%s" % BillingManager.formatted_price("wf_sober_packs_5", "$2.99"),Vector2(245,120),Vector2(190,92),func(): buy_cash("wf_sober_packs_5"),p)
     button("15 PACKS\n%s" % BillingManager.formatted_price("wf_sober_packs_15", "$7.99"),Vector2(455,120),Vector2(190,92),func(): buy_cash("wf_sober_packs_15"),p)
@@ -4541,12 +4541,12 @@ func _roll_one_pack() -> Dictionary:
     # of sync with each other over time.
     pack_inventory -= 1; packs_opened += 1; platinum_pity += 1
     # Platinum is pity-only — no random chance per pack.
-    # Every 80 packs without one the 5th card is guaranteed Platinum.
+    # Every 80 packs without one the 7th card is guaranteed Platinum.
     var guaranteed_platinum := platinum_pity >= 80
     var platinum_hit := guaranteed_platinum
     var pulled: Array = []
-    for i in range(5):
-        var rarity := roll_rarity(i == 4, platinum_hit and i == 4)
+    for i in range(7):
+        var rarity := roll_rarity(i == 6, platinum_hit and i == 6)
         var cd := random_card_of_rarity(rarity)
         var dup_info := add_card_to_collection(cd)
         # Duplicate/vial info is stamped onto a *copy* of the card dict, not
@@ -4797,7 +4797,7 @@ func show_pack_odds(return_screen: Callable) -> void:
     clear_screen(); add_background(0.80); header("PULL ODDS", "Odds are identical for every pack, whether earned free or bought with cash")
     var p := Panel.new(); p.position = Vector2(140, 118); p.size = Vector2(1000, 470)
     p.add_theme_stylebox_override("panel", style()); root_layer.add_child(p)
-    label("Every pack = 5 cards. Cards 1-4 roll independently. Card 5 is guaranteed Silver-or-better. Signature Platinum is pity-only — guaranteed within 80 packs.", Vector2(30, 14), Vector2(940, 40), 16, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    label("Every pack = 7 cards. Cards 1-6 roll independently. Card 7 is guaranteed Silver-or-better. Signature Platinum is pity-only — guaranteed within 80 packs.", Vector2(30, 14), Vector2(940, 40), 16, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
     label("CARDS 1-4 (EACH ROLLED INDEPENDENTLY)", Vector2(30, 66), Vector2(460, 26), 17, p).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     var rows_common := [["Legendary", 2.5], ["Epic", 4.0], ["Gold", 7.5], ["Silver", 18.0], ["Bronze", 68.0]]
@@ -4825,7 +4825,7 @@ func show_pack_odds(return_screen: Callable) -> void:
     var pity_panel := Panel.new(); pity_panel.position = Vector2(30, 268); pity_panel.size = Vector2(940, 84)
     pity_panel.add_theme_stylebox_override("panel", solid_style(Color(0.18, 0.14, 0.05), 10)); p.add_child(pity_panel)
     label("PITY GUARANTEE", Vector2(20, 8), Vector2(900, 24), 16, pity_panel).add_theme_color_override("font_color", GOLD_COLOR)
-    label("If you haven't pulled a Signature Platinum in 80 packs, your next pack's card 5 is guaranteed Signature Platinum. You are currently at %d / 80 packs since your last one." % platinum_pity, Vector2(20, 32), Vector2(900, 46), 15, pity_panel)
+    label("If you haven't pulled a Signature Platinum in 80 packs, your next pack's card 7 is guaranteed Signature Platinum. You are currently at %d / 80 packs since your last one." % platinum_pity, Vector2(20, 32), Vector2(900, 46), 15, pity_panel)
 
     var shiny_panel := Panel.new(); shiny_panel.position = Vector2(30, 360); shiny_panel.size = Vector2(940, 52)
     shiny_panel.add_theme_stylebox_override("panel", solid_style(Color(0.10, 0.06, 0.18), 10)); p.add_child(shiny_panel)
@@ -4843,7 +4843,7 @@ func roll_rarity(guaranteed_silver: bool, force_platinum: bool) -> String:
     #   Legendary  0.8%   ~1 in 25 packs to see one
     #   Epic       2.2%
     #   Gold      10.0%
-    #   Silver    28.0%   card 5 is always Silver-or-better
+    #   Silver    28.0%   card 7 is always Silver-or-better
     #   Bronze    59.0%
     if r <= 8:  return "Legendary"
     if r <= 30: return "Epic"
