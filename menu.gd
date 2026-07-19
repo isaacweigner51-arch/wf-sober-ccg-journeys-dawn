@@ -900,7 +900,7 @@ func _on_viewport_size_changed() -> void:
     # Keep the account launch screen active during rotation/resizing.
     if launch_screen_active:
         show_launch_screen()
-    elif academy_complete:
+    else:
         show_home()
 
 func load_cards() -> Array:
@@ -1732,10 +1732,7 @@ func start_brother_battle() -> void:
 
 func auto_claim_daily_reward_after_login() -> void:
     if not can_claim_daily_reward():
-        if academy_complete:
-            show_home()
-        else:
-            show_first_day_intro()
+        show_home()
         return
     var today := current_calendar_day()
     var reward_index := normalized_daily_reward_index()
@@ -3712,9 +3709,6 @@ func class_description(c: String) -> String:
         _: return "Growth, planning, and powerful finishers"
 
 func choose_class(c: String) -> void:
-    if not academy_complete:
-        begin_academy()
-        return
     selected_class = c; selected_deck_class = c
     grant_starter_collection(c)
     build_starter_deck(c)
