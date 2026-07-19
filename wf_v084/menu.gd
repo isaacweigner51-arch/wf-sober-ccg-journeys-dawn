@@ -1043,27 +1043,64 @@ func _serialize_profile_for_cloud() -> Dictionary:
     }
 
 func _apply_cloud_profile(data: Dictionary) -> void:
-    # Write each section/key from the cloud blob into the local ConfigFile so
-    # that the next load_profile() call picks it all up fresh.
+    # Merge cloud data into the local ConfigFile, never downgrading progress.
+    # Rule: local wins whenever it represents MORE progress than the cloud value.
     if data.is_empty():
         return
     var cfg := ConfigFile.new()
-    cfg.load(SAVE_PATH) # Load existing local data (may be empty on fresh install).
+    cfg.load(SAVE_PATH)
+
     for section in data.keys():
         var sec_data: Variant = data[section]
         if not (sec_data is Dictionary):
             continue
         for key in sec_data.keys():
-            cfg.set_value(section, key, sec_data[key])
+            var cloud_val: Variant = sec_data[key]
+            var local_val: Variant = cfg.get_value(section, key, null)
+
+            # ── Never regress boolean progress flags ──────────────────────────
+            if section == "academy" and key == "complete":
+                # Once true locally, it stays true regardless of cloud.
+                cfg.set_value(section, key, bool(local_val) or bool(cloud_val))
+                continue
+            if section == "academy" and key == "reward_claimed":
+                cfg.set_value(section, key, bool(local_val) or bool(cloud_val))
+                continue
+
+            # ── Never regress numeric progress counters ───────────────────────
+            if section == "academy" and key == "step":
+                cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
+                continue
+
+            # ── Never regress earned currency ────────────────────────────────
+            if section == "economy" and key in ["gold", "dust"]:
+                cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
+                continue
+
+            # ── Never regress collection (union of both arrays) ───────────────
+            if section == "collection" and cloud_val is Array:
+                var merged: Array = (local_val.duplicate() if local_val is Array else [])
+                for entry in cloud_val:
+                    if not merged.has(entry):
+                        merged.append(entry)
+                cfg.set_value(section, key, merged)
+                continue
+
+            # ── All other fields: cloud wins (deck config, daily state, etc.) ─
+            cfg.set_value(section, key, cloud_val)
+
     cfg.save(SAVE_PATH)
-    print("CLOUD: applied save data from Supabase")
+    print("CLOUD: merged save data (progress-safe)")
 
 func _on_cloud_save_loaded(data: Dictionary) -> void:
     if data.is_empty():
         return
     _apply_cloud_profile(data)
     load_profile() # Re-read local file now that cloud data has been written.
-    print("CLOUD: profile restored (%d sections)" % data.size())
+    # Immediately re-upload the merged (correct) state so Supabase is never
+    # stale again — this is what fixes the loop on subsequent logins.
+    _queue_cloud_upload.call_deferred()
+    print("CLOUD: profile merged and re-uploaded (%d sections)" % data.size())
 
 func clear_screen() -> void:
     for child in get_children(): child.queue_free()
