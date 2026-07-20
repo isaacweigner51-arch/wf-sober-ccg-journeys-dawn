@@ -861,11 +861,15 @@ func show_launch_screen() -> void:
     panel.add_child(launch_password)
 
     button("SIGN IN", Vector2(80, 275), Vector2(220, 50), func():
+        print("LOGIN UI ── SIGN IN pressed  email_len=%d  pass_len=%d" % [launch_email.text.length(), launch_password.text.length()])
         launch_status.text = "Signing in..."
+        launch_status.add_theme_color_override("font_color", Color(0.94, 0.95, 1.0))
         NetworkManager.sign_in_with_email(launch_email.text, launch_password.text)
     , panel)
     button("CREATE ACCOUNT", Vector2(320, 275), Vector2(220, 50), func():
+        print("LOGIN UI ── CREATE ACCOUNT pressed  email_len=%d  pass_len=%d" % [launch_email.text.length(), launch_password.text.length()])
         launch_status.text = "Creating account..."
+        launch_status.add_theme_color_override("font_color", Color(0.94, 0.95, 1.0))
         NetworkManager.create_account_with_email(launch_email.text, launch_password.text)
     , panel)
     button("CONTINUE AS GUEST", Vector2(180, 338), Vector2(260, 46), func():
@@ -897,11 +901,13 @@ func _on_launch_auth_result(success: bool, message: String) -> void:
         show_home()
 
 func _on_viewport_size_changed() -> void:
-    # Keep the account launch screen active during rotation/resizing.
+    # On Android the virtual keyboard fires this signal. Previously this called
+    # show_launch_screen() which wiped whatever the player had typed into the
+    # email/password fields. The launch panel is fixed-position and does not
+    # depend on viewport dimensions, so skip the rebuild entirely.
     if launch_screen_active:
-        show_launch_screen()
-    else:
-        show_home()
+        return
+    show_home()
 
 func load_cards() -> Array:
     var file := FileAccess.open("res://data/cards.json", FileAccess.READ)

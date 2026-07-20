@@ -54,12 +54,17 @@ func continue_as_guest() -> void:
     _authenticate_anonymously()
 
 func sign_in_with_email(email: String, password: String) -> void:
+    print("SIGN IN ── called  email_len=%d  pass_len=%d" % [email.length(), password.length()])
     email = email.strip_edges()
+    print("SIGN IN ── after strip  email='%s'  pass_len=%d" % [email, password.length()])
     if email.is_empty() or password.length() < 6:
+        print("SIGN IN ── BLOCKED by validation  email_empty=%s  pass_short=%s" % [str(email.is_empty()), str(password.length() < 6)])
         account_authenticated.emit(false, "Enter a valid email and a password of at least 6 characters.")
         return
+    print("SIGN IN ── validation OK — sending Supabase request")
     connecting = true
     var result := await _request(HTTPClient.METHOD_POST, "/auth/v1/token?grant_type=password", {"email":email, "password":password}, false)
+    print("SIGN IN ── response  status=%d  ok=%s  body=%s" % [result.status, str(result.ok), result.text.left(400)])
     _complete_account_auth(result, "Signed in.")
 
 func create_account_with_email(email: String, password: String) -> void:
@@ -327,8 +332,11 @@ func _request(method: int, path: String, body: Variant = null, authenticated := 
     var http := HTTPRequest.new()
     add_child(http)
     var payload := "" if body == null else JSON.stringify(body)
+    var method_name := ["GET","POST","PUT","PATCH","DELETE"].get(method, str(method))
+    print("REQUEST ── %s %s  payload_len=%d  auth=%s" % [method_name, path.left(80), payload.length(), str(authenticated)])
     var err := http.request(SUPABASE_URL + path, _headers(authenticated, prefer), method, payload)
     if err != OK:
+        print("REQUEST ── FAILED TO START  err=%d  path=%s" % [err, path])
         http.queue_free()
         request_busy = false
         return {"ok":false, "status":0, "error":"Request could not start (%d)." % err}
@@ -338,6 +346,7 @@ func _request(method: int, path: String, body: Variant = null, authenticated := 
     var status := int(completed[1])
     var raw: PackedByteArray = completed[3]
     var text := raw.get_string_from_utf8()
+    print("REQUEST ── response  status=%d  body_len=%d" % [status, text.length()])
     var parsed: Variant = null
     if not text.is_empty():
         parsed = JSON.parse_string(text)
