@@ -39,6 +39,13 @@ var _idle_paused := false    # true during attacks/death/evolution — stops com
 var art_home := Vector2.ZERO
 var art_clip: Panel          # clip container: keeps art drift/float inside the card window
 static var graphics_quality := 2  # 0 = Low  1 = Medium  2 = High
+
+## Display context — controls which animations and effects are active.
+## Set BEFORE calling setup() so _build() / _init_rarity_vfx() can read it.
+## BATTLEFIELD: full idle breathing, orbs, hover lift, attack feel.
+## PREVIEW:     fixed size, no scale animation, no hover transform, no orbs.
+enum DisplayMode { BATTLEFIELD, PREVIEW }
+var display_mode := DisplayMode.BATTLEFIELD
 var allow_reorder := false
 var show_inspect_button := false
 var inspect_button: Button
@@ -474,7 +481,7 @@ func _rarity_tier_val() -> int:
 ## Called at end of _build() so `frame` is available.
 func _init_rarity_vfx(frame: Control) -> void:
     var tier := _rarity_tier_val()
-    if tier < 4 or hidden_card or graphics_quality == 0:
+    if tier < 4 or hidden_card or graphics_quality == 0 or display_mode == DisplayMode.PREVIEW:
         return
     var orb_count := 4 if tier >= 5 else 3
     for _i in range(orb_count):
@@ -492,6 +499,8 @@ func _init_rarity_vfx(frame: Control) -> void:
 
 func play_attack_wind_up(lean_dir: Vector2) -> void:
     ## Card squashes and leans AWAY from the target — builds anticipation.
+    if display_mode != DisplayMode.BATTLEFIELD:
+        return
     _idle_paused = true
     var tier := _rarity_tier_val()
     var sx := 0.74 if tier >= 4 else (0.80 if tier >= 3 else 0.85)
@@ -505,6 +514,8 @@ func play_attack_wind_up(lean_dir: Vector2) -> void:
 
 func play_attack_lunge(toward_dir: Vector2) -> void:
     ## Card stretches TOWARD the target — peak of the strike.
+    if display_mode != DisplayMode.BATTLEFIELD:
+        return
     var tier := _rarity_tier_val()
     var sx := 1.24 if tier >= 4 else (1.19 if tier >= 3 else 1.13)
     var sy := 0.78 if tier >= 4 else (0.83 if tier >= 3 else 0.88)
@@ -528,15 +539,21 @@ func play_attack_lunge(toward_dir: Vector2) -> void:
 
 func play_attack_settle() -> void:
     ## Card eases back to its resting pose after the strike.
+    if display_mode != DisplayMode.BATTLEFIELD:
+        return
     _art_settle_to_home()
     var tw := create_tween().set_parallel(true)
     tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     tw.tween_property(self, "scale",    Vector2.ONE,     0.22)
     tw.tween_property(self, "position", base_position,   0.22)
     tw.tween_property(self, "rotation", 0.0,             0.18)
-    # Resume idle breathing / float once settle completes.
-    get_tree().create_timer(0.26, true, false, true).timeout.connect(
-        func(): if is_instance_valid(self): _idle_paused = false)
+    # Resume idle breathing once settle completes.
+    # Using tween.finished avoids get_tree().create_timer() which crashes when
+    # the CardView has already been freed or removed from the scene tree.
+    tw.finished.connect(func():
+        if is_instance_valid(self) and not is_queued_for_deletion() and is_inside_tree():
+            _idle_paused = false
+    )
 
 ## Art zooms and shifts toward the strike direction inside the clip window.
 ## Clip container prevents overflow; this makes the character look like it's lunging.
@@ -619,7 +636,7 @@ func phoenix_death_animation() -> void:
     tween.tween_property(self, "scale", Vector2(1.3, 1.3), 0.42)
 
 func _hover_on() -> void:
-    if hidden_card:
+    if hidden_card or display_mode == DisplayMode.PREVIEW:
         return
     hovering = true
     z_index = 100
@@ -633,7 +650,7 @@ func _hover_on() -> void:
 func _hover_off() -> void:
     hovering = false
     rotation = 0.0
-    if hidden_card or selected:
+    if hidden_card or selected or display_mode == DisplayMode.PREVIEW:
         return
     z_index = 0
     var tween := create_tween().set_parallel(true)
@@ -695,26 +712,28 @@ func _process(delta: float) -> void:
         var cycle := fmod(shimmer_time + idle_phase, 3.8)
         shine_strip.position.x = lerpf(-55.0, custom_minimum_size.x + 30.0, cycle / 3.8)
         shine_strip.color = Color(0.92, 0.98, 1.0, 0.16 if cycle > 0.35 and cycle < 3.2 else 0.0)
-    if not _idle_paused:
-        if bool(data.get("can_attack", false)) and not hidden_card and not hovering:
-            var attack_pulse := 1.0 + sin(shimmer_time * 3.6 + idle_phase) * 0.012
-            scale = Vector2(attack_pulse, attack_pulse)
-        elif not hovering and not hidden_card and tier >= 1:
-            # Rarity-scaled breathing for idle (non-attacking) cards
-            var breath_amp := 0.0
-            match tier:
-                1: breath_amp = 0.006
-                2: breath_amp = 0.009
-                3: breath_amp = 0.011
-                _: breath_amp = 0.014  # Legendary / Platinum
-            if bool(data.get("evolved", false)):
-                breath_amp *= 1.4
-            var breath := 1.0 + sin(shimmer_time * 1.55 + idle_phase) * breath_amp
-            scale = Vector2(breath, breath)
-    if hovering and not hidden_card:
-        var local_mouse: Vector2 = get_local_mouse_position()
-        var x_ratio: float = clampf((local_mouse.x / maxf(size.x, 1.0)) - 0.5, -0.5, 0.5)
-        rotation = x_ratio * 0.10
+    # PREVIEW mode: no scale/rotation animation — card size is fixed by the slot.
+    if display_mode == DisplayMode.BATTLEFIELD:
+        if not _idle_paused:
+            if bool(data.get("can_attack", false)) and not hidden_card and not hovering:
+                var attack_pulse := 1.0 + sin(shimmer_time * 3.6 + idle_phase) * 0.012
+                scale = Vector2(attack_pulse, attack_pulse)
+            elif not hovering and not hidden_card and tier >= 1:
+                # Rarity-scaled breathing for idle (non-attacking) cards
+                var breath_amp := 0.0
+                match tier:
+                    1: breath_amp = 0.006
+                    2: breath_amp = 0.009
+                    3: breath_amp = 0.011
+                    _: breath_amp = 0.014  # Legendary / Platinum
+                if bool(data.get("evolved", false)):
+                    breath_amp *= 1.4
+                var breath := 1.0 + sin(shimmer_time * 1.55 + idle_phase) * breath_amp
+                scale = Vector2(breath, breath)
+        if hovering and not hidden_card:
+            var local_mouse: Vector2 = get_local_mouse_position()
+            var x_ratio: float = clampf((local_mouse.x / maxf(size.x, 1.0)) - 0.5, -0.5, 0.5)
+            rotation = x_ratio * 0.10
     # Orbiting energy orbs for Legendary / Platinum
     if _orb_nodes.size() > 0 and not hidden_card and not _idle_paused:
         var orb_count := _orb_nodes.size()
