@@ -189,6 +189,7 @@ var online_seed := 1
 var developer_meta_deck := false
 var player_deck_mode := "custom"
 var enemy_deck_mode := "custom"
+var player_custom_deck_ids: Array = []  # set from battle_setup.cfg when mode=="custom"
 var online_waiting_for_initial := false
 var online_match_started := false
 var online_applying_state := false
@@ -351,6 +352,7 @@ func load_battle_setup() -> void:
             enemy_class = str(cfg.get_value("battle","opponent_class","Courage"))
             player_deck_mode = str(cfg.get_value("battle","your_deck_mode","custom"))
             enemy_deck_mode = str(cfg.get_value("battle","opponent_deck_mode","prebuilt"))
+            player_custom_deck_ids = Array(cfg.get_value("battle","player_card_ids",[]))
         elif mode == "practice":
             story_mode_battle = false
             trial_mode_battle = false
@@ -660,8 +662,36 @@ func build_deck_for_mode(faction_name: String, deck_mode: String) -> Array:
             return build_developer_meta_deck(faction_name)
         "final_boss":
             return build_developer_final_boss_deck()
+        "custom":
+            if not player_custom_deck_ids.is_empty():
+                var custom := _build_deck_from_id_list(player_custom_deck_ids)
+                if not custom.is_empty():
+                    return custom
+            return build_class_deck(faction_name)
         _:
             return build_class_deck(faction_name)
+
+## Build a full card-dict Array from a list of card IDs (as stored in deck slots).
+## Unknown IDs are skipped with a warning; the deck may be shorter than 40 as a result.
+func _build_deck_from_id_list(ids: Array) -> Array:
+    var result: Array = []
+    for raw_id in ids:
+        var id := str(raw_id)
+        var found := false
+        for pool_fn in [build_class_cards.bind("Hope"), build_class_cards.bind("Courage"),
+                        build_class_cards.bind("Serenity"), build_class_cards.bind("Purpose"),
+                        build_universal_cards]:
+            var pool: Array = pool_fn.call()
+            for cd in pool:
+                if str(cd.get("id","")) == id or str(cd.get("name","")) == id:
+                    result.append(cd.duplicate(true))
+                    found = true
+                    break
+            if found:
+                break
+        if not found:
+            push_warning("_build_deck_from_id_list: unknown id %s — skipped" % id)
+    return result
 
 func _developer_curve_deck(pool: Array, low_target: int = 14, mid_target: int = 14, high_target: int = 12) -> Array:
     var buckets := {"low": [], "mid": [], "high": []}

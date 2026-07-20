@@ -47,7 +47,8 @@ const KEYWORD_EXAMPLE_CARDS := [
     {"keyword": "Calm", "id": "JD-032", "meaning": "Rewards you for holding back and not attacking last turn."},
     {"keyword": "Inspire", "id": "JD-082", "meaning": "Triggers whenever another allied follower enters play."},
 ]
-const COPY_LIMITS := {"Bronze":3, "Silver":3, "Gold":3, "Epic":3, "Legendary":3, "Platinum":2, "Signature Gold":2, "Signature Platinum":2}
+const COPY_LIMITS := {"Bronze":3, "Silver":3, "Gold":3, "Epic":3, "Legendary":2, "Platinum":1, "Signature Gold":2, "Signature Platinum":1}
+const MAX_DECK_SLOTS := 8
 const DUST_VALUES := {"Bronze":12, "Silver":37, "Gold":125, "Epic":625, "Legendary":875, "Platinum":1125, "Signature Platinum":1125}
 const CRAFT_COSTS := {"Bronze":50, "Silver":150, "Gold":500, "Epic":2500, "Legendary":3500, "Platinum":4500, "Signature Platinum":4500}
 const DAILY_REWARDS := [
@@ -707,6 +708,13 @@ var sponsor_defeated := false
 var selected_leader_skin := "" # "" (normal) or "sponsor"
 var trial_select_class := "Hope"
 var selected_deck_class := "Hope"
+# ── Multi-deck slots ─────────────────────────────────────────────────────────
+# Array of Dicts: { "name": String, "class": String, "cards": Array[String] }
+# Up to MAX_DECK_SLOTS entries.  Index -1 = "use prebuilt starter deck".
+var deck_slots: Array = []
+var last_trial_deck_idx: int = -1     # which slot the player last chose for Trials
+var last_battle_deck_idx: int = -1    # which slot the player last chose for Battles
+var editing_deck_slot_idx: int = -1   # set while deck builder is open for a specific slot
 # Collection screen filter state -- "All" plus the four leader classes plus
 # "Neutral" for the class tabs, "All" plus each rarity name for the rarity
 # tabs. Kept as instance vars (not locals) so re-opening the screen after a
@@ -948,6 +956,11 @@ func load_profile() -> void:
         sponsor_defeated = bool(cfg.get_value("trials", "sponsor_defeated", false))
         selected_leader_skin = str(cfg.get_value("trials", "selected_leader_skin", ""))
         last_seen_whats_new_version = str(cfg.get_value("meta", "last_seen_whats_new_version", ""))
+        deck_slots = cfg.get_value("deck_slots", "slots", [])
+        last_trial_deck_idx = int(cfg.get_value("deck_slots", "last_trial_idx", -1))
+        last_battle_deck_idx = int(cfg.get_value("deck_slots", "last_battle_idx", -1))
+        if deck_slots.is_empty():
+            _migrate_saved_decks_to_slots()
         # Existing players from earlier builds should not lose access.
         if selected_class != "" and not cfg.has_section_key("academy", "complete"):
             academy_complete = true
@@ -1011,6 +1024,13 @@ func save_profile() -> void:
     cfg.set_value("trials", "sponsor_defeated", sponsor_defeated)
     cfg.set_value("trials", "selected_leader_skin", selected_leader_skin)
     cfg.set_value("meta", "last_seen_whats_new_version", last_seen_whats_new_version)
+    # Multi-deck slots — sync the currently-editing slot before writing.
+    if editing_deck_slot_idx >= 0 and editing_deck_slot_idx < deck_slots.size():
+        deck_slots[editing_deck_slot_idx]["cards"] = saved_deck.duplicate()
+        deck_slots[editing_deck_slot_idx]["class"] = selected_deck_class
+    cfg.set_value("deck_slots", "slots", deck_slots)
+    cfg.set_value("deck_slots", "last_trial_idx", last_trial_deck_idx)
+    cfg.set_value("deck_slots", "last_battle_idx", last_battle_deck_idx)
     cfg.save(SAVE_PATH)
     # Fire-and-forget cloud backup. Runs after this frame so the local save
     # always lands first; silently skipped when not signed in.
@@ -1025,6 +1045,9 @@ func _queue_cloud_upload() -> void:
 
 func _serialize_profile_for_cloud() -> Dictionary:
     saved_decks[selected_deck_class] = saved_deck.duplicate()
+    if editing_deck_slot_idx >= 0 and editing_deck_slot_idx < deck_slots.size():
+        deck_slots[editing_deck_slot_idx]["cards"] = saved_deck.duplicate()
+        deck_slots[editing_deck_slot_idx]["class"] = selected_deck_class
     return {
         "economy": {"gold": gold_balance, "dust": dust_balance, "packs": pack_inventory},
         "packs": {"opened": packs_opened, "platinum_pity": platinum_pity, "legendary_pity": legendary_pity},
@@ -1032,6 +1055,11 @@ func _serialize_profile_for_cloud() -> Dictionary:
         "collection": {"owned": collection_owned, "shiny_owned": collection_shiny_owned},
         "deck": {"class": selected_deck_class, "cards": saved_deck},
         "decks": {"by_class": saved_decks},
+        "deck_slots": {
+            "slots": deck_slots,
+            "last_trial_idx": last_trial_deck_idx,
+            "last_battle_idx": last_battle_deck_idx
+        },
         "academy": {"complete": academy_complete, "step": academy_step, "reward_claimed": academy_reward_claimed},
         "daily": {"reward_day": daily_reward_day, "last_claim_day": daily_last_claim_day},
         "challenge": {"recovery_progress": recovery_challenge_progress},
@@ -1125,6 +1153,10 @@ func _apply_cloud_profile(data: Dictionary) -> bool:
                 cfg.set_value(section, key, merged)
                 continue
 
+            # ── Deck slots: cloud wins wholesale (most-recent edit from any device) ──
+            if section == "deck_slots" and key == "slots" and cloud_val is Array:
+                cfg.set_value(section, key, cloud_val)
+                continue
             # ── All other fields: cloud wins (deck config, daily state, etc.) ─
             cfg.set_value(section, key, cloud_val)
 
@@ -4261,7 +4293,18 @@ func show_trials() -> void:
     sp_btn.disabled = not sponsor_unlocked
 
 func launch_trial_battle(opponent_class: String, tier: int) -> void:
+    # Route through the deck picker before launching.
+    show_trial_deck_picker(opponent_class, tier)
+
+func _do_launch_trial_battle(opponent_class: String, tier: int, chosen_idx: int) -> void:
     var your_class := selected_class if selected_class != "" else "Hope"
+    # Resolve the deck to pass into battle.
+    var card_ids: Array = []
+    if chosen_idx >= 0 and chosen_idx < deck_slots.size():
+        card_ids = Array(deck_slots[chosen_idx].get("cards", []))
+        your_class = str(deck_slots[chosen_idx].get("class", your_class))
+        last_trial_deck_idx = chosen_idx
+        save_profile()
     var cfg := _load_profile_cfg_for_partial_write()
     if cfg != null:
         cfg.set_value("trials", "pending_opponent", opponent_class)
@@ -4270,7 +4313,8 @@ func launch_trial_battle(opponent_class: String, tier: int) -> void:
     var battle_cfg := ConfigFile.new()
     battle_cfg.set_value("battle", "mode", "trial")
     battle_cfg.set_value("battle", "your_class", your_class)
-    battle_cfg.set_value("battle", "your_deck_mode", "custom")
+    battle_cfg.set_value("battle", "your_deck_mode", "custom" if not card_ids.is_empty() else "prebuilt")
+    battle_cfg.set_value("battle", "player_card_ids", card_ids)
     battle_cfg.set_value("battle", "opponent_class", opponent_class)
     battle_cfg.set_value("battle", "opponent_deck_mode", "prebuilt")
     battle_cfg.set_value("battle", "trial_tier", tier)
@@ -6034,19 +6078,37 @@ func show_deck_preview() -> void:
     button("EDIT THIS DECK", Vector2(264, 656), Vector2(220, 48), show_deck_builder)
 
 func show_deck_builder() -> void:
-    clear_screen(); add_background(0.82); header("DECK BUILDER","Separate saved deck for every class • Exactly 40 cards • Class plus Neutral"); currency_bar()
+    clear_screen(); add_background(0.82)
+    var deck_subtitle := "Slot %d — %s" % [editing_deck_slot_idx + 1, str(deck_slots[editing_deck_slot_idx].get("name","Deck"))] if editing_deck_slot_idx >= 0 and editing_deck_slot_idx < deck_slots.size() else "Separate saved deck for every class"
+    header("DECK BUILDER", "%s • Exactly 40 cards • Class plus Neutral" % deck_subtitle)
+    currency_bar()
+    # Back button: go to deck manager if editing a slot, else home.
+    var back_cb: Callable = (func():
+        if editing_deck_slot_idx >= 0:
+            save_profile()
+            editing_deck_slot_idx = -1
+            show_deck_manager()
+        else:
+            show_home())
+    button("BACK", Vector2(28, 662), Vector2(160, 42), back_cb)
     if selected_class == "":
         label("CHOOSE A CLASS FIRST",Vector2(380,245),Vector2(520,60),34).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
         label("Your class unlocks a starter deck. Pack pulls can then be added here.",Vector2(340,320),Vector2(600,70),19).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
         button("CHOOSE MY CLASS",Vector2(485,420),Vector2(310,60),show_class_choice)
         return
-    var class_row := HBoxContainer.new(); class_row.position=Vector2(45,180); class_row.size=Vector2(500,45); root_layer.add_child(class_row)
-    for c in CLASSES:
-        var b:=Button.new()
-        b.text=str(c)
-        b.custom_minimum_size=Vector2(115,40)
-        b.pressed.connect(switch_deck_class.bind(str(c)))
-        class_row.add_child(b)
+    # Only show class switcher when NOT editing a specific named slot
+    # (editing a slot fixes its class; switching would mutate the slot class unintentionally).
+    if editing_deck_slot_idx < 0:
+        var class_row := HBoxContainer.new(); class_row.position=Vector2(45,180); class_row.size=Vector2(500,45); root_layer.add_child(class_row)
+        for c in CLASSES:
+            var b:=Button.new()
+            b.text=str(c)
+            b.custom_minimum_size=Vector2(115,40)
+            b.pressed.connect(switch_deck_class.bind(str(c)))
+            class_row.add_child(b)
+    else:
+        # Show a read-only label indicating which class deck this slot belongs to.
+        label("SLOT %d — %s CLASS DECK" % [editing_deck_slot_idx + 1, selected_deck_class.to_upper()], Vector2(45,185), Vector2(500,36), 18).add_theme_color_override("font_color", class_color(selected_deck_class).lightened(0.2))
     var scroll := ScrollContainer.new(); scroll.position=Vector2(45,240); scroll.size=Vector2(780,400); root_layer.add_child(scroll)
     var grid := GridContainer.new(); grid.columns=5; grid.add_theme_constant_override("h_separation",12); grid.add_theme_constant_override("v_separation",12); scroll.add_child(grid)
     for cd in cards:
@@ -6187,6 +6249,264 @@ func craft_from_deck_builder(id: String) -> void:
     collection_owned[id] = owned + 1
     save_profile()
     show_deck_builder()
+
+## ── Multi-deck slot helpers ──────────────────────────────────────────────────
+
+func _migrate_saved_decks_to_slots() -> void:
+    # Migrate the old one-deck-per-class format into numbered slots (slot 0 first).
+    for cls in CLASSES:
+        var ids: Array = Array(saved_decks.get(str(cls), []))
+        if ids.is_empty():
+            continue
+        if deck_slots.size() >= MAX_DECK_SLOTS:
+            break
+        deck_slots.append({"name": "My %s Deck" % str(cls), "class": str(cls), "cards": ids.duplicate()})
+    print("DECK MIGRATION: migrated %d class deck(s) into numbered slots" % deck_slots.size())
+
+func _slot_validation_text(slot: Dictionary) -> String:
+    var cls := str(slot.get("class", ""))
+    var cards: Array = Array(slot.get("cards", []))
+    if cards.size() != 40:
+        return "Deck has %d/40 cards." % cards.size()
+    var counts: Dictionary = {}
+    for id in cards:
+        counts[str(id)] = int(counts.get(str(id), 0)) + 1
+    for id in counts.keys():
+        var cd := card_by_id(id)
+        if cd.is_empty():
+            return "Unknown card: %s" % id
+        var card_class := str(cd.get("class", ""))
+        if card_class != cls and card_class != "Neutral" and card_class != "Universal":
+            return "This card does not belong to %s: %s." % [cls, str(cd.get("name", id))]
+        var rarity := str(cd.get("rarity", "Bronze"))
+        var limit := int(COPY_LIMITS.get(rarity, 1))
+        if int(counts[id]) > limit:
+            return "Too many copies of %s (max %d)." % [str(cd.get("name", id)), limit]
+    return "DECK VALID — 40 CARDS"
+
+func _slot_is_valid(slot: Dictionary) -> bool:
+    return _slot_validation_text(slot).begins_with("DECK VALID")
+
+func _create_new_deck_slot() -> void:
+    if deck_slots.size() >= MAX_DECK_SLOTS:
+        return
+    var new_class := selected_class if selected_class != "" else "Hope"
+    deck_slots.append({"name": "New Deck %d" % (deck_slots.size() + 1), "class": new_class, "cards": []})
+    save_profile()
+    _open_slot_in_deck_builder(deck_slots.size() - 1)
+
+func _open_slot_in_deck_builder(slot_idx: int) -> void:
+    if slot_idx < 0 or slot_idx >= deck_slots.size():
+        return
+    editing_deck_slot_idx = slot_idx
+    var slot: Dictionary = deck_slots[slot_idx]
+    selected_deck_class = str(slot.get("class", selected_class if selected_class != "" else "Hope"))
+    saved_deck = Array(slot.get("cards", []))
+    show_deck_builder()
+
+func _duplicate_deck_slot(slot_idx: int) -> void:
+    if slot_idx < 0 or slot_idx >= deck_slots.size() or deck_slots.size() >= MAX_DECK_SLOTS:
+        return
+    var src: Dictionary = deck_slots[slot_idx].duplicate(true)
+    src["name"] = str(src.get("name", "Deck")) + " (Copy)"
+    deck_slots.append(src)
+    save_profile()
+    show_deck_manager()
+
+func _confirm_delete_slot(slot_idx: int) -> void:
+    if slot_idx < 0 or slot_idx >= deck_slots.size():
+        return
+    var slot_name := str(deck_slots[slot_idx].get("name", "Deck %d" % (slot_idx + 1)))
+    # Show a small confirmation overlay instead of wiping immediately.
+    var overlay := Panel.new()
+    overlay.position = Vector2(340, 220)
+    overlay.size = Vector2(600, 240)
+    overlay.add_theme_stylebox_override("panel", style(Color(0.18, 0.06, 0.06), 14))
+    overlay.z_index = 500
+    root_layer.add_child(overlay)
+    centered_label("Delete \"%s\"?" % slot_name, Vector2(30, 28), Vector2(540, 40), 22, overlay).add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
+    centered_label("This cannot be undone.", Vector2(80, 78), Vector2(440, 28), 15, overlay)
+    button("CANCEL", Vector2(100, 155), Vector2(180, 48), func(): overlay.queue_free(), overlay)
+    button("DELETE", Vector2(320, 155), Vector2(180, 48),
+        func():
+            deck_slots.remove_at(slot_idx)
+            if last_trial_deck_idx == slot_idx: last_trial_deck_idx = -1
+            elif last_trial_deck_idx > slot_idx: last_trial_deck_idx -= 1
+            if last_battle_deck_idx == slot_idx: last_battle_deck_idx = -1
+            elif last_battle_deck_idx > slot_idx: last_battle_deck_idx -= 1
+            overlay.queue_free()
+            save_profile()
+            show_deck_manager(),
+        overlay)
+
+func show_deck_manager() -> void:
+    editing_deck_slot_idx = -1
+    clear_screen(); add_background(0.72)
+    header("MY DECKS", "Up to %d saved decks • tap a slot to build, duplicate, or delete" % MAX_DECK_SLOTS)
+    button("BACK", Vector2(28, 662), Vector2(160, 42), show_home)
+
+    for i in range(MAX_DECK_SLOTS):
+        var col: int = i % 4
+        var row: int = i / 4
+        var px: float = 28.0 + col * 311.0
+        var py: float = 163.0 + row * 190.0
+        var sp := Panel.new()
+        sp.position = Vector2(px, py)
+        sp.size = Vector2(295, 172)
+
+        if i < deck_slots.size():
+            var slot: Dictionary = deck_slots[i]
+            var slot_class := str(slot.get("class", "Hope"))
+            sp.add_theme_stylebox_override("panel", style(class_color(slot_class).darkened(0.45), 12))
+            root_layer.add_child(sp)
+
+            label(str(slot.get("name", "Deck %d" % (i + 1))), Vector2(8, 7), Vector2(174, 26), 14, sp).add_theme_color_override("font_color", GOLD_COLOR)
+            label(slot_class.to_upper(), Vector2(8, 35), Vector2(130, 20), 11, sp).add_theme_color_override("font_color", class_color(slot_class).lightened(0.3))
+
+            var card_count: int = int(Array(slot.get("cards", [])).size())
+            var valid: bool = _slot_is_valid(slot)
+            var status_txt := "%d/40  •  %s" % [card_count, "VALID ✓" if valid else "INVALID"]
+            label(status_txt, Vector2(8, 55), Vector2(278, 20), 11, sp).add_theme_color_override("font_color", GOLD_COLOR if valid else Color(1.0, 0.55, 0.5))
+
+            # "in use" badges
+            if last_battle_deck_idx == i:
+                label("⚔ BATTLE DECK", Vector2(148, 7), Vector2(136, 18), 10, sp).add_theme_color_override("font_color", Color(0.55, 0.9, 1.0))
+            if last_trial_deck_idx == i:
+                label("⚡ TRIAL DECK", Vector2(148, 26), Vector2(136, 18), 10, sp).add_theme_color_override("font_color", Color(1.0, 0.82, 0.35))
+
+            var captured_i := i
+            button("EDIT", Vector2(8, 80), Vector2(80, 34), func(): _open_slot_in_deck_builder(captured_i), sp)
+            button("DUP",  Vector2(98, 80), Vector2(80, 34), func(): _duplicate_deck_slot(captured_i), sp)
+            button("DEL",  Vector2(188, 80), Vector2(80, 34), func(): _confirm_delete_slot(captured_i), sp)
+            button("⚔ BATTLES", Vector2(8, 122), Vector2(132, 38),
+                func():
+                    last_battle_deck_idx = captured_i
+                    save_profile()
+                    show_deck_manager(),
+                sp)
+            button("⚡ TRIALS", Vector2(150, 122), Vector2(132, 38),
+                func():
+                    last_trial_deck_idx = captured_i
+                    save_profile()
+                    show_deck_manager(),
+                sp)
+        else:
+            sp.add_theme_stylebox_override("panel", style(Color(0.07, 0.09, 0.14), 12))
+            root_layer.add_child(sp)
+            label("SLOT %d" % (i + 1), Vector2(10, 12), Vector2(274, 22), 12, sp).add_theme_color_override("font_color", Color(0.32, 0.32, 0.45))
+            button("+ CREATE NEW DECK", Vector2(42, 64), Vector2(210, 46), func(): _create_new_deck_slot(), sp)
+
+func show_trial_deck_picker(opponent_class: String, tier: int) -> void:
+    clear_screen(); add_background(0.72)
+    var tier_names := ["Rookie", "Challenger", "Elite", "SPONSOR BOSS"]
+    var tier_label := tier_names[clampi(tier - 1, 0, tier_names.size() - 1)]
+    header("CHOOSE YOUR DECK", "Trial vs %s — Tier %d: %s" % [opponent_class, tier, tier_label])
+
+    # ── Left panel: scrollable slot list ─────────────────────────────────────
+    var list_panel := Panel.new()
+    list_panel.position = Vector2(28, 162)
+    list_panel.size = Vector2(720, 490)
+    list_panel.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.10), 12))
+    root_layer.add_child(list_panel)
+
+    var scroll := ScrollContainer.new()
+    scroll.position = Vector2(8, 8)
+    scroll.size = Vector2(704, 474)
+    list_panel.add_child(scroll)
+    var vbox := VBoxContainer.new()
+    vbox.custom_minimum_size = Vector2(690, 0)
+    vbox.add_theme_constant_override("separation", 10)
+    scroll.add_child(vbox)
+
+    # Prebuilt starter deck option (always available)
+    var prebuilt_row := _build_trial_deck_row("STARTER DECK (%s)" % (selected_class if selected_class != "" else "Hope"),
+        selected_class if selected_class != "" else "Hope", 40, true, last_trial_deck_idx == -1)
+    prebuilt_row.pressed.connect(func():
+        last_trial_deck_idx = -1
+        save_profile()
+        show_trial_deck_picker(opponent_class, tier))
+    vbox.add_child(prebuilt_row)
+
+    for i in range(deck_slots.size()):
+        var slot: Dictionary = deck_slots[i]
+        var valid: bool = _slot_is_valid(slot)
+        var card_count: int = int(Array(slot.get("cards", [])).size())
+        var deck_name := str(slot.get("name", "Deck %d" % (i + 1)))
+        var slot_class := str(slot.get("class", "Hope"))
+        var row := _build_trial_deck_row(deck_name, slot_class, card_count, valid, last_trial_deck_idx == i)
+        var captured_i := i
+        row.pressed.connect(func():
+            last_trial_deck_idx = captured_i
+            save_profile()
+            show_trial_deck_picker(opponent_class, tier))
+        vbox.add_child(row)
+
+    if deck_slots.is_empty():
+        centered_label("No custom decks yet — go to MY DECKS to create one.", Vector2(60, 200), Vector2(590, 60), 16, list_panel)
+
+    # ── Right panel: selection info + start button ────────────────────────────
+    var info := Panel.new()
+    info.position = Vector2(765, 162)
+    info.size = Vector2(487, 490)
+    info.add_theme_stylebox_override("panel", style(Color(0.07, 0.10, 0.18), 14))
+    root_layer.add_child(info)
+
+    var chosen_name := "STARTER DECK"
+    var chosen_valid := true
+    var chosen_class := selected_class if selected_class != "" else "Hope"
+    if last_trial_deck_idx >= 0 and last_trial_deck_idx < deck_slots.size():
+        var cs: Dictionary = deck_slots[last_trial_deck_idx]
+        chosen_name = str(cs.get("name", "Deck"))
+        chosen_class = str(cs.get("class", "Hope"))
+        chosen_valid = _slot_is_valid(cs)
+
+    # Leader art
+    var art := TextureRect.new()
+    art.texture = class_leader_texture(chosen_class)
+    art.position = Vector2(130, 16)
+    art.size = Vector2(228, 170)
+    art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    art.clip_contents = true
+    info.add_child(art)
+
+    label(chosen_name, Vector2(16, 194), Vector2(455, 34), 20, info).add_theme_color_override("font_color", GOLD_COLOR)
+    label(chosen_class.to_upper(), Vector2(16, 232), Vector2(200, 26), 15, info).add_theme_color_override("font_color", class_color(chosen_class).lightened(0.3))
+
+    if not chosen_valid:
+        var vtext := ""
+        if last_trial_deck_idx >= 0 and last_trial_deck_idx < deck_slots.size():
+            vtext = _slot_validation_text(deck_slots[last_trial_deck_idx])
+        label(vtext if vtext != "" else "Invalid deck.", Vector2(16, 264), Vector2(455, 60), 13, info).add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
+
+    var trial_start_btn := button("START TRIAL", Vector2(100, 418), Vector2(287, 58),
+        func(): _do_launch_trial_battle(opponent_class, tier, last_trial_deck_idx), info)
+    trial_start_btn.disabled = not chosen_valid
+    if not chosen_valid:
+        trial_start_btn.add_theme_stylebox_override("disabled", style(Color(0.22, 0.22, 0.28), 10))
+
+    button("MY DECKS", Vector2(100, 360), Vector2(287, 48), show_deck_manager, info)
+    button("BACK", Vector2(28, 662), Vector2(160, 42), show_home)
+
+func _build_trial_deck_row(deck_name: String, deck_class: String, card_count: int, valid: bool, selected: bool) -> Button:
+    var row := Button.new()
+    row.custom_minimum_size = Vector2(690, 52)
+    row.add_theme_font_size_override("font_size", 14)
+    var row_style := StyleBoxFlat.new()
+    if selected:
+        row_style.bg_color = class_color(deck_class).darkened(0.2)
+        row_style.border_color = GOLD_COLOR
+        row_style.set_border_width_all(2)
+    else:
+        row_style.bg_color = Color(0.10, 0.13, 0.20)
+        row_style.border_color = class_color(deck_class).darkened(0.3)
+        row_style.set_border_width_all(1)
+    row_style.set_corner_radius_all(8)
+    row.add_theme_stylebox_override("normal", row_style)
+    row.text = "  %s  •  %s  •  %d/40  •  %s" % [
+        deck_class.to_upper(), deck_name, card_count, "VALID ✓" if valid else "INVALID ✗"]
+    row.add_theme_color_override("font_color", GOLD_COLOR if valid else Color(0.8, 0.5, 0.5))
+    return row
 
 func count_in_deck(id: String) -> int:
     var total:=0
