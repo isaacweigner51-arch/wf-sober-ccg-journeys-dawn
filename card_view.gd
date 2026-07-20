@@ -32,6 +32,9 @@ var _spark_timers: Array = []
 var hovering := false
 var shimmer_time := 0.0
 var idle_phase := 0.0
+var _rarity_tier_cache := -1
+var _orb_nodes: Array = []
+var _aura_time := 0.0
 var art_home := Vector2.ZERO
 var allow_reorder := false
 var show_inspect_button := false
@@ -430,6 +433,7 @@ func _build() -> void:
             bond_badge.add_theme_constant_override("shadow_offset_y", 2)
             bond_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
             frame.add_child(bond_badge)
+    _init_rarity_vfx(frame)
 
 func set_selected(value: bool) -> void:
     selected = value
@@ -437,6 +441,80 @@ func set_selected(value: bool) -> void:
     tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     tween.tween_property(self, "scale", Vector2(1.08, 1.08) if value else Vector2.ONE, 0.15)
     modulate = Color(1.1, 1.1, 0.8) if value else Color.WHITE
+
+## ── Rarity helper ─────────────────────────────────────────────────────────────
+func _rarity_tier_val() -> int:
+    if _rarity_tier_cache >= 0:
+        return _rarity_tier_cache
+    match str(data.get("rarity", "Bronze")):
+        "Silver":    _rarity_tier_cache = 1
+        "Gold":      _rarity_tier_cache = 2
+        "Epic":      _rarity_tier_cache = 3
+        "Legendary": _rarity_tier_cache = 4
+        "Platinum":  _rarity_tier_cache = 5
+        _:           _rarity_tier_cache = 0
+    # Evolved cards punch up to at least Epic tier visually
+    if bool(data.get("evolved", false)):
+        _rarity_tier_cache = maxi(_rarity_tier_cache, 3)
+    return _rarity_tier_cache
+
+## Spawn orbiting energy orbs for Legendary / Platinum cards.
+## Called at end of _build() so `frame` is available.
+func _init_rarity_vfx(frame: Control) -> void:
+    var tier := _rarity_tier_val()
+    if tier < 4 or hidden_card:
+        return
+    var orb_count := 4 if tier >= 5 else 3
+    for _i in range(orb_count):
+        var orb := ColorRect.new()
+        orb.size = Vector2(6, 6) if tier >= 5 else Vector2(5, 5)
+        orb.color = Color(1.0, 0.82, 0.28, 0.0)  # invisible until _process updates
+        orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        orb.z_index = 96
+        frame.add_child(orb)
+        _orb_nodes.append(orb)
+
+## ── Attack feel animation ──────────────────────────────────────────────────────
+## All three methods are fire-and-forget (no await).
+## Caller in main.gd controls sequencing with explicit timers.
+
+func play_attack_wind_up(lean_dir: Vector2) -> void:
+    ## Card squashes and leans AWAY from the target — builds anticipation.
+    var tier := _rarity_tier_val()
+    var sx := 0.82 if tier >= 3 else 0.86
+    var sy := 1.18 if tier >= 3 else 1.14
+    var lean := 7.0 + tier * 1.5
+    var tw := create_tween().set_parallel(true)
+    tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    tw.tween_property(self, "scale", Vector2(sx, sy), 0.10)
+    tw.tween_property(self, "position", base_position + lean_dir * lean, 0.10)
+    tw.tween_property(self, "rotation", lean_dir.x * -0.10, 0.10)
+
+func play_attack_lunge(toward_dir: Vector2) -> void:
+    ## Card stretches TOWARD the target — peak of the strike.
+    var tier := _rarity_tier_val()
+    var sx := 1.16 if tier >= 3 else 1.11
+    var sy := 0.84 if tier >= 3 else 0.89
+    var lunge := 13.0 + tier * 2.0
+    var tw := create_tween().set_parallel(true)
+    tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tw.tween_property(self, "scale", Vector2(sx, sy), 0.07)
+    tw.tween_property(self, "position", base_position + toward_dir * lunge, 0.07)
+    tw.tween_property(self, "rotation", toward_dir.x * 0.07, 0.07)
+    # Legendary / Platinum: brief bright flash at the moment of contact
+    if tier >= 4:
+        var flash_col := Color(0.75, 1.5, 1.8) if tier >= 5 else Color(1.6, 1.35, 0.65)
+        var ftw := create_tween()
+        ftw.tween_property(self, "modulate", flash_col, 0.04)
+        ftw.tween_property(self, "modulate", Color.WHITE, 0.09)
+
+func play_attack_settle() -> void:
+    ## Card eases back to its resting pose after the strike.
+    var tw := create_tween().set_parallel(true)
+    tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tw.tween_property(self, "scale",    Vector2.ONE,     0.22)
+    tw.tween_property(self, "position", base_position,   0.22)
+    tw.tween_property(self, "rotation", 0.0,             0.18)
 
 func summon_animation() -> void:
     scale = Vector2(0.18, 0.18)
@@ -456,10 +534,22 @@ func damage_flash() -> void:
     tween.tween_property(self, "modulate", Color.WHITE, 0.12)
 
 func death_animation() -> void:
-    var tween := create_tween().set_parallel(true)
-    tween.tween_property(self, "scale", Vector2(0.2, 0.2), 0.25)
-    tween.tween_property(self, "rotation", 0.35, 0.25)
-    tween.tween_property(self, "modulate:a", 0.0, 0.22)
+    var tier := _rarity_tier_val()
+    # Legendary / Platinum: brief scale burst + flash before the collapse.
+    if tier >= 4:
+        var burst := create_tween().set_parallel(true)
+        burst.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        var burst_col := Color(0.6, 1.8, 2.0) if tier >= 5 else Color(2.0, 1.6, 0.4)
+        burst.tween_property(self, "modulate", burst_col, 0.06)
+        burst.tween_property(self, "scale", Vector2(1.36, 1.36), 0.06)
+    # Collapse — delay slightly for higher rarities so burst lands first.
+    var delay := 0.07 if tier >= 4 else 0.0
+    var collapse := create_tween().set_parallel(true)
+    collapse.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+    collapse.tween_property(self, "scale",        Vector2(0.12, 0.12),            0.26).set_delay(delay)
+    collapse.tween_property(self, "rotation",     randf_range(-0.55, 0.55),       0.26).set_delay(delay)
+    collapse.tween_property(self, "modulate:a",   0.0,                            0.24).set_delay(delay)
+    collapse.tween_property(self, "modulate",     Color.WHITE,                    0.06).set_delay(delay)
 
 func phoenix_death_animation() -> void:
     # Phoenix Rising: dissolves upward into golden light rather than crumpling.
@@ -503,33 +593,46 @@ func _process(delta: float) -> void:
             suppress_next_press = true
             inspect_requested.emit(data.duplicate(true))
     shimmer_time += delta
+    _aura_time += delta
     var life_wave: float = (sin(shimmer_time * 1.8 + idle_phase) + 1.0) * 0.5
     if foil_glow != null and foil_glow.visible:
         var pulse: float = (sin(shimmer_time * 3.2) + 1.0) * 0.5
         foil_glow.color = Color(0.62 + pulse * 0.25, 0.86 + pulse * 0.10, 1.0, 0.08 + pulse * 0.12)
     if shiny_rainbow != null and shiny_rainbow.visible:
-        # Rainbow foil: slow hue cycle across the full card surface
         shiny_rainbow.color = Color.from_hsv(fmod(shimmer_time * 0.18, 1.0), 0.60, 1.0, 0.20)
-        # Sparkle dots: each flashes on its own timer at a random card position
         for _si in shiny_sparks.size():
             var _old_t: float = _spark_timers[_si]
             _spark_timers[_si] = fmod(_old_t + delta, 2.8)
             var _phase: float = _spark_timers[_si]
             var _sp: ColorRect = shiny_sparks[_si]
-            if _old_t > _phase:  # timer just wrapped — pick a new random position
+            if _old_t > _phase:
                 _sp.position = Vector2(randf_range(2.0, custom_minimum_size.x - 8.0), randf_range(2.0, custom_minimum_size.y - 8.0))
             var _bright := 0.0
             if _phase < 0.30: _bright = _phase / 0.30
             elif _phase < 0.60: _bright = 1.0 - (_phase - 0.30) / 0.30
             _sp.color = Color.from_hsv(fmod(shimmer_time * 0.4 + float(_si) * 0.1, 1.0), 0.4, 1.0, _bright * 0.92)
+    var tier := _rarity_tier_val()
     if living_glow != null:
-        living_glow.modulate.a = 0.42 + life_wave * 0.35
+        var base_alpha := 0.42 + life_wave * 0.35
+        # Epic+: deeper aura pulse layered on top
+        if tier >= 3:
+            var epic_pulse := maxf(0.0, sin(shimmer_time * 0.85 + idle_phase) * sin(shimmer_time * 2.1 + idle_phase * 0.7))
+            base_alpha += epic_pulse * 0.28
+            if bool(data.get("evolved", false)):
+                base_alpha += epic_pulse * 0.15
+        living_glow.modulate.a = base_alpha
     if art_rect != null and not hidden_card:
         var drift := Vector2(sin(shimmer_time * 0.72 + idle_phase) * 1.8, cos(shimmer_time * 0.58 + idle_phase) * 1.2)
+        # Legendary+: character floats up and down inside the art window
+        var float_y := 0.0
+        if tier >= 4:
+            float_y = sin(shimmer_time * 1.05 + idle_phase) * 3.5
+            if bool(data.get("evolved", false)):
+                float_y *= 1.5
         if hovering:
             var mouse_ratio := get_local_mouse_position() / Vector2(maxf(size.x, 1.0), maxf(size.y, 1.0)) - Vector2(0.5, 0.5)
             drift += mouse_ratio * 5.0
-        art_rect.position = art_home + drift
+        art_rect.position = art_home + drift + Vector2(0.0, float_y)
     if shine_strip != null and shine_strip.visible:
         var cycle := fmod(shimmer_time + idle_phase, 3.8)
         shine_strip.position.x = lerpf(-55.0, custom_minimum_size.x + 30.0, cycle / 3.8)
@@ -537,10 +640,40 @@ func _process(delta: float) -> void:
     if bool(data.get("can_attack", false)) and not hidden_card and not hovering:
         var attack_pulse := 1.0 + sin(shimmer_time * 3.6 + idle_phase) * 0.012
         scale = Vector2(attack_pulse, attack_pulse)
+    elif not hovering and not hidden_card and tier >= 1:
+        # Rarity-scaled breathing for idle (non-attacking) cards
+        var breath_amp := 0.0
+        match tier:
+            1: breath_amp = 0.006
+            2: breath_amp = 0.009
+            3: breath_amp = 0.011
+            _: breath_amp = 0.014  # Legendary / Platinum
+        if bool(data.get("evolved", false)):
+            breath_amp *= 1.4
+        var breath := 1.0 + sin(shimmer_time * 1.55 + idle_phase) * breath_amp
+        scale = Vector2(breath, breath)
     if hovering and not hidden_card:
         var local_mouse: Vector2 = get_local_mouse_position()
         var x_ratio: float = clampf((local_mouse.x / maxf(size.x, 1.0)) - 0.5, -0.5, 0.5)
         rotation = x_ratio * 0.10
+    # Orbiting energy orbs for Legendary / Platinum
+    if _orb_nodes.size() > 0 and not hidden_card:
+        var orb_count := _orb_nodes.size()
+        var orbit_r: float = pivot_offset.x * 0.72
+        var orb_speed := 1.5 if tier >= 5 else 1.05
+        if bool(data.get("evolved", false)):
+            orb_speed *= 1.35
+        for _oi in range(orb_count):
+            var _orb: ColorRect = _orb_nodes[_oi]
+            if not is_instance_valid(_orb):
+                continue
+            var _angle := _aura_time * orb_speed + float(_oi) * TAU / float(orb_count)
+            _orb.position = pivot_offset + Vector2(cos(_angle) * orbit_r, sin(_angle) * orbit_r * 0.42) - _orb.size * 0.5
+            var _bright := 0.52 + sin(_aura_time * 2.8 + float(_oi) * 1.3) * 0.22
+            if tier >= 5:  # Platinum: rainbow cycle
+                _orb.color = Color.from_hsv(fmod(_aura_time * 0.28 + float(_oi) * 0.33, 1.0), 0.76, 1.0, _bright)
+            else:          # Legendary: gold-orange
+                _orb.color = Color(1.0, 0.72 + sin(_aura_time * 1.8 + float(_oi)) * 0.14, 0.22, _bright)
 
 func _living_glow_style() -> StyleBoxFlat:
     var style := StyleBoxFlat.new()

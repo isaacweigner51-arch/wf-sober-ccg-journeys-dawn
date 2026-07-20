@@ -190,6 +190,7 @@ var developer_meta_deck := false
 var player_deck_mode := "custom"
 var enemy_deck_mode := "custom"
 var player_custom_deck_ids: Array = []  # set from battle_setup.cfg when mode=="custom"
+var _shake_tween: Tween = null          # screen-shake tween; killed before starting a new one
 var online_waiting_for_initial := false
 var online_match_started := false
 var online_applying_state := false
@@ -5494,30 +5495,65 @@ func perform_player_attack(target_index: int) -> void:
     busy = false; refresh_ui()
 
 func animate_attack(attacker_index: int, target_index: int, player_side: bool) -> void:
-    var area: Control = player_board_area if player_side else enemy_board_area
     if attacker_index < 0: return
+    var area: Control = player_board_area if player_side else enemy_board_area
     var view: CardView = find_card_view_for_board_index(area, attacker_index)
     if view == null: return
-    var origin: Vector2 = view.position
-    var target_pos: Vector2
-    if target_index < 0:
-        var target_leader: Control = enemy_leader if player_side else player_leader
-        target_pos = target_leader.global_position + target_leader.size * 0.5 - area.global_position
-    else:
-        var target_area: Control = enemy_board_area if player_side else player_board_area
-        var target_card: CardView = find_card_view_for_board_index(target_area, target_index)
-        if target_card == null: return
-        target_pos = target_card.global_position + target_card.size * 0.5 - area.global_position
-    view.z_index = 300
+
     var attacker_card: Dictionary = (player_board if player_side else enemy_board)[attacker_index]
+
+    # Global center of the attacker.
+    var from_center: Vector2 = view.global_position + view.size * 0.5
+
+    # Global center of the target (leader or follower).
+    var to_center: Vector2
+    if target_index < 0:
+        var tl: Control = enemy_leader if player_side else player_leader
+        to_center = tl.global_position + tl.size * 0.5
+    else:
+        var t_area: Control = enemy_board_area if player_side else player_board_area
+        var tv: CardView = find_card_view_for_board_index(t_area, target_index)
+        if tv == null: return
+        to_center = tv.global_position + tv.size * 0.5
+
+    var attack_dir: Vector2 = (to_center - from_center).normalized()
+
+    # Signature voice for platinum / flagship abilities.
     if str(attacker_card.get("ability", "")) in ["walking_free", "rally_the_free", "hope_platinum", "serenity_platinum"]:
         await play_signature_voice(str(attacker_card.get("name", "")), player_side, true)
+
     play_sfx("attack_swing_clean")
-    var tween := create_tween(); tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN); tween.tween_property(view, "position", target_pos - view.size * 0.5, 0.18); await tween.finished
+    view.z_index = 300
+
+    # 1. Wind-up: card squashes and leans away from target.
+    view.play_attack_wind_up(-attack_dir)
+    await get_tree().create_timer(0.13, true, false, true).timeout
+
+    # 2. Lunge: card stretches toward target at the moment of release.
+    view.play_attack_lunge(attack_dir)
+    await get_tree().create_timer(0.09, true, false, true).timeout
+
+    # 3. Projectile launches from the card toward the target.
+    var proj_type: String  = _projectile_type_for_card(attacker_card)
+    var rarity: String     = str(attacker_card.get("rarity", "Bronze"))
+    var travel_time: float = _launch_projectile(from_center, to_center, proj_type, rarity)
+
+    # 4. Await projectile arrival, then apply impact.
+    await get_tree().create_timer(travel_time, true, false, true).timeout
     play_sfx(attack_impact_sound(attacker_index, target_index, player_side))
+
+    var rtier: int        = _rarity_tier_int(rarity)
+    var impact_col: Color = _projectile_impact_color(proj_type, rarity)
+    _screen_shake(3.0 + rtier * 1.6, 0.28)
+    _spawn_impact_sparks(to_center, impact_col, 6 + rtier * 2)
+
+    # 5. Combat resolves on impact.
     await resolve_combat(attacker_index, target_index, player_side)
+
+    # 6. Card settles back to idle pose.
     if is_instance_valid(view):
-        var back := create_tween(); back.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT); back.tween_property(view, "position", origin, 0.20); await back.finished
+        view.play_attack_settle()
+        view.z_index = 0
 
 func animate_enemy_attack(attacker_index: int, target_index: int) -> void:
     if attacker_index < 0 or attacker_index >= enemy_board.size(): return
@@ -5631,8 +5667,13 @@ func destroy_unit(board: Array, index: int, player_side: bool, specifically_targ
     var area := player_board_area if player_side else enemy_board_area
     var dead_view: CardView = find_card_view_for_board_index(area, index)
     if dead_view != null:
+        # Death impact burst — rarity-scaled spark shower before the card collapses.
+        var death_center := dead_view.global_position + dead_view.size * 0.5
+        var dead_rarity  := str(dead.get("rarity", "Bronze"))
+        _spawn_impact_sparks(death_center, _projectile_impact_color("punch", dead_rarity),
+            8 + _rarity_tier_int(dead_rarity) * 3)
         dead_view.death_animation()
-        await get_tree().create_timer(0.23).timeout
+        await get_tree().create_timer(0.30, true, false, true).timeout
     training_on_follower_lost(player_side)
     board.remove_at(index)
     var relapse_zone: Array = player_relapse if player_side else enemy_relapse
@@ -6221,6 +6262,160 @@ func _return_to_main_menu() -> void:
     var err := get_tree().change_scene_to_file("res://main.tscn")
     if err != OK:
         push_error("Could not return to main menu: %s" % err)
+
+## ── Combat VFX helpers ────────────────────────────────────────────────────────
+
+func _rarity_tier_int(rarity: String) -> int:
+    match rarity:
+        "Silver":    return 1
+        "Gold":      return 2
+        "Epic":      return 3
+        "Legendary": return 4
+        "Platinum":  return 5
+    return 0
+
+func _projectile_type_for_card(card: Dictionary) -> String:
+    if bool(card.get("is_spell", false)):
+        return "spell"
+    var ability := str(card.get("ability", ""))
+    if ability.contains("burn") or ability.contains("fire"):
+        return "fire"
+    if ability.contains("lightning") or ability.contains("storm"):
+        return "lightning"
+    match str(card.get("faction", card.get("class", ""))):
+        "Courage": return "slash"
+        "Hope":    return "energy"
+        "Serenity":return "wave"
+        "Purpose": return "punch"
+    return "punch"
+
+func _projectile_symbol(proj_type: String) -> String:
+    match proj_type:
+        "slash":     return "✕"
+        "energy":    return "✦"
+        "wave":      return "≋"
+        "spell":     return "◆"
+        "fire":      return "★"
+        "lightning": return "✦"
+        "punch":     return "●"
+    return "●"
+
+func _projectile_impact_color(proj_type: String, rarity: String) -> Color:
+    var base: Color
+    match proj_type:
+        "slash":     base = Color(1.0, 0.36, 0.14)
+        "energy":    base = Color(0.38, 0.76, 1.0)
+        "wave":      base = Color(0.22, 0.90, 0.80)
+        "spell":     base = Color(0.72, 0.32, 1.0)
+        "fire":      base = Color(1.0, 0.52, 0.08)
+        "lightning": base = Color(0.95, 0.98, 0.28)
+        "punch":     base = Color(1.0, 0.68, 0.22)
+        _:           base = Color(1.0, 0.85, 0.35)
+    return base.lightened(_rarity_tier_int(rarity) * 0.06)
+
+## Spawns a projectile that travels from `from_global` to `to_global`.
+## Returns the travel duration so the caller can await it.
+## Does NOT await internally — fire-and-forget.
+func _launch_projectile(from_global: Vector2, to_global: Vector2, proj_type: String, rarity: String) -> float:
+    var dist: float      = from_global.distance_to(to_global)
+    var travel: float    = clampf(dist / 900.0, 0.14, 0.32)
+    var rtier: int       = _rarity_tier_int(rarity)
+    var base_col: Color  = _projectile_impact_color(proj_type, rarity)
+    var proj_sz: float   = 11.0 + rtier * 3.5
+
+    # ── Main projectile node ───────────────────────────────────────────────
+    var proj := Panel.new()
+    proj.size    = Vector2(proj_sz, proj_sz)
+    proj.position = from_global - proj.size * 0.5
+    proj.z_index = 850
+    var pst := StyleBoxFlat.new()
+    pst.bg_color   = base_col
+    pst.set_corner_radius_all(int(proj_sz * 0.5))
+    pst.shadow_color = base_col.lightened(0.35)
+    pst.shadow_size  = 4 + rtier * 2
+    proj.add_theme_stylebox_override("panel", pst)
+    var sym := Label.new()
+    sym.text = _projectile_symbol(proj_type)
+    sym.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    sym.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    sym.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+    sym.add_theme_font_size_override("font_size", int(proj_sz * 0.85))
+    sym.add_theme_color_override("font_color", Color.WHITE)
+    sym.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    proj.add_child(sym)
+    if not safe_add_child(self, proj):
+        return travel
+
+    # ── Ghost trail (static fading copies along the path) ─────────────────
+    var trail_count := mini(2 + rtier, 6)
+    for _ti in range(trail_count):
+        var t_frac := float(_ti + 1) / float(trail_count + 1)
+        var g_pos: Vector2 = from_global.lerp(to_global, t_frac * 0.28)
+        var g_sz: float    = proj_sz * (1.0 - t_frac * 0.5)
+        var ghost := ColorRect.new()
+        ghost.size  = Vector2(g_sz, g_sz)
+        ghost.color = Color(base_col.r, base_col.g, base_col.b, 0.55 * (1.0 - t_frac * 0.45))
+        ghost.position = g_pos - ghost.size * 0.5
+        ghost.z_index  = 840
+        ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        if safe_add_child(self, ghost):
+            var delay := travel * t_frac * 0.32
+            var gtw := create_tween()
+            gtw.tween_interval(delay)
+            gtw.tween_property(ghost, "modulate:a", 0.0, travel * 0.55)
+            get_tree().create_timer(delay + travel * 0.65, true, false, true).timeout.connect(
+                func(): if is_instance_valid(ghost): ghost.queue_free())
+
+    # ── Travel tween ───────────────────────────────────────────────────────
+    var ptw := create_tween()
+    ptw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+    ptw.tween_property(proj, "position", to_global - proj.size * 0.5, travel)
+
+    # Impact burst: scale up + fade just before arriving
+    get_tree().create_timer(travel - 0.05, true, false, true).timeout.connect(func():
+        if not is_instance_valid(proj): return
+        var burst := create_tween().set_parallel(true)
+        burst.tween_property(proj, "scale",       Vector2(2.6 + rtier * 0.4, 2.6 + rtier * 0.4), 0.12)
+        burst.tween_property(proj, "modulate:a",  0.0,                                             0.11))
+
+    get_tree().create_timer(travel + 0.18, true, false, true).timeout.connect(
+        func(): if is_instance_valid(proj): proj.queue_free())
+
+    return travel
+
+## Spawns `count` spark fragments flying outward from `at_global`.
+func _spawn_impact_sparks(at_global: Vector2, color: Color, count: int) -> void:
+    for _si in range(count):
+        var spark := ColorRect.new()
+        var sz := randf_range(3.5, 7.5)
+        spark.size     = Vector2(sz, sz)
+        spark.color    = color.lightened(randf_range(-0.1, 0.35))
+        spark.position = at_global - spark.size * 0.5
+        spark.z_index  = 870
+        spark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        if not safe_add_child(self, spark): continue
+        var angle := float(_si) * TAU / float(count) + randf_range(-0.45, 0.45)
+        var speed := randf_range(52.0, 140.0)
+        var vel   := Vector2(cos(angle), sin(angle)) * speed
+        var life  := randf_range(0.28, 0.55)
+        var stw := create_tween().set_parallel(true)
+        stw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+        stw.tween_property(spark, "position",    at_global + vel * life - spark.size * 0.5, life)
+        stw.tween_property(spark, "modulate:a",  0.0,                                       life)
+        get_tree().create_timer(life + 0.06, true, false, true).timeout.connect(
+            func(): if is_instance_valid(spark): spark.queue_free())
+
+## Shakes the root Control (which shakes the whole battle scene) for `duration` seconds.
+func _screen_shake(intensity: float, duration: float) -> void:
+    if is_instance_valid(_shake_tween): _shake_tween.kill()
+    var origin := Vector2.ZERO
+    _shake_tween = create_tween()
+    var steps := 8
+    var step_t := duration / float(steps)
+    for _i in range(steps):
+        var off := Vector2(randf_range(-intensity, intensity), randf_range(-intensity * 0.55, intensity * 0.55))
+        _shake_tween.tween_property(self, "position", origin + off, step_t)
+    _shake_tween.tween_property(self, "position", origin, step_t * 0.5)
 
 func show_vfx(text_value: String, world_pos: Vector2, color: Color) -> void:
     var label := Label.new(); label.text = text_value; label.position = world_pos; label.z_index = 900; label.add_theme_font_size_override("font_size", ui_font(31)); label.add_theme_color_override("font_color", color); label.add_theme_color_override("font_shadow_color", Color.BLACK); label.add_theme_constant_override("shadow_offset_x", 3); label.add_theme_constant_override("shadow_offset_y", 3)
