@@ -1615,7 +1615,7 @@ func maybe_show_whats_new() -> void:
             if not str(item).to_upper().contains("EASTER"):
                 clean_items.append(item)
         if not clean_items.is_empty():
-            var sc := sec.duplicate()
+            var sc: Dictionary = sec.duplicate()
             sc["items"] = clean_items
             clean_sections.append(sc)
     if clean_sections.is_empty() and new_cards.is_empty() and upcoming.is_empty():
