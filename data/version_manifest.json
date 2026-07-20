@@ -1,13 +1,13 @@
 {
-  "version": "0.9.0",
-  "build_name": "Deck Master",
+  "version": "0.9.1",
+  "build_name": "Combat Weight",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Multi-deck slots, trial deck picker, combat animations, and Hope balance pass.",
+  "notes": "Full animation polish pass — combat weight, hit stop, directional shake, art lunge, damage numbers, evolution shockwave, Legendary/Platinum presence.",
   "required": false,
-  "version_code": "0.9.0",
-  "version_name": "0.9.0",
+  "version_code": "0.9.1",
+  "version_name": "0.9.1",
   "card_count": 195,
 
   "sections": [
@@ -21,6 +21,23 @@
       ]
     },
     {
+      "category": "Animation Polish",
+      "items": [
+        "Hit stop — every attack freezes for 0.04–0.07 s on impact before damage resolves, making hits feel heavier.",
+        "Directional screen shake — shake now pushes toward the point of impact then rebounds, scaled by rarity (Bronze: barely perceptible → Platinum: satisfying).",
+        "Art lunge — the card's artwork zooms and shifts inside the frame during the strike; the character looks like it's pressing forward.",
+        "Damage numbers redesigned — pop in large, spring-bounce to natural size, drift upward, fade smoothly. Heavy or rarity-scaled hits display in gold at a larger size.",
+        "Projectiles accelerate with cubic easing, brighten at 72% of travel, and burst larger on arrival.",
+        "Impact package: bright central flash + expanding shockwave ring added to every hit.",
+        "Idle animations locked during combat — breathing, float, and orbiting orbs pause cleanly while a card attacks or dies, then resume.",
+        "Buff flash — stat increases trigger a scale-pop and colored glow on the affected card with a floating stat label.",
+        "Healing particles, recovery sparkle burst, and relapse entry wisp added to matching game events.",
+        "Evolution shockwave — all four evolution tiers (Standard, Epic, Legendary, Platinum) fire an expanding ring on completion.",
+        "Legendary and Platinum followers now stand out in idle with larger orbiting dots, wider orbit radius, brighter halos, and rarity-scaled border glow.",
+        "Graphics quality levels (Low / Medium / High) gate spark counts, orb rendering, and ring VFX for performance."
+      ]
+    },
+    {
       "category": "Balance Changes",
       "items": [
         "Hope class — 10-card buff pass improving healing synergy, leader-heal triggers, and late-game power.",
@@ -31,13 +48,8 @@
       "category": "Bug Fixes",
       "items": [
         "Courage 'Never Quit' survive-buff (Never Quit, JD-023, JD-089, JD-146) now triggers correctly after a unit survives lethal damage.",
-        "Battle deck mode now correctly routes custom slot decks into the fight — no more falling back to the class prebuilt silently."
-      ]
-    },
-    {
-      "category": "Audio / Visual",
-      "items": [
-        "Damage flash, healing glow, ward-break burst, and card-draw VFX added to all combat sequences."
+        "Battle deck mode now correctly routes custom slot decks into the fight — no more falling back to the class prebuilt silently.",
+        "Art clipped inside card frame — Legendary float and parallax drift can no longer overflow the card border."
       ]
     }
   ],
