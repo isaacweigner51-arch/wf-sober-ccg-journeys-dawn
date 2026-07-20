@@ -1045,17 +1045,39 @@ func _serialize_profile_for_cloud() -> Dictionary:
         "meta": {"last_seen_whats_new_version": last_seen_whats_new_version}
     }
 
-func _apply_cloud_profile(data: Dictionary) -> void:
+## Safely coerce any Variant to bool without crashing on null.
+## ConfigFile.get_value() returns null when the key is missing; GDScript's
+## bool() constructor cannot accept null and throws "Invalid call. Nonexistent
+## 'bool' constructor." Use this helper wherever a ConfigFile value may be null.
+func _safe_bool(v: Variant) -> bool:
+    if v == null:
+        return false
+    if v is bool:
+        return v
+    if v is int or v is float:
+        return v != 0
+    return false
+
+## Merge cloud save Dictionary into the local ConfigFile.
+## Returns true on success, false if anything goes wrong.
+## The caller MUST NOT upload to Supabase when this returns false.
+func _apply_cloud_profile(data: Dictionary) -> bool:
     # Merge cloud data into the local ConfigFile, never downgrading progress.
     # Rule: local wins whenever it represents MORE progress than the cloud value.
     if data.is_empty():
-        return
+        return true
+
+    if not (data is Dictionary):
+        push_error("CLOUD MERGE: data is not a Dictionary — aborting merge")
+        return false
+
     var cfg := ConfigFile.new()
     cfg.load(SAVE_PATH)
 
     for section in data.keys():
         var sec_data: Variant = data[section]
         if not (sec_data is Dictionary):
+            push_warning("CLOUD MERGE: section '%s' value is not a Dictionary (got %s) — skipping" % [section, typeof(sec_data)])
             continue
         for key in sec_data.keys():
             var cloud_val: Variant = sec_data[key]
@@ -1063,10 +1085,10 @@ func _apply_cloud_profile(data: Dictionary) -> void:
 
             # ── Never regress boolean progress flags ──────────────────────────
             if section == "academy" and key in ["complete", "reward_claimed"]:
-                cfg.set_value(section, key, bool(local_val) or bool(cloud_val))
+                cfg.set_value(section, key, _safe_bool(local_val) or _safe_bool(cloud_val))
                 continue
             if section == "trials" and key in ["sponsor_leader_unlocked", "sponsor_sleeve_unlocked", "sponsor_defeated"]:
-                cfg.set_value(section, key, bool(local_val) or bool(cloud_val))
+                cfg.set_value(section, key, _safe_bool(local_val) or _safe_bool(cloud_val))
                 continue
 
             # ── Never regress numeric progress counters ───────────────────────
@@ -1106,8 +1128,13 @@ func _apply_cloud_profile(data: Dictionary) -> void:
             # ── All other fields: cloud wins (deck config, daily state, etc.) ─
             cfg.set_value(section, key, cloud_val)
 
-    cfg.save(SAVE_PATH)
-    print("CLOUD: merged save data (progress-safe)")
+    var save_err := cfg.save(SAVE_PATH)
+    if save_err != OK:
+        push_error("CLOUD MERGE: cfg.save() failed with error %d — local file unchanged, aborting upload" % save_err)
+        return false
+
+    print("CLOUD MERGE: merged save data successfully (progress-safe)")
+    return true
 
 func _on_cloud_save_loaded(data: Dictionary) -> void:
     # ── Log local save state before any merge ─────────────────────────────────
@@ -1136,7 +1163,11 @@ func _on_cloud_save_loaded(data: Dictionary) -> void:
 
     # Remote save found — merge with local, local wins on all progress fields.
     print("CLOUD SYNC ── action : applying cloud save (local wins on progress)")
-    _apply_cloud_profile(data)
+    var merge_ok := _apply_cloud_profile(data)
+    if not merge_ok:
+        push_error("CLOUD SYNC: merge failed — upload ABORTED to protect cloud data")
+        print("CLOUD SYNC ── UPLOAD BLOCKED: merge error, cloud data preserved unchanged")
+        return
     load_profile() # Re-read merged result from disk into memory.
     print("CLOUD SYNC ── after  : gold=%d vials=%d packs=%d cards=%d trials=%d" % [
         gold_balance, dust_balance, pack_inventory, collection_owned.size(),
