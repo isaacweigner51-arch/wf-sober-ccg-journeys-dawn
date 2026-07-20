@@ -332,7 +332,8 @@ func _request(method: int, path: String, body: Variant = null, authenticated := 
     var http := HTTPRequest.new()
     add_child(http)
     var payload := "" if body == null else JSON.stringify(body)
-    var method_name := ["GET","POST","PUT","PATCH","DELETE"].get(method, str(method))
+    var _method_names := ["GET","POST","PUT","PATCH","DELETE"]
+    var method_name: String = _method_names[method] if method < _method_names.size() else str(method)
     print("REQUEST ── %s %s  payload_len=%d  auth=%s" % [method_name, path.left(80), payload.length(), str(authenticated)])
     var err := http.request(SUPABASE_URL + path, _headers(authenticated, prefer), method, payload)
     if err != OK:
