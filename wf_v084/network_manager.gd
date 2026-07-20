@@ -332,22 +332,48 @@ func _request(method: int, path: String, body: Variant = null, authenticated := 
     var http := HTTPRequest.new()
     add_child(http)
     var payload := "" if body == null else JSON.stringify(body)
-    var _method_names := ["GET","POST","PUT","PATCH","DELETE"]
+    # Godot HTTPClient.Method: GET=0 HEAD=1 POST=2 PUT=3 DELETE=4 OPTIONS=5 TRACE=6 CONNECT=7 PATCH=8
+    var _method_names := ["GET","HEAD","POST","PUT","DELETE","OPTIONS","TRACE","CONNECT","PATCH"]
     var method_name: String = _method_names[method] if method < _method_names.size() else str(method)
-    print("REQUEST ── %s %s  payload_len=%d  auth=%s" % [method_name, path.left(80), payload.length(), str(authenticated)])
-    var err := http.request(SUPABASE_URL + path, _headers(authenticated, prefer), method, payload)
+    var full_url: String = SUPABASE_URL + path
+    print("REQUEST ── %s %s" % [method_name, full_url])
+    print("REQUEST ── base_url='%s'  starts_https=%s  payload_len=%d" % [
+        SUPABASE_URL, str(SUPABASE_URL.begins_with("https://")), payload.length()])
+    var err := http.request(full_url, _headers(authenticated, prefer), method, payload)
+    print("REQUEST ── http.request() returned  err=%d  (%s)" % [err, error_string(err) if err != OK else "OK"])
     if err != OK:
-        print("REQUEST ── FAILED TO START  err=%d  path=%s" % [err, path])
         http.queue_free()
         request_busy = false
-        return {"ok":false, "status":0, "error":"Request could not start (%d)." % err}
+        return {"ok":false, "status":0, "error":"Request could not start: %s (%d)." % [error_string(err), err]}
     var completed: Array = await http.request_completed
     http.queue_free()
     request_busy = false
+    # completed[0] = HTTPRequest.Result (Godot-level result code)
+    # completed[1] = HTTP response code (0 if connection never established)
+    var godot_result := int(completed[0])
     var status := int(completed[1])
     var raw: PackedByteArray = completed[3]
     var text := raw.get_string_from_utf8()
-    print("REQUEST ── response  status=%d  body_len=%d" % [status, text.length()])
+    var godot_result_name: String = {
+        0: "RESULT_SUCCESS",
+        1: "RESULT_CHUNKED_BODY_SIZE_MISMATCH",
+        2: "RESULT_CANT_CONNECT",
+        3: "RESULT_CANT_RESOLVE",
+        4: "RESULT_CONNECTION_ERROR",
+        5: "RESULT_TLS_HANDSHAKE_ERROR",
+        6: "RESULT_NO_RESPONSE",
+        7: "RESULT_BODY_SIZE_LIMIT_EXCEEDED",
+        8: "RESULT_BODY_DECOMPRESS_FAILED",
+        9: "RESULT_REQUEST_FAILED",
+        10: "RESULT_DOWNLOAD_FILE_CANT_OPEN",
+        11: "RESULT_DOWNLOAD_FILE_WRITE_ERROR",
+        12: "RESULT_REDIRECT_LIMIT_REACHED",
+        13: "RESULT_TIMEOUT"
+    }.get(godot_result, "RESULT_UNKNOWN_%d" % godot_result)
+    print("REQUEST ── response  godot_result=%d (%s)  http_status=%d  body_len=%d" % [
+        godot_result, godot_result_name, status, text.length()])
+    if godot_result != 0:
+        print("REQUEST ── NON-SUCCESS RESULT: %s — body: %s" % [godot_result_name, text.left(300)])
     var parsed: Variant = null
     if not text.is_empty():
         parsed = JSON.parse_string(text)
