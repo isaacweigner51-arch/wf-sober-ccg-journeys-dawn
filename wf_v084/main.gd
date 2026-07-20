@@ -1626,6 +1626,7 @@ func leader_feedback(leader: Control, damage: int, healing: bool = false) -> voi
         tween.tween_property(leader, "modulate", Color(0.55, 1.35, 0.70), 0.10)
         tween.tween_property(leader, "modulate", Color.WHITE, 0.22)
         leader_emote(leader, "♥", Color(0.55, 1.0, 0.70))
+        _spawn_heal_particles(leader.global_position + leader.size * 0.5)
     else:
         tween.tween_property(leader, "modulate", Color(1.65, 0.35, 0.35), 0.06)
         tween.tween_property(leader, "position", start + Vector2(10, 0), 0.04)
@@ -4500,12 +4501,15 @@ func apply_sanctuary_serenity_buff(player_side: bool) -> void:
             break
     if not has_sanctuary:
         return
-    for ally in board:
+    var area_sct: Control = player_board_area if player_side else enemy_board_area
+    for i in range(board.size()):
+        var ally: Dictionary = board[i]
         if bool(ally.get("is_amulet", false)):
             continue
         ally["attack"] = int(ally.get("attack", 0)) + 1
         ally["health"] = int(ally.get("health", 0)) + 1
         ally["max_health"] = int(ally.get("max_health", ally.get("health", 0))) + 1
+        show_buff_flash(find_card_view_for_board_index(area_sct, i), "+1/+1", Color(0.55, 0.9, 1.0))
         await show_vfx("SANCTUARY — ALLY +1/+1", area_center(player_side), Color(0.55, 0.9, 1.0))
         return
 
@@ -5001,11 +5005,14 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
         var gained := (player_max_mana if player_side else enemy_max_mana) > turn_number
         if gained:
             var allies: Array = player_board if player_side else enemy_board
-            for ally in allies:
+            var area_sg: Control = player_board_area if player_side else enemy_board_area
+            for i in range(allies.size()):
+                var ally: Dictionary = allies[i]
                 if ally == unit: continue
                 ally["attack"] = int(ally.get("attack", 0)) + 1
                 ally["health"] = int(ally.get("health", 0)) + 1
                 ally["max_health"] = int(ally.get("max_health", ally.get("health", 0))) + 1
+                show_buff_flash(find_card_view_for_board_index(area_sg, i), "+1/+1", Color(0.85, 0.72, 1.0))
                 break
             await show_vfx("GUIDANCE +1/+1", area_center(player_side), Color(0.85, 0.72, 1.0))
     elif ability == "small_steps":
@@ -5105,11 +5112,15 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
             await show_vfx("CIRCLE OF SUPPORT: ALL ALLIES +0/+1", area_center(player_side), Color(0.45, 0.9, 0.65))
     elif ability in ["buff_all", "buff_all_attack"]:
         var allies: Array = player_board if player_side else enemy_board
-        for ally in allies:
+        var area_ba: Control = player_board_area if player_side else enemy_board_area
+        for i in range(allies.size()):
+            var ally: Dictionary = allies[i]
             if ally == unit: continue
             ally["attack"] = int(ally["attack"]) + amount
             if ability == "buff_all":
                 ally["health"] = int(ally["health"]) + amount; ally["max_health"] = int(ally["max_health"]) + amount
+            var buff_str_ba := "+%d/+%d" % [amount, amount] if ability == "buff_all" else "+%d ATK" % amount
+            show_buff_flash(find_card_view_for_board_index(area_ba, i), buff_str_ba, Color(1.0, 0.76, 0.25))
         await show_vfx("RALLY", area_center(player_side), Color(1.0, 0.76, 0.25))
     elif ability == "damage_unit":
         var foes: Array = enemy_board if player_side else player_board
@@ -5410,7 +5421,10 @@ func recover_from_relapse(player_side: bool, mode: String, amount: int) -> void:
             recovered["attack"] = int(recovered["attack"]) + amount; recovered["health"] = int(recovered["health"]) + amount; recovered["max_health"] = int(recovered["max_health"]) + amount
         board.append(recovered)
     await trigger_leader_recovery_progress(player_side, "second_chances")
-    await show_vfx("RECOVERY", area_center(player_side), Color(1.0, 0.78, 0.35))
+    spawn_sparkle_burst(area_center(player_side),
+        6 if CardView.graphics_quality >= 1 else 3,
+        [Color(1.0, 0.82, 0.35), Color(0.55, 0.95, 1.0)], self, 55.0)
+    await show_vfx("RECOVERY ✦", area_center(player_side), Color(1.0, 0.78, 0.35))
 
 func clear_battlefield_except(source: Dictionary, source_player_side: bool) -> void:
     for i in range(enemy_board.size() - 1, -1, -1):
@@ -5674,6 +5688,7 @@ func destroy_unit(board: Array, index: int, player_side: bool, specifically_targ
             8 + _rarity_tier_int(dead_rarity) * 3)
         dead_view.death_animation()
         await get_tree().create_timer(0.30, true, false, true).timeout
+        _spawn_relapse_entry_vfx(death_center, player_side)
     training_on_follower_lost(player_side)
     board.remove_at(index)
     var relapse_zone: Array = player_relapse if player_side else enemy_relapse
@@ -6346,8 +6361,9 @@ func _launch_projectile(from_global: Vector2, to_global: Vector2, proj_type: Str
     if not safe_add_child(self, proj):
         return travel
 
-    # ── Ghost trail (static fading copies along the path) ─────────────────
-    var trail_count := mini(2 + rtier, 6)
+    # ── Ghost trail — count scales with graphics quality ──────────────────
+    var trail_max := mini(2 + rtier, 6)
+    var trail_count := maxi(0, int(float(trail_max) * ([0.25, 0.6, 1.0] as Array)[CardView.graphics_quality]))
     for _ti in range(trail_count):
         var t_frac := float(_ti + 1) / float(trail_count + 1)
         var g_pos: Vector2 = from_global.lerp(to_global, t_frac * 0.28)
@@ -6385,7 +6401,9 @@ func _launch_projectile(from_global: Vector2, to_global: Vector2, proj_type: Str
 
 ## Spawns `count` spark fragments flying outward from `at_global`.
 func _spawn_impact_sparks(at_global: Vector2, color: Color, count: int) -> void:
-    for _si in range(count):
+    var q_scale: float = ([0.35, 0.65, 1.0] as Array)[CardView.graphics_quality]
+    var actual := maxi(1, int(float(count) * q_scale))
+    for _si in range(actual):
         var spark := ColorRect.new()
         var sz := randf_range(3.5, 7.5)
         spark.size     = Vector2(sz, sz)
@@ -6416,6 +6434,66 @@ func _screen_shake(intensity: float, duration: float) -> void:
         var off := Vector2(randf_range(-intensity, intensity), randf_range(-intensity * 0.55, intensity * 0.55))
         _shake_tween.tween_property(self, "position", origin + off, step_t)
     _shake_tween.tween_property(self, "position", origin, step_t * 0.5)
+
+## Floating "+N/+N" text rising off a card + brief scale-pop on the card itself.
+## Call anywhere a live board follower gets a permanent stat increase.
+func show_buff_flash(card_view: CardView, stat_text: String, color: Color) -> void:
+    if not is_instance_valid(card_view):
+        return
+    card_view.play_buff_vfx(stat_text, color)
+    # Floating label drifts up from the card centre so it clears any board UI.
+    var lbl := Label.new()
+    lbl.text = stat_text
+    lbl.z_index = 1600
+    lbl.add_theme_font_size_override("font_size", ui_font(22))
+    lbl.add_theme_color_override("font_color", color)
+    lbl.add_theme_color_override("font_shadow_color", Color.BLACK)
+    lbl.add_theme_constant_override("shadow_offset_x", 2)
+    lbl.add_theme_constant_override("shadow_offset_y", 2)
+    lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var start_pos := card_view.global_position + Vector2(card_view.size.x * 0.5 - 24, -8)
+    lbl.position = start_pos
+    if not safe_add_child(self, lbl): return
+    var tw := create_tween().set_parallel(true)
+    tw.tween_property(lbl, "position:y", start_pos.y - 42, 0.80)
+    tw.tween_property(lbl, "modulate:a", 0.0, 0.65).set_delay(0.22)
+    tw.finished.connect(lbl.queue_free)
+
+## Upward-drifting heart particles for leader healing VFX.
+func _spawn_heal_particles(origin: Vector2) -> void:
+    var count := 5 if CardView.graphics_quality >= 2 else 3
+    for i in range(count):
+        var p := Label.new()
+        p.text = "♥"
+        p.add_theme_font_size_override("font_size", ui_font(13 + (i % 3) * 4))
+        p.add_theme_color_override("font_color", Color(0.42, 1.0, 0.62, 0.90))
+        p.z_index = 650
+        p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        p.position = origin + Vector2(randf_range(-24, 24), randf_range(-10, 10))
+        if not safe_add_child(self, p): continue
+        var dest := Vector2(p.position.x + randf_range(-16, 16), p.position.y - randf_range(42, 72))
+        var tw := create_tween().set_parallel(true)
+        tw.tween_property(p, "position", dest, 0.72)
+        tw.tween_property(p, "modulate:a", 0.0, 0.68).set_delay(0.10)
+        tw.finished.connect(p.queue_free)
+
+## Dark wisp that drifts toward the relapse zone when a follower is destroyed.
+func _spawn_relapse_entry_vfx(origin: Vector2, player_side: bool) -> void:
+    if CardView.graphics_quality == 0:
+        return
+    var ghost := Label.new()
+    ghost.text = "↓"
+    ghost.add_theme_font_size_override("font_size", ui_font(20))
+    ghost.add_theme_color_override("font_color", Color(0.55, 0.42, 0.72, 0.80))
+    ghost.z_index = 520
+    ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ghost.position = origin
+    if not safe_add_child(self, ghost): return
+    var drift_y := origin.y + (58.0 if player_side else -58.0)
+    var tw := create_tween().set_parallel(true)
+    tw.tween_property(ghost, "position:y", drift_y, 0.60)
+    tw.tween_property(ghost, "modulate:a", 0.0, 0.55).set_delay(0.08)
+    tw.finished.connect(ghost.queue_free)
 
 func show_vfx(text_value: String, world_pos: Vector2, color: Color) -> void:
     var label := Label.new(); label.text = text_value; label.position = world_pos; label.z_index = 900; label.add_theme_font_size_override("font_size", ui_font(31)); label.add_theme_color_override("font_color", color); label.add_theme_color_override("font_shadow_color", Color.BLACK); label.add_theme_constant_override("shadow_offset_x", 3); label.add_theme_constant_override("shadow_offset_y", 3)
@@ -6646,6 +6724,7 @@ func _check_survive_buff(board: Array, index: int, unit_player_side: bool, damag
     var buff_str := "+%d/+%d" % [atk_gain, hp_gain] if (atk_gain > 0 and hp_gain > 0) \
         else ("+%d ATK" % atk_gain if hp_gain == 0 else "+%d HP" % hp_gain)
     var area: Control = player_board_area if unit_player_side else enemy_board_area
+    show_buff_flash(find_card_view_for_board_index(area, index), buff_str, Color(1.0, 0.85, 0.25))
     await show_vfx(buff_str, area.global_position + Vector2(90 + index * 145, -20), Color(1.0, 0.85, 0.25))
 
 ## ── Attack drag-line overlay ──────────────────────────────────────────────────
