@@ -1,125 +1,50 @@
 {
-  "version": "0.8.33",
-  "build": "Shiny Horizons",
+  "version": "0.9.0",
+  "build_name": "Deck Master",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Cloud save, class-aware recovery tutorial, and Collection screen layout polish.",
+  "notes": "Multi-deck slots, trial deck picker, combat animations, and Hope balance pass.",
   "required": false,
-  "version_code": "0.8.33",
-  "build_name": "Shiny Horizons",
+  "version_code": "0.9.0",
+  "version_name": "0.9.0",
   "card_count": 195,
-  "version_name": "0.8.33",
-  "fixes": [
-    "Cloud save — signing into your account now restores your full collection, deck, academy progress, and Vials on any device.",
-    "New account profile rows are created automatically on first email sign-in — no more silent failures after account creation.",
-    "Recovery Academy lesson 6 (Recovery & Revive) now shows your class's own recovery skill instead of always using Hope's revive — Courage learns Face It Head-On, Serenity learns Sanctuary of Serenity, Purpose learns Daily Progress.",
-    "Evolution blocked until Turn 4 — orbs are greyed out and an error message appears if you try earlier.",
-    "Tutorial lesson 6 (Recovery & Revive) freeze fixed — Hope path now correctly waits for the enemy to attack before prompting the revive.",
-    "Collection screen layout rebuilt — craft-cost guide and currency panel no longer overlap; search, filters, and card binder each sit in their own row.",
-    "Epic craft cost updated to 2,500 Vials. Legendary craft cost updated to 3,500 Vials.",
-    "CREATE buttons throughout Collection and Deck Builder now show formatted costs with commas (e.g. 2,500)."
-  ],
-  "features": [
-    "Reduced Legendaries to 3 per class; added 7 Bronze and 5 Silver per class",
-    "Academy Lesson 1 redesigned \u2014 visual zone tiles, no walls of text, progression fixed.",
-    "Recovery Academy rebuilt \u2014 6 lessons now run inside real battles with live followers.",
-    "Class balance complete \u2014 all 4 classes now even: 6 Bronze / 5 Silver / 7 Gold / 6 Epic / 5 Legendary / 1 Platinum each (147 cards total).",
-    "The Sponsor shiny art updated \u2014 holographic platinum light rays and rainbow iridescence.",
-    "Sponsor Evolution cinematic \u2014 moody diner backdrop plays when The Sponsor evolves.",
-    "Sponsor Trial reward \u2014 defeating The Sponsor for the first time awards a Shiny Platinum copy.",
-    "Walking Free (JD-060) cost lowered from 10 to 6.",
-    "The Undaunted (JD-140) art corrected \u2014 clean look, no tattoos.",
-    "Tutorial overlay \u2014 mentor banner stays at top of battle screen during Academy lessons.",
-    "Lesson progression \u2014 completing a battle lesson auto-returns you to the Academy."
-  ],
-  "features": [
-    "CLOUD SAVE \u2014 Your account now backs up your full game state to the cloud automatically after every save. Sign in on any device to restore your collection, deck, academy progress, and Vials exactly where you left off.",
-    "CLASS RECOVERY TUTORIAL \u2014 Academy lesson 6 is now personalised to your chosen class. Courage players learn Face It Head-On (attack the leader to gain Progress). Serenity players learn Sanctuary of Serenity (heal your leader to buff allies). Purpose players learn Daily Progress (spend all Play Points then End Turn). Hope players see the original Recovery Call revive lesson.",
-    "Academy zone lesson redesigned \u2014 visual zone tiles, no long text, fixed progression bug so players can advance past Lesson 1.",
-    "The Undaunted (JD-140) art corrected \u2014 clean chest, no tattoos.",
-    "CLASS BALANCE COMPLETE \u2014 All four classes (Hope, Courage, Serenity, Purpose) are now perfectly even across every rarity tier: 6 Bronze, 5 Silver, 7 Gold, 6 Epic, 5 Legendary, 1 Platinum each.",
-    "SPONSOR SHINY ART \u2014 The Sponsor's shiny/platinum copy now renders dedicated holographic art: platinum light rays, rainbow iridescence, and a 'ONE DAY AT A TIME' mug baked into the image.",
-    "SPONSOR EVOLUTION CINEMATIC \u2014 When The Sponsor evolves, a moody rain-streaked diner scene fades in behind the card as the backdrop, grounding the moment in a real place.",
-    "EASTER EGG CARDS \u2014 Two hidden Legendary cards have been added to the pool. Find them if you can.",
-    "RECOVERY ACADEMY REBUILT \u2014 Six lessons now run inside the real battle scene with followers on the field. Play a Follower, Combat, End Your Turn, Spells & Amulets, Recovery & Revive, and Sponsor & Sponsee all use live gameplay instead of static UI panels.",
-    "TUTORIAL OVERLAY \u2014 A fixed mentor banner appears at the top of the battle screen during Academy lessons, showing the lesson name, mentor, and step-by-step instructions that update as you progress.",
-    "SCRIPTED ENEMY TURN \u2014 During Recovery & Revive (lesson 5) the opponent attacks your follower on their first turn, putting it into the Relapse Zone so you can practice the recover mechanic immediately.",
-    "LESSON PROGRESSION \u2014 Completing a battle lesson automatically increments your Academy step and returns you to the Academy screen, ready for the next lesson.",
-    "CLASS BALANCE \u2014 All four classes now have equal card counts per rarity: 5 Bronze, 3 Silver, 4 Gold, 2 Epic, 4 Legendary, 1 Platinum each.",
-    "COPY LIMITS EXPANDED \u2014 Legendaries now allow 3 copies per deck (up from 2). Platinums, Signature Platinums, and Signature Golds now allow 2 copies per deck (up from 1). Epics remain at 3.",
-    "SPONSOR TRIAL CINEMATIC \u2014 Battling The Sponsor plays a dedicated cinematic intro before the battle loads.",
-    "SPONSOR TRIAL REWARD \u2014 Defeating The Sponsor for the first time awards a \u2728 Shiny Platinum copy."
-  ],
-  "upcoming_events": [
-    "More seasonal content and cards are in development \u2014 check back after future updates for details."
-  ],
-  "new_cards": [
+
+  "sections": [
     {
-      "id": "JD-138",
-      "name": "Turning Point",
-      "class": "Purpose",
-      "rarity": "Legendary"
+      "category": "New Features",
+      "items": [
+        "Multi-deck slots — save up to 8 named custom decks and switch between them any time.",
+        "Trial deck picker — choose which of your custom decks to bring into each Trial before it starts.",
+        "Deck Manager screen — create, edit, duplicate, and delete deck slots all in one place.",
+        "Drag-to-attack — drag a unit card onto an enemy to attack instead of tapping to select."
+      ]
     },
     {
-      "id": "JD-140",
-      "name": "The Undaunted",
-      "class": "Courage",
-      "rarity": "Legendary"
+      "category": "Balance Changes",
+      "items": [
+        "Hope class — 10-card buff pass improving healing synergy, leader-heal triggers, and late-game power.",
+        "Deck copy limits tightened: Legendaries now cap at 2 copies per deck; Platinums cap at 1 copy."
+      ]
     },
     {
-      "id": "JD-141",
-      "name": "Morning Promise",
-      "class": "Hope",
-      "rarity": "Silver"
+      "category": "Bug Fixes",
+      "items": [
+        "Courage 'Never Quit' survive-buff (Never Quit, JD-023, JD-089, JD-146) now triggers correctly after a unit survives lethal damage.",
+        "Battle deck mode now correctly routes custom slot decks into the fight — no more falling back to the class prebuilt silently."
+      ]
     },
     {
-      "id": "JD-142",
-      "name": "Stand Your Ground",
-      "class": "Courage",
-      "rarity": "Silver"
-    },
-    {
-      "id": "JD-143",
-      "name": "Gentle Breath",
-      "class": "Serenity",
-      "rarity": "Silver"
-    },
-    {
-      "id": "JD-144",
-      "name": "Sunrise Session",
-      "class": "Hope",
-      "rarity": "Gold"
-    },
-    {
-      "id": "JD-145",
-      "name": "Battle Tested",
-      "class": "Courage",
-      "rarity": "Gold"
-    },
-    {
-      "id": "JD-146",
-      "name": "Never Quit",
-      "class": "Courage",
-      "rarity": "Gold"
-    },
-    {
-      "id": "JD-147",
-      "name": "Peaceful Harbor",
-      "class": "Serenity",
-      "rarity": "Gold"
-    },
-    {
-      "id": "JD-148",
-      "name": "The Believer",
-      "class": "Hope",
-      "rarity": "Legendary"
-    },
-    {
-      "id": "JD-149",
-      "name": "Finding Peace",
-      "class": "Serenity",
-      "rarity": "Legendary"
+      "category": "Audio / Visual",
+      "items": [
+        "Damage flash, healing glow, ward-break burst, and card-draw VFX added to all combat sequences."
+      ]
     }
+  ],
+
+  "new_cards": [],
+
+  "upcoming_events": [
+    "More seasonal content and cards are in development — check back after future updates."
   ]
 }

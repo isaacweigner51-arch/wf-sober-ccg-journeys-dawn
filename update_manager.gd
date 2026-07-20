@@ -4,44 +4,95 @@ signal update_available(version: String, notes: String, required: bool)
 signal update_check_finished(has_update: bool)
 
 const LOCAL_MANIFEST := "res://data/version_manifest.json"
-var current_version := "0.8.22"
+
+# ── Current-build metadata (populated from data/version_manifest.json) ────────
+# To ship a new version:
+#   1. Bump "version" in version_manifest.json to match export_presets.cfg.
+#   2. Replace "sections" with that build's notes (see format below).
+#   3. Done — the popup auto-shows once per new version; old notes are gone.
+#
+# "sections" format:
+#   [
+#     {
+#       "category": "New Features",   ← one of the recognised categories (see
+#       "items": ["...", "..."]          CATEGORY_STYLES in menu.gd for the list)
+#     },
+#     ...
+#   ]
+# ─────────────────────────────────────────────────────────────────────────────
+var current_version    := "0.9.0"
+var current_build_name := ""
+var current_notes      := ""
 var remote_manifest_url := ""
-# "What's new" content for the currently installed build — bundled locally
-# (not fetched over the network) so the popup always has something to show
-# the moment a player opens the app after an update, with no server
-# dependency. Edit data/version_manifest.json before each release: bump
-# "version" to match export_presets.cfg's version/name, and update "fixes"
-# and "upcoming_events" to describe that release.
-var current_notes := ""
-var current_fixes: Array = []
-var current_features: Array = []
-var current_new_cards: Array = []
+
+## Structured sections for the What's New popup.
+## Each entry: { "category": String, "items": Array[String] }
+var current_sections:       Array = []
+
+## New cards introduced in this build.
+## Each entry: { "id": String, "name": String, "class": String, "rarity": String }
+var current_new_cards:      Array = []
+
+## Teaser text for upcoming features.
 var current_upcoming_events: Array = []
+
+# Legacy flat lists — populated only when the manifest uses the old format
+# (no "sections" key). Kept for backward compatibility.
+var current_fixes:    Array = []
+var current_features: Array = []
 
 func _ready() -> void:
     var f := FileAccess.open(LOCAL_MANIFEST, FileAccess.READ)
-    if f != null:
-        var parsed = JSON.parse_string(f.get_as_text())
-        if parsed is Dictionary:
-            current_version = str(parsed.get("version", current_version))
-            remote_manifest_url = str(parsed.get("remote_manifest_url", ""))
-            current_notes = str(parsed.get("notes", ""))
-            current_fixes = parsed.get("fixes", [])
-            current_features = parsed.get("features", [])
-            current_new_cards = parsed.get("new_cards", [])
-            current_upcoming_events = parsed.get("upcoming_events", [])
+    if f == null:
+        return
+    var parsed = JSON.parse_string(f.get_as_text())
+    if not parsed is Dictionary:
+        return
 
-# Snapshot of what changed in the build currently installed, for a "What's
-# New" popup. Menu code compares `version` against the last version it
-# recorded seeing and only shows the popup when they differ.
+    current_version         = str(parsed.get("version",         current_version))
+    current_build_name      = str(parsed.get("build_name",      ""))
+    current_notes           = str(parsed.get("notes",           ""))
+    remote_manifest_url     = str(parsed.get("remote_manifest_url", ""))
+    current_new_cards       = parsed.get("new_cards",       [])
+    current_upcoming_events = parsed.get("upcoming_events", [])
+
+    if parsed.has("sections"):
+        # ── New structured format ──────────────────────────────────────────
+        current_sections = parsed.get("sections", [])
+    else:
+        # ── Legacy flat format: convert to sections on load ────────────────
+        current_fixes    = parsed.get("fixes",    [])
+        # The old JSON had a duplicated "features" key; take the last one
+        # (the most complete one) by iterating raw.  JSON.parse_string gives
+        # us only the last duplicate, which is what we want.
+        current_features = parsed.get("features", [])
+
+        if not current_features.is_empty():
+            current_sections.append({
+                "category": "New Features",
+                "items":    current_features
+            })
+        if not current_fixes.is_empty():
+            current_sections.append({
+                "category": "Bug Fixes",
+                "items":    current_fixes
+            })
+
+## Snapshot of what changed in the build currently installed.
+## Menu code compares `version` against the last version it recorded seeing
+## and only shows the popup when they differ.
 func get_whats_new() -> Dictionary:
     return {
-        "version": current_version,
-        "notes": current_notes,
-        "fixes": current_fixes,
-        "features": current_features,
-        "new_cards": current_new_cards,
-        "upcoming_events": current_upcoming_events,
+        "version":           current_version,
+        "build_name":        current_build_name,
+        "notes":             current_notes,
+        "sections":          current_sections,
+        "new_cards":         current_new_cards,
+        "upcoming_events":   current_upcoming_events,
+        # Legacy keys — still returned so any callers that read them directly
+        # continue to work without changes.
+        "fixes":             current_fixes,
+        "features":          current_features,
     }
 
 func check_for_updates() -> void:
@@ -58,7 +109,11 @@ func check_for_updates() -> void:
                 var latest := str(parsed.get("version", current_version))
                 has_update = _version_is_newer(latest, current_version)
                 if has_update:
-                    update_available.emit(latest, str(parsed.get("notes", "A new update is available.")), bool(parsed.get("required", false)))
+                    update_available.emit(
+                        latest,
+                        str(parsed.get("notes", "A new update is available.")),
+                        bool(parsed.get("required", false))
+                    )
         update_check_finished.emit(has_update)
         request.queue_free()
     )

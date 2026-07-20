@@ -1603,128 +1603,199 @@ func maybe_show_whats_new() -> void:
     var version := str(info.get("version", ""))
     if version.is_empty() or version == last_seen_whats_new_version:
         return
-    var fixes: Array = info.get("fixes", [])
-    var upcoming: Array = info.get("upcoming_events", [])
+    var sections: Array = info.get("sections", [])
     var new_cards: Array = info.get("new_cards", [])
-    # Filter easter eggs out of features before showing
-    var features: Array = []
-    for entry in info.get("features", []):
-        if not str(entry).to_upper().contains("EASTER"):
-            features.append(entry)
-    if fixes.is_empty() and features.is_empty() and new_cards.is_empty() and upcoming.is_empty():
+    var upcoming: Array = info.get("upcoming_events", [])
+    var build_name := str(info.get("build_name", ""))
+    # Filter any easter-egg mentions from items before showing.
+    var clean_sections: Array = []
+    for sec in sections:
+        var clean_items: Array = []
+        for item in Array(sec.get("items", [])):
+            if not str(item).to_upper().contains("EASTER"):
+                clean_items.append(item)
+        if not clean_items.is_empty():
+            var sc := sec.duplicate()
+            sc["items"] = clean_items
+            clean_sections.append(sc)
+    if clean_sections.is_empty() and new_cards.is_empty() and upcoming.is_empty():
         last_seen_whats_new_version = version
         save_profile()
         return
-    show_whats_new_popup(version, fixes, features, new_cards, upcoming)
+    show_whats_new_popup(version, build_name, clean_sections, new_cards, upcoming)
 
-func show_whats_new_popup(version: String, fixes: Array, features: Array, new_cards: Array, upcoming: Array) -> void:
+# ── Category → display style lookup ───────────────────────────────────────────
+# Each recognisable category name maps to an icon glyph and a header colour.
+# Any category not in this table falls back to a neutral white star.
+# To add a new category that always looks consistent, add an entry here.
+const WHATS_NEW_CATEGORY_STYLES := {
+    "New Features":    {"icon": "✦", "color": Color(0.35, 0.85, 1.00)},
+    "Balance Changes": {"icon": "⚖", "color": Color(1.00, 0.82, 0.35)},
+    "Bug Fixes":       {"icon": "✓", "color": Color(0.45, 1.00, 0.65)},
+    "UI Improvements": {"icon": "◈", "color": Color(0.85, 0.55, 1.00)},
+    "Audio / Visual":  {"icon": "♫", "color": Color(1.00, 0.62, 0.32)},
+    "Audio/Visual":    {"icon": "♫", "color": Color(1.00, 0.62, 0.32)},
+    "New Cards":       {"icon": "✧", "color": Color(0.95, 0.78, 0.20)},
+    "Features":        {"icon": "✦", "color": Color(0.35, 0.85, 1.00)},
+    "Changes & Fixes": {"icon": "✓", "color": Color(0.45, 1.00, 0.65)},
+    "Upcoming":        {"icon": "◌", "color": Color(1.00, 0.83, 0.35)},
+}
+
+func show_whats_new_popup(version: String, build_name: String, sections: Array, new_cards: Array, upcoming: Array) -> void:
+    # ── Scrim (blocks touch-through to underlying nav buttons) ────────────────
     var scrim := ColorRect.new()
-    scrim.color = Color(0.02, 0.03, 0.06, 0.85)
+    scrim.color = Color(0.01, 0.02, 0.05, 0.90)
     scrim.position = Vector2.ZERO
     scrim.size = Vector2(1280, 720)
     scrim.mouse_filter = Control.MOUSE_FILTER_STOP
     scrim.z_index = 950
     root_layer.add_child(scrim)
 
+    # ── Dialog shell ──────────────────────────────────────────────────────────
+    var DW := 820.0; var DH := 580.0
     var dialog := Panel.new()
-    dialog.position = Vector2(290, 90)
-    dialog.size = Vector2(700, 540)
+    dialog.position = Vector2((1280 - DW) / 2.0, (720 - DH) / 2.0)
+    dialog.size = Vector2(DW, DH)
     dialog.z_index = 951
-    dialog.add_theme_stylebox_override("panel", style(GOLD_COLOR, 20))
+    var dlg_style := StyleBoxFlat.new()
+    dlg_style.bg_color = Color(0.05, 0.07, 0.12)
+    dlg_style.border_color = GOLD_COLOR
+    dlg_style.set_border_width_all(2)
+    dlg_style.set_corner_radius_all(18)
+    dialog.add_theme_stylebox_override("panel", dlg_style)
     scrim.add_child(dialog)
 
-    centered_label("WHAT'S NEW", Vector2(30, 20), Vector2(640, 34), 26, dialog).add_theme_color_override("font_color", GOLD_COLOR)
-    centered_label("Version %s" % version, Vector2(30, 56), Vector2(640, 22), 14, dialog).modulate = Color(0.75, 0.82, 0.92)
+    # ── Version + build name header ───────────────────────────────────────────
+    var version_tag := "v%s" % version
+    if build_name != "":
+        version_tag = "v%s  —  %s" % [version, build_name.to_upper()]
 
-    # The bullet list used to be laid out with a fixed 44px slot per entry
-    # and absolute Y coordinates. Any entry whose wrapped text needed more
-    # than ~2 lines at 14pt spilled past its slot into the next entry's
-    # position, so their text rendered on top of each other -- and a long
-    # release note list could also spill past the close button. A
-    # ScrollContainer + VBoxContainer lets each label claim exactly the
-    # height its own wrapped text needs (no guessed constant) and lets the
-    # whole list scroll instead of overflowing the dialog as more entries
-    # are added release after release.
+    centered_label("WHAT'S NEW", Vector2(50, 14), Vector2(DW - 110, 38), 28, dialog).add_theme_color_override("font_color", GOLD_COLOR)
+    var ver_lbl := centered_label(version_tag, Vector2(50, 54), Vector2(DW - 110, 22), 13, dialog)
+    ver_lbl.add_theme_color_override("font_color", Color(0.62, 0.70, 0.85))
+
+    # Thin separator
+    var sep := ColorRect.new()
+    sep.color = Color(GOLD_COLOR.r, GOLD_COLOR.g, GOLD_COLOR.b, 0.30)
+    sep.position = Vector2(30, 82)
+    sep.size = Vector2(DW - 60, 1)
+    dialog.add_child(sep)
+
+    # ── Scrollable content area ───────────────────────────────────────────────
+    var INNER_W := DW - 60.0   # 760
     var scroll := ScrollContainer.new()
-    scroll.position = Vector2(30, 92)
-    scroll.size = Vector2(640, 372)
+    scroll.position = Vector2(24, 90)
+    scroll.size = Vector2(DW - 48, 428)
     dialog.add_child(scroll)
+
     var list := VBoxContainer.new()
-    list.custom_minimum_size = Vector2(624, 0)
-    list.add_theme_constant_override("separation", 6)
+    list.custom_minimum_size = Vector2(INNER_W, 0)
+    list.add_theme_constant_override("separation", 4)
     scroll.add_child(list)
 
-    var _add_section_header := func(text_value: String, color: Color) -> void:
-        var spacer := Control.new(); spacer.custom_minimum_size = Vector2(624, 6); list.add_child(spacer)
-        var hdr := Label.new()
-        hdr.text = text_value
-        hdr.add_theme_font_size_override("font_size", ui_font_size(15))
-        hdr.add_theme_color_override("font_color", color)
-        list.add_child(hdr)
+    # ── Helper closures ───────────────────────────────────────────────────────
+    var _spacer := func(h: float) -> void:
+        var s := Control.new()
+        s.custom_minimum_size = Vector2(INNER_W, h)
+        list.add_child(s)
 
-    var _add_bullet := func(text_value: String, color: Color) -> void:
+    var _add_section_header := func(icon_glyph: String, text_value: String, hdr_color: Color) -> void:
+        _spacer.call(8)
+        var row := HBoxContainer.new()
+        row.custom_minimum_size = Vector2(INNER_W, 0)
+        list.add_child(row)
+
+        # Coloured left accent bar
+        var accent := ColorRect.new()
+        accent.custom_minimum_size = Vector2(3, 0)
+        accent.size_flags_vertical = Control.SIZE_EXPAND_FILL
+        accent.color = hdr_color
+        row.add_child(accent)
+
+        var pad := Control.new()
+        pad.custom_minimum_size = Vector2(8, 0)
+        row.add_child(pad)
+
+        var hdr := Label.new()
+        hdr.text = "%s  %s" % [icon_glyph, text_value.to_upper()]
+        hdr.add_theme_font_size_override("font_size", ui_font_size(15))
+        hdr.add_theme_color_override("font_color", hdr_color)
+        hdr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        row.add_child(hdr)
+
+        _spacer.call(2)
+
+    var _add_bullet := func(text_value: String, item_color: Color) -> void:
         var item := Label.new()
-        item.text = "•  %s" % text_value
+        item.text = "    •  %s" % text_value
         item.add_theme_font_size_override("font_size", ui_font_size(14))
-        item.add_theme_color_override("font_color", color)
+        item.add_theme_color_override("font_color", item_color)
         item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-        item.custom_minimum_size = Vector2(624, 0)
+        item.custom_minimum_size = Vector2(INNER_W, 0)
         list.add_child(item)
 
-    if not fixes.is_empty():
-        _add_section_header.call("CHANGES & IMPROVEMENTS", Color(0.55, 1.0, 0.70))
-        for entry in fixes:
-            _add_bullet.call(str(entry), Color(0.94, 0.95, 1.0))
+    # ── Render each section from the manifest ─────────────────────────────────
+    var rarity_colors := {
+        "Bronze":    Color(0.72, 0.48, 0.22),
+        "Silver":    Color(0.78, 0.82, 0.88),
+        "Gold":      Color(0.95, 0.78, 0.20),
+        "Epic":      Color(0.65, 0.30, 0.90),
+        "Legendary": Color(0.95, 0.55, 0.10),
+        "Platinum":  Color(0.55, 0.92, 0.98),
+    }
 
-    if not features.is_empty():
-        _add_section_header.call("FEATURES", Color(0.55, 1.0, 0.70))
-        for entry in features:
-            _add_bullet.call(str(entry), Color(0.94, 0.95, 1.0))
+    for sec in sections:
+        var cat := str(sec.get("category", ""))
+        var style_info: Dictionary = WHATS_NEW_CATEGORY_STYLES.get(cat, {"icon": "★", "color": Color(0.85, 0.85, 0.92)})
+        var icon: String = str(style_info.get("icon", "★"))
+        var hc: Color = style_info.get("color", Color(0.85, 0.85, 0.92))
+        _add_section_header.call(icon, cat, hc)
+        for item_text in Array(sec.get("items", [])):
+            _add_bullet.call(str(item_text), Color(0.92, 0.93, 0.98))
 
+    # ── New cards (pulled separately from manifest) ───────────────────────────
     if not new_cards.is_empty():
-        _add_section_header.call("NEW CARDS", GOLD_COLOR)
-        var rarity_colors := {
-            "Bronze": Color(0.72, 0.48, 0.22), "Silver": Color(0.78, 0.82, 0.88),
-            "Gold": Color(0.95, 0.78, 0.20), "Epic": Color(0.65, 0.30, 0.90),
-            "Legendary": Color(0.95, 0.55, 0.10), "Platinum": Color(0.55, 0.92, 0.98),
-        }
+        var hc: Color = WHATS_NEW_CATEGORY_STYLES.get("New Cards", {}).get("color", GOLD_COLOR)
+        _add_section_header.call("✧", "New Cards", hc)
         for card_entry in new_cards:
             var cd: Dictionary = card_entry if card_entry is Dictionary else {}
-            var rarity: String = str(cd.get("rarity", ""))
+            var rarity := str(cd.get("rarity", ""))
             var rc: Color = rarity_colors.get(rarity, Color(0.85, 0.85, 0.85))
-            var line := "%s  [%s %s]" % [str(cd.get("name","?")), str(cd.get("class","?")), rarity]
+            var line := "%s  [%s · %s]" % [str(cd.get("name","?")), str(cd.get("class","?")), rarity]
             _add_bullet.call(line, rc)
 
+    # ── Upcoming events ───────────────────────────────────────────────────────
     if not upcoming.is_empty():
-        _add_section_header.call("UPCOMING", Color(1.0, 0.83, 0.35))
+        var hc: Color = WHATS_NEW_CATEGORY_STYLES.get("Upcoming", {}).get("color", Color(1.0, 0.83, 0.35))
+        _add_section_header.call("◌", "Upcoming", hc)
         for entry in upcoming:
-            _add_bullet.call(str(entry), Color(0.94, 0.95, 1.0))
+            _add_bullet.call(str(entry), Color(0.88, 0.88, 0.75))
 
+    _spacer.call(8)
+
+    # ── Dismiss logic (identical to previous — no background-tap to avoid
+    #    touch-through onto nav buttons underneath) ───────────────────────────
     var _dismiss := func():
         if not is_instance_valid(scrim): return
-        # Hide immediately so touch-up / lingering pointer events can't fall
-        # through to whatever nav button is underneath (the classic tap-through
-        # bug on touchscreens where tap-down dismisses the overlay and tap-up
-        # hits the Collection button behind it).
         scrim.hide()
         last_seen_whats_new_version = version
         save_profile()
         scrim.queue_free()
 
-    # ── DO NOT connect gui_input on the scrim. ────────────────────────────────
-    # A background-tap-to-dismiss handler on a touchscreen fires on the
-    # press half of the touch event, frees the scrim, and then the release
-    # half lands on the nav button behind it — sending the player to
-    # Collection every time they dismiss this popup. Only explicit buttons
-    # should close it.
-
-    # ✕ button — top-right corner of the dialog, always reachable.
-    var x_btn := button("✕", Vector2(648, 8), Vector2(44, 36), _dismiss, dialog)
+    # ✕ in top-right corner.
+    var x_btn := button("✕", Vector2(DW - 52, 10), Vector2(40, 34), _dismiss, dialog)
     x_btn.add_theme_font_size_override("font_size", ui_font_size(18))
-    x_btn.add_theme_color_override("font_color", Color(0.8, 0.8, 0.9))
+    x_btn.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
+
+    # Separator above close button.
+    var sep2 := ColorRect.new()
+    sep2.color = Color(GOLD_COLOR.r, GOLD_COLOR.g, GOLD_COLOR.b, 0.22)
+    sep2.position = Vector2(30, DH - 70)
+    sep2.size = Vector2(DW - 60, 1)
+    dialog.add_child(sep2)
 
     # GOT IT — bottom-centre of the dialog.
-    var close_btn := button("GOT IT  ✓", Vector2(270, 480), Vector2(160, 48), _dismiss, dialog)
+    var close_btn := button("GOT IT  ✓", Vector2((DW - 200) / 2.0, DH - 58), Vector2(200, 46), _dismiss, dialog)
     close_btn.add_theme_font_size_override("font_size", ui_font_size(16))
 
 func show_online_vs_setup() -> void:
