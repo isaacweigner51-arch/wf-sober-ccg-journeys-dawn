@@ -6841,7 +6841,6 @@ func _ensure_attack_drag_line() -> void:
     attack_drag_line.width = 3.5
     attack_drag_line.default_color = Color(1.0, 0.28, 0.18, 0.80)
     attack_drag_line.z_index = 1000
-    attack_drag_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
     attack_drag_line.visible = false
     safe_add_child(self, attack_drag_line)
 
