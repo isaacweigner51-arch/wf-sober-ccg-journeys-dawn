@@ -5630,9 +5630,11 @@ func resolve_combat(attacker_index: int, target_index: int, player_side: bool) -
         if is_instance_valid(def_view):
             def_view.damage_flash()
         # Flash the attacker card if it took counter-damage.
+        var atk_area: Control = player_board_area if player_side else enemy_board_area
+        var view: CardView = find_card_view_for_board_index(atk_area, attacker_index)
         if defender_damage > 0 and is_instance_valid(view):
             view.damage_flash()
-            show_damage_number(defender_damage, (player_board_area if player_side else enemy_board_area).global_position + Vector2(80 + attacker_index * 145, 28), str(defender.get("rarity", "Bronze")))
+            show_damage_number(defender_damage, atk_area.global_position + Vector2(80 + attacker_index * 145, 28), str(defender.get("rarity", "Bronze")))
 
         # A unit survives whenever it has at least 1 defense remaining.
         var defender_died: bool = defender_remaining <= 0

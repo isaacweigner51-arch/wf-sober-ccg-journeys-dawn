@@ -6470,7 +6470,7 @@ func show_deck_manager() -> void:
 func show_trial_deck_picker(opponent_class: String, tier: int) -> void:
     clear_screen(); add_background(0.72)
     var tier_names := ["Rookie", "Challenger", "Elite", "SPONSOR BOSS"]
-    var tier_label := tier_names[clampi(tier - 1, 0, tier_names.size() - 1)]
+    var tier_label: String = tier_names[clampi(tier - 1, 0, tier_names.size() - 1)]
     header("CHOOSE YOUR DECK", "Trial vs %s — Tier %d: %s" % [opponent_class, tier, tier_label])
 
     # ── Left panel: scrollable slot list ─────────────────────────────────────
