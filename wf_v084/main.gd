@@ -33,6 +33,8 @@ var game_over := false
 var busy := false
 var selected_attacker := -1
 var selected_evolution_cost: int = 0
+var attack_drag_line: Line2D = null
+var attack_drag_attacker_idx: int = -1
 var player_evolutions_used: Array[bool] = [false, false, false, false]
 var enemy_evolutions_used: Array[bool] = [false, false, false, false]
 
@@ -4320,6 +4322,8 @@ func draw_card(deck: Array, hand: Array) -> void:
         return
     hand.append(drawn)
     play_sfx("draw")
+    var draw_is_player: bool = (hand == player_hand)
+    show_vfx("DRAW", Vector2(520, 490 if draw_is_player else 55), Color(0.72, 0.58, 1.0))
 
 func start_player_turn() -> void:
     if game_over: return
@@ -5315,9 +5319,10 @@ func card_clicked(index: int, player_side: bool) -> void:
         if bool(player_board[index].get("is_amulet", false)):
             status_label.text = "Amulets cannot attack."
             return
-        if not bool(player_board[index].get("can_attack", false)): status_label.text = "%s is resting." % player_board[index]["name"]; return
-        selected_attacker = index; status_label.text = "Choose an enemy target."
-        refresh_ui()
+        if not bool(player_board[index].get("can_attack", false)):
+            safe_set_text(status_label, "%s is resting." % str(player_board[index].get("name", "That follower")))
+            return
+        safe_set_text(status_label, "Drag %s to attack." % str(player_board[index].get("name", "follower")))
     else:
         if selected_attacker < 0: return
         if index >= 0 and index < enemy_board.size() and bool(enemy_board[index].get("is_amulet", false)):
@@ -5429,6 +5434,16 @@ func resolve_combat(attacker_index: int, target_index: int, player_side: bool) -
 
         await show_vfx("-%d" % attacker_damage, (enemy_board_area if player_side else player_board_area).global_position + Vector2(120 + target_index * 145, 50), Color(1.0, 0.3, 0.2))
 
+        # Flash the defender card on impact.
+        var def_area: Control = enemy_board_area if player_side else player_board_area
+        var def_view: CardView = find_card_view_for_board_index(def_area, target_index)
+        if is_instance_valid(def_view):
+            def_view.damage_flash()
+        # Flash the attacker card if it took counter-damage.
+        if defender_damage > 0 and is_instance_valid(view):
+            view.damage_flash()
+            await show_vfx("-%d" % defender_damage, (player_board_area if player_side else enemy_board_area).global_position + Vector2(120 + attacker_index * 145, 50), Color(1.0, 0.3, 0.2))
+
         # A unit survives whenever it has at least 1 defense remaining.
         var defender_died: bool = defender_remaining <= 0
         var attacker_died: bool = attacker_remaining <= 0
@@ -5438,6 +5453,12 @@ func resolve_combat(attacker_index: int, target_index: int, player_side: bool) -
             await destroy_unit(defend_board, target_index, not player_side)
         if attacker_died and attacker_index < attack_board.size():
             await destroy_unit(attack_board, attacker_index, player_side)
+        # Survive-buff abilities fire after both destroy_unit calls so a unit
+        # that died does not erroneously receive its own buff.
+        if not attacker_died and attacker_index < attack_board.size():
+            await _check_survive_buff(attack_board, attacker_index, player_side, defender_damage, true)
+        if not defender_died and target_index < defend_board.size():
+            await _check_survive_buff(defend_board, target_index, not player_side, attacker_damage, false)
     check_winner(); refresh_ui()
 
 func destroy_unit(board: Array, index: int, player_side: bool, specifically_targets_amulet: bool = false) -> void:
@@ -5445,6 +5466,10 @@ func destroy_unit(board: Array, index: int, player_side: bool, specifically_targ
     var dead: Dictionary = board[index]
     if bool(dead.get("is_amulet", false)) and not specifically_targets_amulet:
         return
+    # Ward-break VFX — show before the follower is removed.
+    if str(dead.get("ability", "")) in ["guard", "guard_heal", "guard_protect", "rise_together"]:
+        var ward_area: Control = player_board_area if player_side else enemy_board_area
+        show_vfx("WARD BROKEN", ward_area.global_position + Vector2(90 + index * 145, 20), Color(0.45, 0.75, 1.0))
     if bool(dead.get("sponsor_protection", false)):
         dead["sponsor_protection"] = false
         dead["health"] = 1
@@ -6262,8 +6287,109 @@ func close_card_details() -> void:
         card_detail_panel.queue_free()
     card_detail_panel = null
 
+## ── Survive-buff ability trigger ─────────────────────────────────────────────
+## Called after both destroy_unit passes in resolve_combat so that a unit
+## that died in that exchange never receives its own buff.
+## was_attacker: true = this unit initiated the attack, false = it was the target.
+func _check_survive_buff(board: Array, index: int, unit_player_side: bool, damage_taken: int, was_attacker: bool) -> void:
+    if index < 0 or index >= board.size():
+        return
+    var unit: Dictionary = board[index]
+    var ab := str(unit.get("ability", ""))
+    var uid := str(unit.get("id", ""))
+    var uname := str(unit.get("name", "?"))
+    var atk_gain := 0
+    var hp_gain := 0
+
+    # Silver Never Quit (hardcoded ability) or pack-pulled JD-023
+    if ab == "survive_buff" or uid == "JD-023":
+        atk_gain = 1; hp_gain = 1
+    # First Brave Step JD-089: +1 Health after surviving combat
+    elif uid == "JD-089":
+        atk_gain = 0; hp_gain = 1
+    # Gold Never Quit JD-146: +1/+0 only when it takes damage as the defender
+    elif uid == "JD-146" and not was_attacker:
+        atk_gain = 1; hp_gain = 0
+
+    if atk_gain == 0 and hp_gain == 0:
+        return
+
+    unit["attack"] = int(unit.get("attack", 0)) + atk_gain
+    unit["health"] = int(unit.get("health", 0)) + hp_gain
+    if hp_gain > 0:
+        unit["max_health"] = int(unit.get("max_health", unit["health"])) + hp_gain
+    board[index] = unit
+
+    print("SURVIVE BUFF ── %s (%s) took %d dmg, survived — +%d/+%d applied → atk=%d hp=%d" % [
+        uname, uid if uid != "" else ab, damage_taken, atk_gain, hp_gain,
+        int(unit["attack"]), int(unit["health"])])
+
+    var buff_str := "+%d/+%d" % [atk_gain, hp_gain] if (atk_gain > 0 and hp_gain > 0) \
+        else ("+%d ATK" % atk_gain if hp_gain == 0 else "+%d HP" % hp_gain)
+    var area: Control = player_board_area if unit_player_side else enemy_board_area
+    await show_vfx(buff_str, area.global_position + Vector2(90 + index * 145, -20), Color(1.0, 0.85, 0.25))
+
+## ── Attack drag-line overlay ──────────────────────────────────────────────────
+func _ensure_attack_drag_line() -> void:
+    if is_instance_valid(attack_drag_line):
+        return
+    attack_drag_line = Line2D.new()
+    attack_drag_line.width = 3.5
+    attack_drag_line.default_color = Color(1.0, 0.28, 0.18, 0.80)
+    attack_drag_line.z_index = 1000
+    attack_drag_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    attack_drag_line.visible = false
+    safe_add_child(self, attack_drag_line)
+
+func _on_attack_drag_update(card_index: int, _context: String, global_pos: Vector2) -> void:
+    if game_over or busy or not player_turn_active:
+        _clear_attack_drag()
+        return
+    if card_index < 0 or card_index >= player_board.size():
+        _clear_attack_drag()
+        return
+    if not bool(player_board[card_index].get("can_attack", false)):
+        _clear_attack_drag()
+        return
+    attack_drag_attacker_idx = card_index
+    _ensure_attack_drag_line()
+
+    # Start point: centre of attacker card in scene coordinates.
+    var attacker_view: CardView = find_card_view_for_board_index(player_board_area, card_index)
+    var start: Vector2 = global_pos  # fallback
+    if is_instance_valid(attacker_view):
+        start = attacker_view.global_position + attacker_view.size * attacker_view.scale * 0.5
+    attack_drag_line.clear_points()
+    attack_drag_line.add_point(start)
+    attack_drag_line.add_point(global_pos)
+    attack_drag_line.visible = true
+
+    # Highlight valid enemy targets; dim everything else.
+    var guard_idx: int = first_guard_index(enemy_board)
+    for child in enemy_board_area.get_children():
+        if not (child is CardView):
+            continue
+        var is_valid: bool = (guard_idx < 0 or child.card_index == guard_idx) \
+            and not bool(enemy_board[mini(child.card_index, enemy_board.size() - 1)].get("is_amulet", false))
+        child.modulate = Color(1.3, 1.1, 0.7) if is_valid else Color(0.5, 0.5, 0.5)
+    if is_instance_valid(enemy_leader):
+        enemy_leader.modulate = Color(1.3, 0.6, 0.6) if guard_idx < 0 else Color(0.5, 0.5, 0.5)
+
+func _clear_attack_drag() -> void:
+    attack_drag_attacker_idx = -1
+    if is_instance_valid(attack_drag_line):
+        attack_drag_line.visible = false
+        attack_drag_line.clear_points()
+    # Restore all enemy card and leader modulates.
+    for child in enemy_board_area.get_children():
+        if child is CardView:
+            child.modulate = Color.WHITE
+    if is_instance_valid(enemy_leader):
+        enemy_leader.modulate = Color.WHITE
+
 func _on_card_drag_action(card_index: int, context: String, release_global: Vector2) -> void:
     close_card_details()
+    _clear_attack_drag()
     if busy or game_over or not player_turn_active:
         return
     if context == "hand":
@@ -6360,6 +6486,7 @@ func rebuild_board(area: Control, board: Array, player_side: bool, animate_new: 
         view.card_chosen.connect(func(idx: int): card_clicked(idx, player_side))
         if player_side:
             view.drag_action_requested.connect(_on_card_drag_action)
+            view.drag_position_updated.connect(_on_attack_drag_update)
         view.inspect_requested.connect(show_card_details)
         area.add_child(view)
         view.enable_card_interactions(false, true)

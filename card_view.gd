@@ -8,6 +8,7 @@ static var _catalog_by_name: Dictionary = {}
 static var _catalog_loaded: bool = false
 static var _art_cache: Dictionary = {}
 signal drag_action_requested(card_index: int, context: String, global_release_position: Vector2)
+signal drag_position_updated(card_index: int, context: String, global_pos: Vector2)
 
 var card_index := -1
 var data: Dictionary = {}
@@ -151,6 +152,8 @@ func _gesture_motion(context: String) -> void:
         accept_event()
     if gesture_dragging:
         position = drag_origin_position + delta
+        if context == "player_board":
+            drag_position_updated.emit(card_index, context, get_global_mouse_position())
         accept_event()
 
 func _gesture_release(context: String, release_global: Vector2) -> void:
