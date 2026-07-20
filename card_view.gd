@@ -479,7 +479,7 @@ func _init_rarity_vfx(frame: Control) -> void:
     var orb_count := 4 if tier >= 5 else 3
     for _i in range(orb_count):
         var orb := ColorRect.new()
-        orb.size = Vector2(6, 6) if tier >= 5 else Vector2(5, 5)
+        orb.size = Vector2(9, 9) if tier >= 5 else Vector2(7, 7)
         orb.color = Color(1.0, 0.82, 0.28, 0.0)  # invisible until _process updates
         orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
         orb.z_index = 96
@@ -494,35 +494,41 @@ func play_attack_wind_up(lean_dir: Vector2) -> void:
     ## Card squashes and leans AWAY from the target — builds anticipation.
     _idle_paused = true
     var tier := _rarity_tier_val()
-    var sx := 0.82 if tier >= 3 else 0.86
-    var sy := 1.18 if tier >= 3 else 1.14
-    var lean := 7.0 + tier * 1.5
+    var sx := 0.74 if tier >= 4 else (0.80 if tier >= 3 else 0.85)
+    var sy := 1.26 if tier >= 4 else (1.20 if tier >= 3 else 1.15)
+    var lean := 11.0 + tier * 2.5
     var tw := create_tween().set_parallel(true)
-    tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-    tw.tween_property(self, "scale", Vector2(sx, sy), 0.10)
-    tw.tween_property(self, "position", base_position + lean_dir * lean, 0.10)
-    tw.tween_property(self, "rotation", lean_dir.x * -0.10, 0.10)
+    tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tw.tween_property(self, "scale", Vector2(sx, sy), 0.12)
+    tw.tween_property(self, "position", base_position + lean_dir * lean, 0.11)
+    tw.tween_property(self, "rotation", lean_dir.x * -0.13, 0.11)
 
 func play_attack_lunge(toward_dir: Vector2) -> void:
     ## Card stretches TOWARD the target — peak of the strike.
     var tier := _rarity_tier_val()
-    var sx := 1.16 if tier >= 3 else 1.11
-    var sy := 0.84 if tier >= 3 else 0.89
-    var lunge := 13.0 + tier * 2.0
+    var sx := 1.24 if tier >= 4 else (1.19 if tier >= 3 else 1.13)
+    var sy := 0.78 if tier >= 4 else (0.83 if tier >= 3 else 0.88)
+    var lunge := 18.0 + tier * 3.0
     var tw := create_tween().set_parallel(true)
     tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     tw.tween_property(self, "scale", Vector2(sx, sy), 0.07)
     tw.tween_property(self, "position", base_position + toward_dir * lunge, 0.07)
-    tw.tween_property(self, "rotation", toward_dir.x * 0.07, 0.07)
-    # Legendary / Platinum: brief bright flash at the moment of contact
-    if tier >= 4:
-        var flash_col := Color(0.75, 1.5, 1.8) if tier >= 5 else Color(1.6, 1.35, 0.65)
-        var ftw := create_tween()
-        ftw.tween_property(self, "modulate", flash_col, 0.04)
-        ftw.tween_property(self, "modulate", Color.WHITE, 0.09)
+    tw.tween_property(self, "rotation", toward_dir.x * 0.09, 0.07)
+    # Art zooms and shifts inside the clip window toward the strike
+    _art_lunge(toward_dir)
+    # Rarity-scaled release flash — Gold+ get a visible pop
+    var flash_col: Color
+    if tier >= 5:   flash_col = Color(0.55, 1.9, 2.4)
+    elif tier >= 4: flash_col = Color(2.0, 1.6, 0.52)
+    elif tier >= 2: flash_col = Color(1.5, 1.4, 1.2)
+    else:           flash_col = Color(1.25, 1.2, 1.15)
+    var ftw := create_tween()
+    ftw.tween_property(self, "modulate", flash_col, 0.04)
+    ftw.tween_property(self, "modulate", Color.WHITE, 0.10)
 
 func play_attack_settle() -> void:
     ## Card eases back to its resting pose after the strike.
+    _art_settle_to_home()
     var tw := create_tween().set_parallel(true)
     tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     tw.tween_property(self, "scale",    Vector2.ONE,     0.22)
@@ -531,6 +537,28 @@ func play_attack_settle() -> void:
     # Resume idle breathing / float once settle completes.
     get_tree().create_timer(0.26, true, false, true).timeout.connect(
         func(): if is_instance_valid(self): _idle_paused = false)
+
+## Art zooms and shifts toward the strike direction inside the clip window.
+## Clip container prevents overflow; this makes the character look like it's lunging.
+func _art_lunge(toward_dir: Vector2) -> void:
+    if art_rect == null or not is_instance_valid(art_rect): return
+    var tier := _rarity_tier_val()
+    var zoom := 1.12 + tier * 0.028
+    var shift := toward_dir * (4.5 + tier * 1.2)
+    art_rect.pivot_offset = art_rect.size * 0.5
+    var tw := create_tween().set_parallel(true)
+    tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tw.tween_property(art_rect, "scale", Vector2(zoom, zoom), 0.07)
+    tw.tween_property(art_rect, "position", art_home + shift, 0.07)
+
+## Resets art position and scale during the settle phase.
+func _art_settle_to_home() -> void:
+    if art_rect == null or not is_instance_valid(art_rect): return
+    art_rect.pivot_offset = art_rect.size * 0.5
+    var tw := create_tween().set_parallel(true)
+    tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tw.tween_property(art_rect, "scale", Vector2.ONE, 0.26)
+    tw.tween_property(art_rect, "position", art_home, 0.26)
 
 ## Brief scale-pop + colored flash for stat buffs. Fire-and-forget.
 ## Skips if the card is already in a combat animation.
@@ -690,7 +718,7 @@ func _process(delta: float) -> void:
     # Orbiting energy orbs for Legendary / Platinum
     if _orb_nodes.size() > 0 and not hidden_card and not _idle_paused:
         var orb_count := _orb_nodes.size()
-        var orbit_r: float = pivot_offset.x * 0.72
+        var orbit_r: float = pivot_offset.x * 0.96
         var orb_speed := 1.5 if tier >= 5 else 1.05
         if bool(data.get("evolved", false)):
             orb_speed *= 1.35
@@ -710,19 +738,23 @@ func _living_glow_style() -> StyleBoxFlat:
     var style := StyleBoxFlat.new()
     style.bg_color = Color(0, 0, 0, 0)
     var rarity := str(data.get("rarity", "Bronze"))
-    var glow := Color(0.38, 0.65, 0.78, 0.26)
-    if rarity == "Silver": glow = Color(0.78, 0.88, 1.0, 0.30)
-    elif rarity == "Legendary": glow = Color(1.0, 0.66, 0.16, 0.40)
-    elif rarity == "Platinum": glow = Color(0.62, 0.88, 1.0, 0.48)
+    var glow := Color(0.38, 0.65, 0.78, 0.28)
+    if rarity == "Silver":    glow = Color(0.78, 0.88, 1.0, 0.36)
+    elif rarity == "Gold":    glow = Color(1.0, 0.82, 0.28, 0.40)
+    elif rarity == "Epic":    glow = Color(0.72, 0.44, 1.0, 0.48)
+    elif rarity == "Legendary": glow = Color(1.0, 0.68, 0.13, 0.60)
+    elif rarity == "Platinum":  glow = Color(0.50, 0.92, 1.0, 0.75)
     if bool(data.get("evolved", false)):
-        glow = Color(0.34, 0.92, 1.0, 0.58)
+        glow = Color(0.32, 0.94, 1.0, 0.68)
     if bool(data.get("is_shiny", false)):
-        glow = Color(0.88, 0.65, 1.0, 0.62)
+        glow = Color(0.88, 0.65, 1.0, 0.74)
     style.border_color = glow
-    style.set_border_width_all(3)
+    var border_w := 6 if rarity == "Platinum" else (5 if rarity == "Legendary" else (4 if rarity in ["Epic", "Gold"] else 3))
+    if bool(data.get("evolved", false)): border_w = maxi(border_w, 4)
+    style.set_border_width_all(border_w)
     style.set_corner_radius_all(9)
     style.shadow_color = glow
-    style.shadow_size = 7
+    style.shadow_size = 24 if rarity == "Platinum" else (18 if rarity == "Legendary" else (12 if rarity == "Epic" else (9 if bool(data.get("evolved", false)) else 7)))
     return style
 
 func _frame_style() -> StyleBoxFlat:

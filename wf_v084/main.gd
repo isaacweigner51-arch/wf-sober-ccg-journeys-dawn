@@ -2574,6 +2574,9 @@ func play_standard_evolution_animation(index: int, cost: int, player_side: bool)
     reveal.tween_property(ring, "scale", Vector2(1.35, 1.35), 0.30)
     reveal.tween_property(ring, "color:a", 0.0, 0.30)
     await reveal.finished
+    var _evo_col_std := Color(0.28, 0.82, 1.0) if cost < 3 else (Color(0.95, 0.72, 0.20) if cost == 3 else Color(0.85, 0.42, 1.0))
+    spawn_sparkle_burst(screen_center, 10 if CardView.graphics_quality >= 1 else 4, [_evo_col_std, Color.WHITE], self, 82.0)
+    _spawn_impact_ring(screen_center, _evo_col_std, mini(cost + 1, 5))
     await get_tree().create_timer(0.22).timeout
 
     var return_tween := create_tween().set_parallel(true)
@@ -2660,6 +2663,7 @@ func play_epic_evolution_animation(index: int, cost: int, player_side: bool) -> 
     pulse.tween_property(card_view, "scale", Vector2(1.8, 1.8), 0.10)
     await pulse.finished
     spawn_sparkle_burst(screen_center, 16, [Color(0.86, 0.62, 1.0), Color(1.0, 1.0, 1.0), Color(0.62, 0.82, 1.0)], self)
+    _spawn_impact_ring(screen_center, Color(0.78, 0.48, 1.0), 4)
 
     var attack_gain: int = 1 if cost < 3 else (3 if cost == 3 else 4)
     var defense_gain: int = 0 if cost == 1 else (2 if cost == 2 else (3 if cost == 3 else 4))
@@ -2792,6 +2796,7 @@ func play_legendary_evolution_animation(index: int, cost: int, player_side: bool
     pulse.tween_property(card_view, "scale", Vector2(1.9, 1.9), 0.11)
     await pulse.finished
     spawn_sparkle_burst(screen_center, 24, [Color(1.0, 0.86, 0.34), Color(1.0, 1.0, 1.0), Color(1.0, 0.66, 0.22)], self, 115.0)
+    _spawn_impact_ring(screen_center, Color(1.0, 0.72, 0.18), 5)
 
     var attack_gain: int = 1 if cost < 3 else (3 if cost == 3 else 4)
     var defense_gain: int = 0 if cost == 1 else (2 if cost == 2 else (3 if cost == 3 else 4))
@@ -2965,6 +2970,7 @@ func play_platinum_evolution_animation(index: int, cost: int, player_side: bool)
     pulse.tween_property(card_view, "scale", Vector2(2.0, 2.0), 0.12)
     await pulse.finished
     spawn_sparkle_burst(screen_center, 32, [Color(1.0, 0.96, 0.85), Color(1.0, 0.84, 0.34), Color(0.68, 0.90, 1.0)], self, 130.0)
+    _spawn_impact_ring(screen_center, Color(0.52, 0.92, 1.0), 5)
 
     var attack_gain: int = 1 if cost < 3 else (3 if cost == 3 else 4)
     var defense_gain: int = 0 if cost == 1 else (2 if cost == 2 else (3 if cost == 3 else 4))
@@ -5558,8 +5564,18 @@ func animate_attack(attacker_index: int, target_index: int, player_side: bool) -
 
     var rtier: int        = _rarity_tier_int(rarity)
     var impact_col: Color = _projectile_impact_color(proj_type, rarity)
-    _screen_shake(3.0 + rtier * 1.6, 0.28)
-    _spawn_impact_sparks(to_center, impact_col, 6 + rtier * 2)
+    var impact_dir: Vector2 = (to_center - from_center).normalized()
+
+    # Rarity-calibrated directional shake: Bronze = barely perceptible, Platinum = satisfying
+    const SHAKE_INTENSITY := [0.8, 1.8, 3.5, 5.5, 8.0, 11.0]
+    const SHAKE_DURATION  := [0.15, 0.19, 0.22, 0.25, 0.27, 0.30]
+    _screen_shake(SHAKE_INTENSITY[rtier], SHAKE_DURATION[rtier], impact_dir)
+    _spawn_impact_flash(to_center, impact_col, rtier)
+    _spawn_impact_sparks(to_center, impact_col, 7 + rtier * 3)
+    _spawn_impact_ring(to_center, impact_col, rtier)
+
+    # Hit stop — tiny freeze before damage resolves makes the hit feel heavier.
+    await get_tree().create_timer(0.04 + rtier * 0.005, true, false, true).timeout
 
     # 5. Combat resolves on impact.
     await resolve_combat(attacker_index, target_index, player_side)
@@ -5586,7 +5602,7 @@ func resolve_combat(attacker_index: int, target_index: int, player_side: bool) -
         leader_feedback(enemy_leader if player_side else player_leader, int(attacker["attack"]), false)
         play_battle_bark(player_leader if player_side else enemy_leader, selected_class if player_side else enemy_class, "attack", player_side)
         await trigger_leader_recovery_progress(player_side, "standing_ground")
-        await show_vfx("-%d" % attacker["attack"], enemy_leader.global_position if player_side else player_leader.global_position, Color(1.0, 0.25, 0.2))
+        show_damage_number(int(attacker["attack"]), (enemy_leader if player_side else player_leader).global_position + Vector2(45, 18), str(attacker.get("rarity", "Bronze")))
         if player_side and training_mode:
             training_attacked_this_turn = true
     else:
@@ -5606,7 +5622,7 @@ func resolve_combat(attacker_index: int, target_index: int, player_side: bool) -
         defend_board[target_index] = defender
         attack_board[attacker_index] = attacker
 
-        await show_vfx("-%d" % attacker_damage, (enemy_board_area if player_side else player_board_area).global_position + Vector2(120 + target_index * 145, 50), Color(1.0, 0.3, 0.2))
+        show_damage_number(attacker_damage, (enemy_board_area if player_side else player_board_area).global_position + Vector2(80 + target_index * 145, 28), str(attacker.get("rarity", "Bronze")))
 
         # Flash the defender card on impact.
         var def_area: Control = enemy_board_area if player_side else player_board_area
@@ -5616,7 +5632,7 @@ func resolve_combat(attacker_index: int, target_index: int, player_side: bool) -
         # Flash the attacker card if it took counter-damage.
         if defender_damage > 0 and is_instance_valid(view):
             view.damage_flash()
-            await show_vfx("-%d" % defender_damage, (player_board_area if player_side else enemy_board_area).global_position + Vector2(120 + attacker_index * 145, 50), Color(1.0, 0.3, 0.2))
+            show_damage_number(defender_damage, (player_board_area if player_side else enemy_board_area).global_position + Vector2(80 + attacker_index * 145, 28), str(defender.get("rarity", "Bronze")))
 
         # A unit survives whenever it has at least 1 defense remaining.
         var defender_died: bool = defender_remaining <= 0
@@ -6384,15 +6400,23 @@ func _launch_projectile(from_global: Vector2, to_global: Vector2, proj_type: Str
 
     # ── Travel tween ───────────────────────────────────────────────────────
     var ptw := create_tween()
-    ptw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+    # Cubic acceleration: projectile starts slow then rockets — feels more forceful.
+    ptw.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
     ptw.tween_property(proj, "position", to_global - proj.size * 0.5, travel)
 
-    # Impact burst: scale up + fade just before arriving
-    get_tree().create_timer(travel - 0.05, true, false, true).timeout.connect(func():
+    # Pre-impact brighten at 72% of travel — telegraphs the hit before it lands.
+    get_tree().create_timer(travel * 0.72, true, false, true).timeout.connect(func():
+        if not is_instance_valid(proj): return
+        var brig := create_tween()
+        brig.tween_property(proj, "modulate", Color(2.4, 2.4, 2.4), 0.06)
+        brig.tween_property(proj, "modulate", Color.WHITE, 0.04))
+
+    # Arrival burst: bigger pop, snappier fade
+    get_tree().create_timer(travel - 0.04, true, false, true).timeout.connect(func():
         if not is_instance_valid(proj): return
         var burst := create_tween().set_parallel(true)
-        burst.tween_property(proj, "scale",       Vector2(2.6 + rtier * 0.4, 2.6 + rtier * 0.4), 0.12)
-        burst.tween_property(proj, "modulate:a",  0.0,                                             0.11))
+        burst.tween_property(proj, "scale",       Vector2(4.2 + rtier * 0.7, 4.2 + rtier * 0.7), 0.08)
+        burst.tween_property(proj, "modulate:a",  0.0,                                             0.07))
 
     get_tree().create_timer(travel + 0.18, true, false, true).timeout.connect(
         func(): if is_instance_valid(proj): proj.queue_free())
@@ -6423,17 +6447,98 @@ func _spawn_impact_sparks(at_global: Vector2, color: Color, count: int) -> void:
         get_tree().create_timer(life + 0.06, true, false, true).timeout.connect(
             func(): if is_instance_valid(spark): spark.queue_free())
 
-## Shakes the root Control (which shakes the whole battle scene) for `duration` seconds.
-func _screen_shake(intensity: float, duration: float) -> void:
+## Directional screen shake: first impulse toward `impact_dir`, then decaying random.
+## Pass a non-zero impact_dir for the characteristic directional hit feel.
+func _screen_shake(intensity: float, duration: float, impact_dir: Vector2 = Vector2.ZERO) -> void:
     if is_instance_valid(_shake_tween): _shake_tween.kill()
     var origin := Vector2.ZERO
     _shake_tween = create_tween()
     var steps := 8
     var step_t := duration / float(steps)
-    for _i in range(steps):
-        var off := Vector2(randf_range(-intensity, intensity), randf_range(-intensity * 0.55, intensity * 0.55))
+    var dir := impact_dir.normalized() if impact_dir.length() > 0.01 \
+        else Vector2(randf_range(-1.0, 1.0), randf_range(-0.5, 0.5)).normalized()
+    for i in range(steps):
+        var decay := pow(1.0 - float(i) / float(steps), 1.4)
+        var off: Vector2
+        if i == 0:
+            off = dir * intensity * decay           # first hit — toward impact
+        elif i == 1:
+            off = -dir * intensity * decay * 0.55  # rebound
+        else:
+            off = Vector2(randf_range(-1.0, 1.0), randf_range(-0.55, 0.55)).normalized() * intensity * decay
         _shake_tween.tween_property(self, "position", origin + off, step_t)
     _shake_tween.tween_property(self, "position", origin, step_t * 0.5)
+
+## Expanding ring at impact point — shockwave feel on every hit.
+func _spawn_impact_ring(at_global: Vector2, color: Color, rtier: int) -> void:
+    if CardView.graphics_quality == 0: return
+    var ring := Panel.new()
+    var ring_sz := 28.0 + rtier * 9.0
+    ring.size = Vector2(ring_sz, ring_sz)
+    ring.position = at_global - ring.size * 0.5
+    ring.z_index = 876
+    ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ring.pivot_offset = ring.size * 0.5
+    var rst := StyleBoxFlat.new()
+    rst.bg_color = Color(0, 0, 0, 0)
+    rst.border_color = color.lightened(0.30)
+    rst.set_border_width_all(maxi(2, rtier + 1))
+    rst.set_corner_radius_all(int(ring_sz * 0.5))
+    ring.add_theme_stylebox_override("panel", rst)
+    if not safe_add_child(self, ring): return
+    var target_scale := 3.4 + rtier * 0.55
+    var tw := create_tween().set_parallel(true)
+    tw.tween_property(ring, "scale", Vector2(target_scale, target_scale), 0.34)
+    tw.tween_property(ring, "modulate:a", 0.0, 0.30)
+    tw.finished.connect(ring.queue_free)
+
+## Bright central flash at the impact point — the pop of energy on contact.
+func _spawn_impact_flash(at_global: Vector2, color: Color, rtier: int) -> void:
+    var flash := Panel.new()
+    var fsz := 30.0 + rtier * 11.0
+    flash.size = Vector2(fsz, fsz)
+    flash.position = at_global - flash.size * 0.5
+    flash.z_index = 894
+    flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    flash.pivot_offset = flash.size * 0.5
+    var fst := StyleBoxFlat.new()
+    fst.bg_color = Color(minf(color.r * 2.2, 1.0), minf(color.g * 2.0, 1.0), minf(color.b * 2.0, 1.0), 0.94)
+    fst.set_corner_radius_all(int(fsz * 0.5))
+    flash.add_theme_stylebox_override("panel", fst)
+    if not safe_add_child(self, flash): return
+    var tw := create_tween().set_parallel(true)
+    tw.tween_property(flash, "scale", Vector2(2.2 + rtier * 0.45, 2.2 + rtier * 0.45), 0.11)
+    tw.tween_property(flash, "modulate:a", 0.0, 0.11)
+    tw.finished.connect(flash.queue_free)
+
+## Weighted damage number: pops large, springs to size, drifts up, fades.
+## Fire-and-forget — do NOT await this. Combat continues while it animates.
+func show_damage_number(dmg: int, world_pos: Vector2, attacker_rarity: String = "Bronze") -> void:
+    var rtier := _rarity_tier_int(attacker_rarity)
+    var is_heavy := dmg >= 5 or rtier >= 4
+    var lbl := Label.new()
+    lbl.text = "-%d" % dmg
+    lbl.z_index = 1412
+    lbl.add_theme_font_size_override("font_size", ui_font(50 if is_heavy else 38))
+    lbl.add_theme_color_override("font_color", Color(1.0, 0.90, 0.18) if is_heavy else Color(1.0, 0.26, 0.22))
+    lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.92))
+    lbl.add_theme_constant_override("shadow_offset_x", 3)
+    lbl.add_theme_constant_override("shadow_offset_y", 3)
+    lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    lbl.pivot_offset = Vector2(30, 22)
+    lbl.position = world_pos
+    if not safe_add_child(self, lbl): return
+    lbl.scale = Vector2(2.0, 2.0)  # starts large
+    var tw := create_tween()
+    # Spring bounce to natural size
+    tw.tween_property(lbl, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tw.parallel().tween_property(lbl, "position:y", world_pos.y - 10, 0.14)
+    # Drift upward
+    tw.tween_property(lbl, "position:y", world_pos.y - 68, 0.65).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    # Fade after short hold
+    tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.58).set_delay(0.16)
+    get_tree().create_timer(0.90, true, false, true).timeout.connect(
+        func(): if is_instance_valid(lbl): lbl.queue_free())
 
 ## Floating "+N/+N" text rising off a card + brief scale-pop on the card itself.
 ## Call anywhere a live board follower gets a permanent stat increase.
