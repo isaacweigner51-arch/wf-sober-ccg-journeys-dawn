@@ -329,31 +329,38 @@ func _headers(authenticated := true, prefer := "") -> PackedStringArray:
 
 func _request(method: int, path: String, body: Variant = null, authenticated := true, prefer := "") -> Dictionary:
     request_busy = true
-    var http := HTTPRequest.new()
-    add_child(http)
+    var http_request := HTTPRequest.new()
+    add_child(http_request)
     var payload := "" if body == null else JSON.stringify(body)
-    # Godot HTTPClient.Method: GET=0 HEAD=1 POST=2 PUT=3 DELETE=4 OPTIONS=5 TRACE=6 CONNECT=7 PATCH=8
-    var _method_names := ["GET","HEAD","POST","PUT","DELETE","OPTIONS","TRACE","CONNECT","PATCH"]
-    var method_name: String = _method_names[method] if method < _method_names.size() else str(method)
     var full_url: String = SUPABASE_URL + path
-    print("REQUEST ── %s %s" % [method_name, full_url])
-    print("REQUEST ── base_url='%s'  starts_https=%s  payload_len=%d" % [
-        SUPABASE_URL, str(SUPABASE_URL.begins_with("https://")), payload.length()])
-    var err := http.request(full_url, _headers(authenticated, prefer), method, payload)
-    print("REQUEST ── http.request() returned  err=%d  (%s)" % [err, error_string(err) if err != OK else "OK"])
-    if err != OK:
-        http.queue_free()
+
+    print("SUPABASE BASE URL = ", SUPABASE_URL)
+    print("FINAL REQUEST URL = ", full_url)
+    print("ANON KEY LOADED = ", not SUPABASE_KEY.is_empty())
+
+    var request_error := http_request.request(full_url, _headers(authenticated, prefer), method, payload)
+
+    print("HTTPRequest.request return code = ", request_error)
+    print("HTTPRequest.request error text = ", error_string(request_error))
+
+    if request_error != OK:
+        http_request.queue_free()
         request_busy = false
-        return {"ok":false, "status":0, "error":"Request could not start: %s (%d)." % [error_string(err), err]}
-    var completed: Array = await http.request_completed
-    http.queue_free()
+        var err_msg := "HTTP request failed to start: %s (code %d)" % [error_string(request_error), request_error]
+        account_authenticated.emit(false, err_msg)
+        return {"ok": false, "status": 0, "error": err_msg}
+
+    var completed: Array = await http_request.request_completed
+    http_request.queue_free()
     request_busy = false
-    # completed[0] = HTTPRequest.Result (Godot-level result code)
-    # completed[1] = HTTP response code (0 if connection never established)
+
+    # completed[0] = HTTPRequest.Result (Godot connection-level result)
+    # completed[1] = HTTP status code (0 means the connection never succeeded)
     var godot_result := int(completed[0])
     var status := int(completed[1])
     var raw: PackedByteArray = completed[3]
     var text := raw.get_string_from_utf8()
+
     var godot_result_name: String = {
         0: "RESULT_SUCCESS",
         1: "RESULT_CHUNKED_BODY_SIZE_MISMATCH",
@@ -370,14 +377,17 @@ func _request(method: int, path: String, body: Variant = null, authenticated := 
         12: "RESULT_REDIRECT_LIMIT_REACHED",
         13: "RESULT_TIMEOUT"
     }.get(godot_result, "RESULT_UNKNOWN_%d" % godot_result)
-    print("REQUEST ── response  godot_result=%d (%s)  http_status=%d  body_len=%d" % [
-        godot_result, godot_result_name, status, text.length()])
+
+    print("HTTPRequest completed: godot_result=", godot_result, " (", godot_result_name, ")  http_status=", status, "  body_len=", text.length())
     if godot_result != 0:
-        print("REQUEST ── NON-SUCCESS RESULT: %s — body: %s" % [godot_result_name, text.left(300)])
+        print("HTTPRequest NON-SUCCESS: ", godot_result_name, " — body: ", text.left(300))
+        if status == 0:
+            account_authenticated.emit(false, "Network error: %s" % godot_result_name)
+
     var parsed: Variant = null
     if not text.is_empty():
         parsed = JSON.parse_string(text)
-    return {"ok": status >= 200 and status < 300, "status":status, "data":parsed, "text":text}
+    return {"ok": status >= 200 and status < 300, "status": status, "data": parsed, "text": text}
 
 func _authenticate_anonymously() -> void:
     var result := await _request(HTTPClient.METHOD_POST, "/auth/v1/signup", {}, false)
