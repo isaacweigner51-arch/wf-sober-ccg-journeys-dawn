@@ -471,23 +471,23 @@ func build_class_cards(faction_name: String) -> Array:
             card("Purpose Eternal",9,9,10,faction_name,"Epic","charge_storm",0,"Charge. Storm. Breakthrough — cuts through even a full board.","star","jd-129")]
     return [
         card("Dawnwing Messenger",1,1,2,"Hope","Bronze","draw",1,"On Play: Draw a card.","road"),
-        card("Kindled Promise",1,1,3,"Hope","Bronze","heal_leader",1,"On Play: Restore 1 defense.","hands"),
-        card("Helping Hand",2,2,3,"Hope","Bronze","heal_buff",1,"On Play: Restore 1 defense and give another ally +1 Health.","hands"),
+        card("Kindled Promise",1,1,3,"Hope","Bronze","heal_leader_draw",1,"Arrival: Restore 1 defense and draw a card.","hands"),
+        card("Helping Hand",2,2,3,"Hope","Bronze","heal_buff_comeback",1,"On Play: Restore 1 defense and give another ally +1 Health. If the opponent controls more followers, also draw a card.","hands"),
         card("Open Horizon",2,2,2,"Hope","Bronze","final_draw",1,"Final Breath: Draw a card.","road"),
-        card("Beacon Keeper",3,2,4,"Hope","Bronze","renew_growth",1,"Whenever you restore defense, this gains +1/+1.","star"),
-        card("Encouraging Words",3,3,3,"Hope","Silver","heal_draw",2,"On Play: Restore 2 defense and draw a card.","star"),
-        card("Dreamward Keeper",4,3,6,"Hope","Silver","guard",0,"Guard.","shield"),
+        card("Beacon Keeper",3,2,4,"Hope","Bronze","renew_growth",1,"Arrival: Restore 1 defense. Renew: Whenever you restore defense, this gains +1/+1.","star"),
+        card("Encouraging Words",3,3,4,"Hope","Silver","heal_draw",2,"On Play: Restore 2 defense and draw a card.","star"),
+        card("Dreamward Keeper",4,3,6,"Hope","Silver","guard_heal_buff",0,"Guard. Whenever your leader is healed, this follower gains +1/+1.","shield"),
         card("Returned Wanderer",4,4,4,"Hope","Silver","final_draw",2,"Final Breath: Draw 2 cards.","road"),
-        card("Promise of Tomorrow",5,4,6,"Hope","Gold","revive",0,"On Play: Recover the most recent allied follower from the Relapse Zone.","star"),
+        card("Promise of Tomorrow",5,4,6,"Hope","Gold","revive_discount",0,"On Play: Recover the most recent allied follower from the Relapse Zone to your hand. It costs 2 less this turn.","star"),
         card("The Comeback Trail",2,0,0,"Hope","Gold","second_chances",1,"Amulet — stays on the board and has no Attack or Defense. It cannot be attacked or damaged, and can only be removed by effects that specifically target an Amulet. Whenever you recover a card from the Relapse Zone, gain Progress. At 3 Progress, restore 3 Defense and permanently buff an ally; at 6 transform into Renewed Hope.","star"),
         card("Light Beyond Night",5,5,5,"Hope","Gold","heal_all",2,"On Play: Restore 2 defense to your leader and all allies.","star"),
         card("Guardian Angel",6,4,8,"Hope","Gold","guard_protect",0,"Guard. The first allied follower destroyed is saved at 1 defense.","shield"),
         card("Renewed Faith",4,3,5,"Hope","Legendary","revive_buff",2,"On Play: Recover a follower; it gains +2/+2.","star"),
         card("Never Forgotten",7,6,9,"Hope","Legendary","revive",0,"On Play: Recover your most recent allied follower.","hands"),
-        card("New Beginning",7,5,8,"Hope","Legendary","board_clear_heal",4,"On Play: Clear every other follower, then restore 4 defense.","star"),
+        card("New Beginning",7,5,8,"Hope","Legendary","board_clear_enemy_heal_draw",4,"On Play: Send all enemy followers to their Relapse Zone, restore 4 defense, then draw 2 cards.","star"),
         card("Clean Slate",7,0,0,"Hope","Epic","second_chance",0,"Spell: Transform the 3 enemy followers with the highest Attack into Newcomers (1/1). Restore 3 defense.","hands"),
         card("Healing Grace",5,4,6,"Hope","Epic","heal_draw",4,"On Play: Restore 4 defense and draw a card.","star","jd-135"),
-        card("Beacon of Hope",8,5,7,"Hope","Platinum","hope_platinum",0,"SIGNATURE PLATINUM — Evolve for free. Summon two Inspired Volunteers and empower the first ally that enters play each turn.","star"),
+        card("Beacon of Hope",8,5,7,"Hope","Platinum","hope_platinum",0,"SIGNATURE PLATINUM — Evolve for free. Summon two Inspired Volunteers (2/3). Each Volunteer gains +1/+1 whenever your leader is healed.","star"),
         card("Hope Unending",7,5,8,"Hope","Legendary","heal_draw",6,"On Play: Restore 6 defense and draw a card.","star","jd-130")]
 
 func build_universal_cards() -> Array:
@@ -1532,7 +1532,7 @@ func create_inspired_volunteer(player_side: bool) -> void:
     var board: Array = player_board if player_side else enemy_board
     if follower_count(board) >= MAX_BOARD:
         return
-    var volunteer := card("Inspired Volunteer", 2, 2, 2, "Hope", "Token", "none", 0, "Inspired by Beacon of Hope.", "hands", "jd-131")
+    var volunteer := card("Inspired Volunteer", 2, 2, 3, "Hope", "Token", "heal_grows", 0, "Whenever your leader is healed, gain +1/+1.", "hands", "jd-131")
     volunteer["can_attack"] = false
     volunteer["summoned_turn"] = turn_number
     board.append(volunteer)
@@ -4907,6 +4907,12 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
         else: enemy_health = min(STARTING_HEALTH, enemy_health + amount)
         leader_feedback(player_leader if player_side else enemy_leader, amount, true)
         await show_vfx("+%d" % amount, player_leader.global_position if player_side else enemy_leader.global_position, Color(0.4, 1.0, 0.55))
+    elif ability == "heal_leader_draw":
+        if player_side: player_health = min(STARTING_HEALTH, player_health + amount)
+        else: enemy_health = min(STARTING_HEALTH, enemy_health + amount)
+        leader_feedback(player_leader if player_side else enemy_leader, amount, true)
+        draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
+        await show_vfx("+%d + DRAW" % amount, player_leader.global_position if player_side else enemy_leader.global_position, Color(0.4, 1.0, 0.55))
     elif ability == "draw":
         draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand); await show_vfx("DRAW", Vector2(550, 475 if player_side else 70), Color(0.55, 0.85, 1.0))
     elif ability == "damage_enemy":
@@ -5020,6 +5026,52 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
             if ally != unit:
                 ally["health"] = int(ally["health"]) + amount; ally["max_health"] = int(ally["max_health"]) + amount; break
         await show_vfx("HELPING HAND", area_center(player_side), Color(0.55, 1.0, 0.75))
+    elif ability == "heal_buff_comeback":
+        if player_side: player_health = min(STARTING_HEALTH, player_health + amount)
+        else: enemy_health = min(STARTING_HEALTH, enemy_health + amount)
+        leader_feedback(player_leader if player_side else enemy_leader, amount, true)
+        var hb_allies: Array = player_board if player_side else enemy_board
+        var hb_foes: Array = enemy_board if player_side else player_board
+        for ally in hb_allies:
+            if ally != unit:
+                ally["health"] = int(ally["health"]) + amount
+                ally["max_health"] = int(ally["max_health"]) + amount
+                break
+        var foe_count: int = follower_count(hb_foes)
+        var own_count: int = follower_count(hb_allies)
+        if foe_count > own_count:
+            draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
+            await show_vfx("HELPING HAND + DRAW", area_center(player_side), Color(0.55, 1.0, 0.75))
+        else:
+            await show_vfx("HELPING HAND", area_center(player_side), Color(0.55, 1.0, 0.75))
+    elif ability == "renew_growth":
+        # Arrival: Restore 1 defense (self-triggers the Renew passive this turn).
+        if player_side: player_health = min(STARTING_HEALTH, player_health + 1)
+        else: enemy_health = min(STARTING_HEALTH, enemy_health + 1)
+        leader_feedback(player_leader if player_side else enemy_leader, 1, true)
+        await show_vfx("+1 BEACON KEEPER", player_leader.global_position if player_side else enemy_leader.global_position, Color(0.4, 1.0, 0.55))
+    elif ability == "morning_promise":
+        var cur_hp: int = player_health if player_side else enemy_health
+        if cur_hp >= 15:
+            draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
+            var mp_board: Array = player_board if player_side else enemy_board
+            var mp_idx: int = mp_board.find(unit)
+            if mp_idx >= 0:
+                mp_board[mp_idx]["attack"] = int(unit["attack"]) + 1
+                mp_board[mp_idx]["health"] = int(unit["health"]) + 1
+                mp_board[mp_idx]["max_health"] = int(unit.get("max_health", unit["health"])) + 1
+            await show_vfx("MORNING PROMISE: DRAW + +1/+1", area_center(player_side), Color(1.0, 0.88, 0.45))
+        else:
+            await show_vfx("MORNING PROMISE: NEED 15+ DEF", area_center(player_side), Color(0.6, 0.6, 0.7))
+    elif ability == "circle_support":
+        var cs_allies: Array = player_board if player_side else enemy_board
+        var cs_foes: Array = enemy_board if player_side else player_board
+        if follower_count(cs_foes) > follower_count(cs_allies):
+            for ally in cs_allies:
+                if not bool(ally.get("is_amulet", false)):
+                    ally["health"] = int(ally["health"]) + 1
+                    ally["max_health"] = int(ally["max_health"]) + 1
+            await show_vfx("CIRCLE OF SUPPORT: ALL ALLIES +0/+1", area_center(player_side), Color(0.45, 0.9, 0.65))
     elif ability in ["buff_all", "buff_all_attack"]:
         var allies: Array = player_board if player_side else enemy_board
         for ally in allies:
@@ -5102,6 +5154,24 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
         await show_vfx("PEACE BEYOND FEAR", area_center(player_side), Color(0.55, 0.85, 1.0))
     elif ability in ["revive", "revive_buff", "revive_charge", "revive_to_hand"]:
         await recover_from_relapse(player_side, ability, amount)
+    elif ability == "revive_discount":
+        var rd_relapse: Array = player_relapse if player_side else enemy_relapse
+        if rd_relapse.is_empty():
+            await show_vfx("RELAPSE ZONE EMPTY", area_center(player_side), Color(0.72, 0.72, 0.85))
+        else:
+            var rd_card: Dictionary = rd_relapse.pop_back()
+            if bool(rd_card.get("evolved", false)) and not bool(rd_card.get("is_amulet", false)):
+                rd_card = _strip_evolution_for_revival(rd_card)
+            rd_card["health"] = int(rd_card.get("max_health", rd_card.get("health", 1)))
+            rd_card["can_attack"] = false
+            rd_card["cost"] = maxi(0, int(rd_card.get("cost", 0)) - 2)
+            var rd_hand: Array = player_hand if player_side else enemy_hand
+            var rd_deck: Array = player_deck if player_side else enemy_deck
+            if rd_hand.size() < MAX_HAND: rd_hand.append(rd_card)
+            else: rd_deck.push_front(rd_card)
+            training_on_recovered(player_side)
+            await trigger_leader_recovery_progress(player_side, "second_chances")
+            await show_vfx("RECOVERY — -2 COST", area_center(player_side), Color(1.0, 0.78, 0.35))
     elif ability in ["board_clear", "board_clear_heal", "board_clear_draw"]:
         await clear_battlefield_except(unit, player_side)
         if ability == "board_clear_heal":
@@ -5110,6 +5180,16 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
         elif ability == "board_clear_draw":
             for i in range(2):
                 draw_card(player_deck, player_hand); draw_card(enemy_deck, enemy_hand)
+    elif ability == "board_clear_enemy_heal_draw":
+        var bce_foes: Array = enemy_board if player_side else player_board
+        for i in range(bce_foes.size() - 1, -1, -1):
+            if not bool(bce_foes[i].get("is_amulet", false)):
+                await destroy_unit(bce_foes, i, not player_side)
+        if player_side: player_health = min(STARTING_HEALTH, player_health + amount)
+        else: enemy_health = min(STARTING_HEALTH, enemy_health + amount)
+        for _i in range(2):
+            draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
+        await show_vfx("NEW BEGINNING", area_center(player_side), Color(1.0, 0.85, 0.62))
     elif ability == "heal_all":
         if player_side: player_health = min(STARTING_HEALTH, player_health + amount)
         else: enemy_health = min(STARTING_HEALTH, enemy_health + amount)
@@ -5143,12 +5223,26 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
             enemy_health = min(STARTING_HEALTH, enemy_health + 5)
         unit["serenity_save_active"] = true
         await show_vfx("INNER PEACE — RESTORE 5", area_center(player_side), Color(0.55, 0.9, 1.0))
-    if ability in ["heal_leader", "heal_draw", "guard_heal", "heal_buff", "heal_all", "hope_platinum", "serenity_platinum", "board_clear_heal"]:
+    var _is_heal_ability := ability in ["heal_leader", "heal_leader_draw", "heal_draw", "guard_heal", "heal_buff", "heal_buff_comeback", "heal_all", "hope_platinum", "serenity_platinum", "board_clear_heal", "board_clear_enemy_heal_draw", "renew_growth", "morning_promise"]
+    if _is_heal_ability:
         await apply_sanctuary_serenity_buff(player_side)
-    if player_side and ability in ["heal_leader", "heal_draw", "guard_heal", "heal_buff", "heal_all", "hope_platinum", "serenity_platinum", "board_clear_heal"]:
+        _trigger_on_leader_healed(player_side)
+    if player_side and _is_heal_ability:
         training_on_heal(maxi(1, amount))
     refresh_ui()
 
+
+## Called after any heal event so passive "whenever leader healed" abilities fire.
+## Abilities handled: renew_growth, guard_heal_buff (Dreamward Keeper), heal_grows (Inspired Volunteer).
+func _trigger_on_leader_healed(player_side: bool) -> void:
+    var board: Array = player_board if player_side else enemy_board
+    for i in range(board.size()):
+        var ab := str(board[i].get("ability", ""))
+        if ab in ["renew_growth", "guard_heal_buff", "heal_grows"]:
+            board[i]["attack"] = int(board[i].get("attack", 0)) + 1
+            board[i]["health"] = int(board[i].get("health", 0)) + 1
+            board[i]["max_health"] = int(board[i].get("max_health", board[i]["health"])) + 1
+    refresh_ui()
 
 func add_progress(player_side: bool, amount: int = 1) -> void:
     if player_side:
@@ -5467,7 +5561,7 @@ func destroy_unit(board: Array, index: int, player_side: bool, specifically_targ
     if bool(dead.get("is_amulet", false)) and not specifically_targets_amulet:
         return
     # Ward-break VFX — show before the follower is removed.
-    if str(dead.get("ability", "")) in ["guard", "guard_heal", "guard_protect", "rise_together"]:
+    if str(dead.get("ability", "")) in ["guard", "guard_heal", "guard_heal_buff", "guard_protect", "rise_together"]:
         var ward_area: Control = player_board_area if player_side else enemy_board_area
         show_vfx("WARD BROKEN", ward_area.global_position + Vector2(90 + index * 145, 20), Color(0.45, 0.75, 1.0))
     if bool(dead.get("sponsor_protection", false)):
@@ -5521,7 +5615,7 @@ func first_guard_index(board: Array) -> int:
     for i in range(board.size()):
         if bool(board[i].get("is_amulet", false)):
             continue
-        if str(board[i].get("ability", "")) in ["guard", "guard_heal", "guard_protect", "rise_together"]: return i
+        if str(board[i].get("ability", "")) in ["guard", "guard_heal", "guard_heal_buff", "guard_protect", "rise_together"]: return i
     return -1
 
 func check_winner() -> void:
