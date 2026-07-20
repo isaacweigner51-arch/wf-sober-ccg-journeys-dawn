@@ -34,6 +34,7 @@ var busy := false
 var selected_attacker := -1
 var selected_evolution_cost: int = 0
 var attack_drag_line: Line2D = null
+var _drag_attack_pending := false  # true only while a drag-initiated attack is resolving
 var attack_drag_attacker_idx: int = -1
 var player_evolutions_used: Array[bool] = [false, false, false, false]
 var enemy_evolutions_used: Array[bool] = [false, false, false, false]
@@ -1674,10 +1675,67 @@ func leader_emote(leader: Control, symbol: String, color: Color) -> void:
 # fighting over the same "scale" property.
 func start_leader_idle(portrait: TextureRect) -> void:
     portrait.pivot_offset = portrait.size * 0.5
+    # Breathing — slow scale pulse so the portrait feels alive.
     var idle := create_tween().set_loops().bind_node(portrait)
     idle.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-    idle.tween_property(portrait, "scale", Vector2(1.035, 1.035), 1.5)
-    idle.tween_property(portrait, "scale", Vector2(1.0, 1.0), 1.5)
+    idle.tween_property(portrait, "scale", Vector2(1.040, 1.040), 1.8)
+    idle.tween_property(portrait, "scale", Vector2(1.000, 1.000), 1.8)
+    # Subtle lateral drift — character sways very slightly inside the frame.
+    var drift := create_tween().set_loops().bind_node(portrait)
+    drift.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    drift.tween_property(portrait, "position:x",  2.5, 2.6)
+    drift.tween_property(portrait, "position:x", -2.0, 2.6)
+    drift.tween_property(portrait, "position:x",  0.0, 2.6)
+
+## Applies class-specific background tint and a pulsing aura border to a leader.
+## Must be called AFTER update_leader_visual() so faction is known.
+func _start_leader_class_aura(leader: Button, faction_name: String) -> void:
+    var old := leader.get_node_or_null("ClassAuraBorder")
+    if is_instance_valid(old):
+        old.queue_free()
+
+    var ac := class_accent_color(faction_name)
+
+    # Class-tinted atmospheric background.
+    var aura_bg := leader.get_node_or_null("AuraBg") as ColorRect
+    if aura_bg != null:
+        aura_bg.color = Color(ac.r * 0.10, ac.g * 0.08, ac.b * 0.14, 1.0)
+
+    # Tint the bottom scrim to match.
+    var scrim := leader.get_node_or_null("BottomScrim") as ColorRect
+    if scrim != null:
+        scrim.color = Color(ac.r * 0.06, ac.g * 0.05, ac.b * 0.10, 0.92)
+
+    # Class-coloured accent bar.
+    var accent := leader.get_node_or_null("AccentBar") as ColorRect
+    if accent != null:
+        accent.color = ac
+
+    # Glowing border panel that pulses in class colour.
+    var border := Panel.new()
+    border.name = "ClassAuraBorder"
+    border.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    border.z_index = 90
+    var bs := StyleBoxFlat.new()
+    bs.bg_color       = Color(0, 0, 0, 0)
+    bs.border_color   = Color(ac.r, ac.g, ac.b, 0.60)
+    bs.set_border_width_all(3)
+    bs.set_corner_radius_all(0)
+    bs.shadow_color   = Color(ac.r, ac.g, ac.b, 0.40)
+    bs.shadow_size    = 22
+    border.add_theme_stylebox_override("panel", bs)
+    leader.add_child(border)
+
+    # Pulse speed varies by class personality.
+    var speed: float = 1.9  # Purpose: disciplined default
+    if faction_name == "Courage":  speed = 1.0   # urgent, rapid flicker
+    elif faction_name == "Hope":   speed = 1.6   # warm, steady
+    elif faction_name == "Serenity": speed = 2.6 # slow, meditative
+    var pulse := create_tween().set_loops().bind_node(leader)
+    pulse.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    pulse.tween_property(border, "modulate:a", 0.28, speed)
+    pulse.tween_property(border, "modulate:a", 1.00, speed)
 
 # Leader portraits are square, full-scene paintings with the character in the
 # top ~60% of the canvas (see menu.gd: class_leader_texture, same fix applied
@@ -1763,10 +1821,10 @@ func build_ui() -> void:
     # outside the leader's own (195x185) rect, so it was being silently
     # clipped away entirely. Parenting to self (unclipped) with an absolute
     # position fixes that; z_index keeps it above board art either way.
-    enemy_health_label = make_hp_label(enemy_leader.position + Vector2(118, 142), class_accent_color(enemy_class))
+    enemy_health_label = make_hp_label(enemy_leader.position + Vector2(118, 153), class_accent_color(enemy_class))
     enemy_health_label.z_index = 130
     add_child(enemy_health_label)
-    player_health_label = make_hp_label(player_leader.position + Vector2(118, 142), class_accent_color(selected_class))
+    player_health_label = make_hp_label(player_leader.position + Vector2(118, 153), class_accent_color(selected_class))
     player_health_label.z_index = 130
     add_child(player_health_label)
 
@@ -1904,9 +1962,7 @@ func update_leader_visual(leader: Button, faction_name: String, player_side: boo
     if name_label != null:
         name_label.text = leader_name_for(faction_name)
         name_label.add_theme_color_override("font_color", class_accent_color(faction_name).lightened(0.28))
-    var accent_bar := leader.get_node_or_null("AccentBar") as ColorRect
-    if accent_bar != null:
-        accent_bar.color = class_accent_color(faction_name)
+    _start_leader_class_aura(leader, faction_name)
     leader.tooltip_text = ("Your Leader: " if player_side else "Enemy Leader: ") + leader_name_for(faction_name)
 
 func update_leaders() -> void:
@@ -3066,69 +3122,72 @@ func area_center(player_side: bool) -> Vector2:
 func make_leader(label_text: String, pos: Vector2, player_side: bool) -> Button:
     var leader := Button.new()
     leader.position = pos
-    leader.size = Vector2(195, 185)
+    leader.size = Vector2(200, 200)
     leader.text = ""
     leader.clip_contents = true
     leader.focus_mode = Control.FOCUS_NONE
 
-    var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.018, 0.035, 0.065, 0.99)
-    style.border_color = Color(0.96, 0.77, 0.30)
-    style.set_border_width_all(4)
-    style.set_corner_radius_all(18)
-    style.shadow_color = Color(0, 0, 0, 0.80)
-    style.shadow_size = 14
-    leader.add_theme_stylebox_override("normal", style)
+    # No card-border styling — leaders feel like characters, not cards.
+    var style_empty := StyleBoxEmpty.new()
+    leader.add_theme_stylebox_override("normal",  style_empty)
+    leader.add_theme_stylebox_override("hover",   style_empty)
+    leader.add_theme_stylebox_override("pressed", style_empty)
+    leader.add_theme_stylebox_override("focus",   style_empty)
 
-    var hover_style := StyleBoxFlat.new()
-    hover_style.bg_color = Color(0.03, 0.06, 0.10, 1.0)
-    hover_style.border_color = Color(1.0, 0.88, 0.48)
-    hover_style.set_border_width_all(5)
-    hover_style.set_corner_radius_all(18)
-    hover_style.shadow_color = Color(1.0, 0.74, 0.24, 0.35)
-    hover_style.shadow_size = 18
-    leader.add_theme_stylebox_override("hover", hover_style)
-    leader.add_theme_stylebox_override("pressed", hover_style)
+    # Deep atmospheric background; class-tinted in _start_leader_class_aura().
+    var aura_bg := ColorRect.new()
+    aura_bg.name = "AuraBg"
+    aura_bg.color = Color(0.03, 0.05, 0.10, 1.0)
+    aura_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    aura_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    leader.add_child(aura_bg)
 
+    # Full-frame portrait — edge to edge, COVERED so the face always fills the frame.
     var portrait := TextureRect.new()
     portrait.name = "Portrait"
-    portrait.position = Vector2(8, 8)
-    portrait.size = Vector2(164, 126)
-    portrait.texture = leader_portrait_texture("res://assets/leaders/player.png" if player_side else "res://assets/leaders/enemy.png")
+    portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    portrait.texture = leader_portrait_texture(
+        "res://assets/leaders/player.png" if player_side else "res://assets/leaders/enemy.png")
     portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    # COVERED instead of CENTERED: the source art is a square 512x512 portrait
-    # but this frame is a wide 164x126 box. CENTERED preserves the whole image
-    # and pads the sides with empty dark bars, which reads as an unfinished/
-    # broken portrait. COVERED fills the frame completely (cropping slightly
-    # top/bottom) so the leader's face and torso are always fully visible.
     portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    portrait.clip_contents = true
+    portrait.clip_contents = false
     portrait.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
     portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
     leader.add_child(portrait)
     start_leader_idle(portrait)
 
+    # Gradient scrim fades the portrait into the name area.
+    var scrim := ColorRect.new()
+    scrim.name = "BottomScrim"
+    scrim.position = Vector2(0, 150)
+    scrim.size = Vector2(200, 50)
+    scrim.color = Color(0.03, 0.05, 0.10, 0.90)
+    scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    leader.add_child(scrim)
+
+    # Thin class accent line — coloured in _start_leader_class_aura().
     var accent_bar := ColorRect.new()
     accent_bar.name = "AccentBar"
-    accent_bar.position = Vector2(8, 132)
-    accent_bar.size = Vector2(164, 4)
+    accent_bar.position = Vector2(0, 164)
+    accent_bar.size = Vector2(200, 2)
     accent_bar.color = Color(1.0, 0.80, 0.34)
     accent_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
     leader.add_child(accent_bar)
 
+    # Leader name plate.
     var name_label := Label.new()
     name_label.name = "NameLabel"
     name_label.text = label_text
-    name_label.position = Vector2(6, 138)
-    name_label.size = Vector2(168, 26)
+    name_label.position = Vector2(4, 167)
+    name_label.size = Vector2(192, 30)
     name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-    name_label.add_theme_font_size_override("font_size", ui_font(11))
+    name_label.add_theme_font_size_override("font_size", ui_font(10))
     name_label.add_theme_color_override("font_color", Color(1.0, 0.91, 0.62))
-    name_label.add_theme_color_override("font_shadow_color", Color.BLACK)
-    name_label.add_theme_constant_override("shadow_offset_x", 2)
-    name_label.add_theme_constant_override("shadow_offset_y", 2)
+    name_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.90))
+    name_label.add_theme_constant_override("shadow_offset_x", 1)
+    name_label.add_theme_constant_override("shadow_offset_y", 1)
     name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     leader.add_child(name_label)
     return leader
@@ -5469,6 +5528,7 @@ func card_clicked(index: int, player_side: bool) -> void:
         safe_set_text(status_label, "Drag %s to attack." % str(player_board[index].get("name", "follower")))
     else:
         if selected_attacker < 0: return
+        if not _drag_attack_pending: return  # attacks must originate from a drag, never from a tap
         if index >= 0 and index < enemy_board.size() and bool(enemy_board[index].get("is_amulet", false)):
             status_label.text = "That Recovery Skill cannot be attacked. Use an effect that targets Recovery Skills."
             return
@@ -5483,6 +5543,7 @@ func card_clicked(index: int, player_side: bool) -> void:
 
 func leader_clicked(player_side: bool) -> void:
     if player_side or selected_attacker < 0 or busy or not player_turn_active: return
+    if not _drag_attack_pending: return  # leader attacks must originate from a drag, never from a tap
     if first_guard_index(enemy_board) >= 0: status_label.text = "A Protector must be attacked first."; return
     if selected_attacker >= player_board.size(): return
     var attacker: Dictionary = player_board[selected_attacker]
@@ -6867,16 +6928,24 @@ func _on_attack_drag_update(card_index: int, _context: String, global_pos: Vecto
     attack_drag_line.add_point(global_pos)
     attack_drag_line.visible = true
 
-    # Highlight valid enemy targets; dim everything else.
+    # Highlight the exact target under the pointer; dim invalid targets.
     var guard_idx: int = first_guard_index(enemy_board)
     for child in enemy_board_area.get_children():
         if not (child is CardView):
             continue
         var is_valid: bool = (guard_idx < 0 or child.card_index == guard_idx) \
             and not bool(enemy_board[mini(child.card_index, enemy_board.size() - 1)].get("is_amulet", false))
-        child.modulate = Color(1.3, 1.1, 0.7) if is_valid else Color(0.5, 0.5, 0.5)
+        if not is_valid:
+            child.modulate = Color(0.50, 0.50, 0.50)
+        else:
+            var hovered: bool = Rect2(child.global_position, child.size * child.scale).grow(8.0).has_point(global_pos)
+            child.modulate = Color(1.55, 1.25, 0.55) if hovered else Color(1.0, 1.0, 1.0)
     if is_instance_valid(enemy_leader):
-        enemy_leader.modulate = Color(1.3, 0.6, 0.6) if guard_idx < 0 else Color(0.5, 0.5, 0.5)
+        if guard_idx >= 0:
+            enemy_leader.modulate = Color(0.50, 0.50, 0.50)
+        else:
+            var lhov: bool = Rect2(enemy_leader.global_position, enemy_leader.size).has_point(global_pos)
+            enemy_leader.modulate = Color(1.55, 0.65, 0.65) if lhov else Color(1.0, 1.0, 1.0)
 
 func _clear_attack_drag() -> void:
     attack_drag_attacker_idx = -1
@@ -6919,30 +6988,38 @@ func _on_card_drag_action(card_index: int, context: String, release_global: Vect
         if not bool(player_board[card_index].get("can_attack", false)):
             safe_set_text(status_label, "%s is resting." % str(player_board[card_index].get("name", "That follower")))
             return
-        # Use generous target zones and nearest-target fallback so mouse and touch
-        # releases register reliably even when the card graphic is small.
-        var nearest_index := -1
-        var nearest_distance := 999999.0
+        # ── Target resolution ────────────────────────────────────────────────────
+        # release_global is in canvas coordinates. card_view.gd touch path now
+        # uses get_global_mouse_position() (canvas coords) so mouse and touch are
+        # consistent with Control.get_global_rect() / global_position.
+        # Step 1: enemy follower directly under the release point.
+        # Use visual rect (size * scale) so the hit zone matches what's drawn.
         for child in enemy_board_area.get_children():
-            if child is CardView:
-                var rect: Rect2 = child.get_global_rect().grow(34.0)
-                if rect.has_point(release_global):
-                    selected_attacker = card_index
-                    card_clicked(child.card_index, false)
-                    return
-                var distance: float = release_global.distance_to(rect.get_center())
-                if distance < nearest_distance:
-                    nearest_distance = distance
-                    nearest_index = child.card_index
-        if is_instance_valid(enemy_leader) and enemy_leader.get_global_rect().grow(34.0).has_point(release_global):
-            selected_attacker = card_index
-            leader_clicked(false)
-            return
-        if is_instance_valid(enemy_board_area) and enemy_board_area.get_global_rect().grow(42.0).has_point(release_global) and nearest_index >= 0 and nearest_distance <= 150.0:
-            selected_attacker = card_index
-            card_clicked(nearest_index, false)
-            return
-        safe_set_text(status_label, "Drag directly onto an enemy follower or leader.")
+            if not (child is CardView):
+                continue
+            var vis: Rect2 = Rect2(child.global_position, child.size * child.scale).grow(12.0)
+            if vis.has_point(release_global):
+                print("[ATTACK RELEASE] pointer=%s type=follower id=%s node=%s" % [
+                    release_global, child.data.get("id", "?"), child.get_path()])
+                _drag_attack_pending = true
+                selected_attacker = card_index
+                card_clicked(child.card_index, false)
+                _drag_attack_pending = false
+                return
+        # Step 2: enemy leader — exact rect, no grow, so it never bleeds into
+        # the follower zone above it.
+        if is_instance_valid(enemy_leader):
+            var lr: Rect2 = Rect2(enemy_leader.global_position, enemy_leader.size)
+            if lr.has_point(release_global):
+                print("[ATTACK RELEASE] pointer=%s type=leader" % release_global)
+                _drag_attack_pending = true
+                selected_attacker = card_index
+                leader_clicked(false)
+                _drag_attack_pending = false
+                return
+        # Step 3: no valid target — cancel without attacking anything.
+        print("[ATTACK RELEASE] pointer=%s cancelled=true" % release_global)
+        safe_set_text(status_label, "Drag onto an enemy follower or the enemy leader to attack.")
 
 func rebuild_enemy_hand() -> void:
     clear_children(enemy_hand_area)

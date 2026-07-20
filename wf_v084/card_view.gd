@@ -42,9 +42,14 @@ static var graphics_quality := 2  # 0 = Low  1 = Medium  2 = High
 
 ## Display context — controls which animations and effects are active.
 ## Set BEFORE calling setup() so _build() / _init_rarity_vfx() can read it.
-## BATTLEFIELD: full idle breathing, orbs, hover lift, attack feel.
-## PREVIEW:     fixed size, no scale animation, no hover transform, no orbs.
-enum DisplayMode { BATTLEFIELD, PREVIEW }
+## BATTLEFIELD:   full idle breathing, orbs, hover lift, attack feel.
+## PREVIEW:       fixed size, no breathing, no orbs, no hover, no attack transforms.
+##                Used for Second Chance, Pack Opening, and any fixed-slot display.
+## HAND:          breathing off, hover lift on, no combat animations.
+## COLLECTION:    preview-like — fixed size, rarity VFX visible but no scale drift.
+## DECK_BUILDER:  same as COLLECTION.
+## DETAIL_VIEW:   static render; all interactive animations off.
+enum DisplayMode { BATTLEFIELD, PREVIEW, HAND, COLLECTION, DECK_BUILDER, DETAIL_VIEW }
 var display_mode := DisplayMode.BATTLEFIELD
 var allow_reorder := false
 var show_inspect_button := false
@@ -132,7 +137,11 @@ func _gui_input(event: InputEvent) -> void:
         if event.pressed:
             _gesture_press(context)
         else:
-            _gesture_release(context, event.position)
+            # Use get_global_mouse_position() (canvas coords) instead of
+            # event.position (screen/viewport coords). On mobile with viewport
+            # scaling the two coordinate spaces differ, making release-point
+            # detection against Control.get_global_rect() fail silently.
+            _gesture_release(context, get_global_mouse_position())
     elif event is InputEventScreenDrag:
         _gesture_motion(context)
 
