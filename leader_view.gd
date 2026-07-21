@@ -55,6 +55,7 @@ var _current_state: State = State.IDLE
 var _idle_tween: Tween = null
 var _state_tween: Tween = null
 var has_layered_art := false   # auto-set in setup()
+var _aux_idle_tweens: Array = []   # hair / head / aura tweens killed alongside _idle_tween
 
 # Art layers
 var _art: TextureRect = null         # flat composite fallback
@@ -93,12 +94,16 @@ func setup(class_name_str: String, size_vec: Vector2) -> void:
 	size = size_vec
 	clip_contents = true
 
-	# Layered art disabled — individual layer PNGs (body/head/hair) fill the
-	# entire 1024×1024 canvas with close-up crops, so stacking them in a
-	# clipped frame shows only an extreme zoomed-in region of scales/feathers.
-	# Use the flat composite portrait (with focal-shift) everywhere until the
-	# layer files are redrawn as full-canvas transparent overlays.
-	has_layered_art = false
+	# Auto-detect: all layer PNGs are 1024×1024 full-canvas RGBA overlays that
+	# share the same coordinate space, so stacking them inside a clipped frame
+	# composites correctly.  Fall back to the flat portrait for non-class nodes
+	# (enemy placeholder, Sponsor) that have no layer files.
+	var cn := _class_name_value.to_lower()
+	has_layered_art = (
+		_file_exists_res("res://assets/leaders/%s_body.png" % cn) and
+		_file_exists_res("res://assets/leaders/%s_head.png"  % cn) and
+		_file_exists_res("res://assets/leaders/%s_hair.png"  % cn)
+	)
 
 	_setup_nodes(size_vec)
 
@@ -202,6 +207,9 @@ func set_state(new_state: State) -> void:
 	_current_state = new_state
 	if _idle_tween:  _idle_tween.kill();  _idle_tween = null
 	if _state_tween: _state_tween.kill(); _state_tween = null
+	for t in _aux_idle_tweens:
+		if t: t.kill()
+	_aux_idle_tweens.clear()
 
 	# Reset all layers to neutral transform / colour
 	for node in [_art, _layer_head, _layer_hair, _layer_body, _layer_aura]:
@@ -237,27 +245,55 @@ func get_state() -> State:
 # ── Animation implementations ─────────────────────────────────────────────────
 
 func _play_idle() -> void:
-	# Gentle breathing animation on flat composite (or body layer if layered).
-	# Deferred so get_tree() is available; guard if node was freed before timer.
-	var target := _art if _art else _layer_body
-	if target == null:
-		return
 	if not is_inside_tree():
 		await tree_entered
-	if _idle_tween:
-		_idle_tween.kill()
-	_idle_tween = create_tween().set_loops()
-	_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_idle_tween.tween_property(target, "position:y", -5.0, 2.4)
-	_idle_tween.tween_property(target, "position:y",  0.0, 2.4)
-	# Layered path: also drift hair gently and schedule blinks
-	if _layer_hair != null:
-		var hair_tween := create_tween().set_loops()
-		hair_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		hair_tween.tween_property(_layer_hair, "position:x",  3.5, 1.9)
-		hair_tween.tween_property(_layer_hair, "position:x", -3.5, 1.9)
-	if _layer_head != null and _head_blink_tex != null:
-		_schedule_blink()
+	if _idle_tween: _idle_tween.kill()
+	for t in _aux_idle_tweens:
+		if t: t.kill()
+	_aux_idle_tweens.clear()
+
+	if has_layered_art:
+		# ── Body: breathing rise — the anchor for everything else ────────────
+		_idle_tween = create_tween().set_loops()
+		_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_idle_tween.tween_property(_layer_body, "position:y", -7.0, 2.2)
+		_idle_tween.tween_property(_layer_body, "position:y",  0.0, 2.2)
+
+		# ── Hair: wider sway, slightly faster, out of phase with body ────────
+		if _layer_hair != null:
+			var ht := create_tween().set_loops()
+			ht.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			ht.tween_property(_layer_hair, "position:x",  8.0, 1.6)
+			ht.tween_property(_layer_hair, "position:x", -8.0, 1.6)
+			_aux_idle_tweens.append(ht)
+
+		# ── Head: gentle vertical drift, slight lag behind body ──────────────
+		if _layer_head != null:
+			var hdt := create_tween().set_loops()
+			hdt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			hdt.tween_property(_layer_head, "position:y", -4.5, 2.5).set_delay(0.35)
+			hdt.tween_property(_layer_head, "position:y",  0.0, 2.5)
+			_aux_idle_tweens.append(hdt)
+
+		# ── Aura: slow pulse ─────────────────────────────────────────────────
+		if _layer_aura != null:
+			var at := create_tween().set_loops()
+			at.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			at.tween_property(_layer_aura, "modulate:a", 0.90, 2.2)
+			at.tween_property(_layer_aura, "modulate:a", 0.42, 2.2)
+			_aux_idle_tweens.append(at)
+
+		# Blink loop
+		if _layer_head != null and _head_blink_tex != null:
+			_schedule_blink()
+	else:
+		# ── Flat composite: breathing on the whole portrait ──────────────────
+		var target := _art
+		if target == null: return
+		_idle_tween = create_tween().set_loops()
+		_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_idle_tween.tween_property(target, "position:y", -5.0, 2.4)
+		_idle_tween.tween_property(target, "position:y",  0.0, 2.4)
 
 func _schedule_blink() -> void:
 	if _layer_head == null or _head_blink_tex == null or _current_state != State.IDLE:

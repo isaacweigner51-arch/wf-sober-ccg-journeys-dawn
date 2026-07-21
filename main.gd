@@ -33,6 +33,7 @@ var enemy_max_mana := 0
 var turn_number := 0
 var game_over := false
 var busy := false
+var _active_amulet_tooltip: Control = null   # tap-to-reveal tooltip on field amulets
 var selected_attacker := -1
 var selected_evolution_cost: int = 0
 var attack_drag_line: Line2D = null
@@ -7295,23 +7296,79 @@ func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
             tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
             holder.add_child(tag)
 
-            # Invisible hover target — lets mouse enter so tooltip fires.
-            # Must NOT be disabled (disabled nodes eat no mouse events in Godot 4).
-            # Effect text shown permanently — tooltip approach was unreliable.
+            # Tap/touch the amulet panel to reveal its effect in a floating tooltip.
             var effect_text := str(amulets[slot].get("display_text", ""))
+            var amulet_name_str := str(amulets[slot].get("name", "Amulet"))
+            var accent_cap := accent
             if not effect_text.is_empty():
-                var fx_lbl := Label.new()
-                fx_lbl.text = effect_text
-                fx_lbl.position = Vector2(8, 44)
-                fx_lbl.size = Vector2(slot_width - 14, 26)
-                fx_lbl.add_theme_font_size_override("font_size", ui_font(8))
-                fx_lbl.add_theme_color_override("font_color", Color(0.76, 0.82, 0.95))
-                fx_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-                fx_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-                holder.add_child(fx_lbl)
+                holder.mouse_filter = Control.MOUSE_FILTER_STOP
+                holder.gui_input.connect(func(ev: InputEvent):
+                    var pressed := false
+                    if ev is InputEventMouseButton and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+                        pressed = (ev as InputEventMouseButton).pressed
+                    elif ev is InputEventScreenTouch:
+                        pressed = (ev as InputEventScreenTouch).pressed
+                    if pressed:
+                        _show_amulet_tooltip(holder, amulet_name_str, effect_text, accent_cap)
+                )
         else:
             # Empty slot — hide entirely so the battlefield center stays clean.
             holder.visible = false
+
+func _show_amulet_tooltip(anchor: Control, amulet_name: String, effect: String, accent: Color) -> void:
+    # Dismiss any previous tooltip immediately; second tap on same amulet dismisses.
+    if is_instance_valid(_active_amulet_tooltip):
+        _active_amulet_tooltip.queue_free()
+        _active_amulet_tooltip = null
+        return
+    var tip := Panel.new()
+    tip.z_index = 2200
+    tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var ts := StyleBoxFlat.new()
+    ts.bg_color     = Color(0.03, 0.06, 0.12, 0.97)
+    ts.border_color = accent
+    ts.set_border_width_all(2)
+    ts.set_corner_radius_all(12)
+    ts.shadow_color = Color(0, 0, 0, 0.70)
+    ts.shadow_size  = 10
+    tip.add_theme_stylebox_override("panel", ts)
+    var gp := anchor.global_position
+    var tip_w := 260.0
+    var tip_h := 88.0
+    tip.size = Vector2(tip_w, tip_h)
+    # Appear above the amulet; clamp so it doesn't go off-screen top
+    var tip_x := clampf(gp.x - 46.0, 4.0, 1280.0 - tip_w - 4.0)
+    var tip_y := clampf(gp.y - tip_h - 8.0, 4.0, 720.0 - tip_h - 4.0)
+    tip.position = Vector2(tip_x, tip_y)
+    add_child(tip)
+    var n_lbl := Label.new()
+    n_lbl.text = amulet_name
+    n_lbl.position = Vector2(12, 8)
+    n_lbl.size = Vector2(tip_w - 24, 22)
+    n_lbl.add_theme_font_size_override("font_size", ui_font(14))
+    n_lbl.add_theme_color_override("font_color", accent.lightened(0.3))
+    n_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    tip.add_child(n_lbl)
+    var e_lbl := Label.new()
+    e_lbl.text = effect
+    e_lbl.position = Vector2(12, 32)
+    e_lbl.size = Vector2(tip_w - 24, tip_h - 36)
+    e_lbl.add_theme_font_size_override("font_size", ui_font(12))
+    e_lbl.add_theme_color_override("font_color", Color(0.85, 0.90, 0.98))
+    e_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    e_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    tip.add_child(e_lbl)
+    _active_amulet_tooltip = tip
+    # Fade in
+    tip.modulate.a = 0.0
+    var fade := create_tween()
+    fade.tween_property(tip, "modulate:a", 1.0, 0.18)
+    # Auto-dismiss after 4 s
+    await get_tree().create_timer(4.0).timeout
+    if is_instance_valid(tip):
+        tip.queue_free()
+    if _active_amulet_tooltip == tip:
+        _active_amulet_tooltip = null
 
 func clear_children(node: Node) -> void:
     for child in node.get_children():
