@@ -291,6 +291,21 @@ func clear_recovery_vials() -> void:
     else:
         print("CLOUD ── recovery_vials cleared OK")
 
+## Save a player-chosen display name to the player_profiles row.
+func update_display_name(new_name: String) -> bool:
+    if user_id.is_empty() or access_token.is_empty():
+        return false
+    print("CLOUD ── updating display_name for user_id=%s  name='%s'" % [user_id, new_name])
+    var result := await _request(HTTPClient.METHOD_PATCH,
+        "/rest/v1/player_profiles?user_id=eq.%s" % user_id.uri_encode(),
+        {"display_name": new_name}, true, "return=minimal")
+    if result.ok:
+        account_profile["display_name"] = new_name
+        print("CLOUD ── display_name updated OK")
+    else:
+        push_warning("CLOUD ── update_display_name PATCH failed (HTTP %d): %s" % [result.status, result.text])
+    return result.ok
+
 ## Zero out the pending_packs column after the client has applied the grant.
 ## Called deferred so it does not block the login frame.
 func clear_pending_packs() -> void:

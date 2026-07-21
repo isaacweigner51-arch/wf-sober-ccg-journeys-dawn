@@ -1706,15 +1706,15 @@ func show_home() -> void:
     avatar.clip_contents = true
     top.add_child(avatar)
     label("WALKING FREE CCG", Vector2(70, 8), Vector2(330, 28), 21, top).add_theme_color_override("font_color", GOLD_COLOR)
-    label("Journey's Dawn  •  " + active_class + " Leader", Vector2(70, 35), Vector2(390, 21), 13, top)
+    # Subtitle: always shows class, appends gamer ID when set so player knows who's signed in.
+    var _dn := str(NetworkManager.account_profile.get("display_name", "")).strip_edges()
+    var _subtitle := "Journey's Dawn  •  " + active_class + " Leader" + ("  •  " + _dn if _dn != "" else "")
+    label(_subtitle, Vector2(70, 35), Vector2(560, 21), 13, top)
     print("SHOW_HOME ── DISPLAYED : gold=%d  vials=%d  packs=%d" % [gold_balance, dust_balance, pack_inventory])
     var wallet := label("GOLD %d     VIALS %d     PACKS %d" % [gold_balance, dust_balance, pack_inventory], Vector2(750, 17), Vector2(375, 30), 16, top)
     wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     button("SUPPORT", Vector2(500, 10), Vector2(110, 44), show_contact_support, top)
-    button("SIGN IN", Vector2(622, 10), Vector2(110, 44), func():
-        NetworkManager.sign_out_account()
-        show_launch_screen()
-    , top)
+    button("ACCOUNT", Vector2(622, 10), Vector2(110, 44), show_account_panel, top)
     button("SETTINGS", Vector2(1140, 10), Vector2(96, 44), show_test_tools if AccessManager.role_at_least(AccessManager.ROLE_TESTER) else show_launch_screen, top)
 
     maybe_show_whats_new()
@@ -2006,6 +2006,104 @@ func show_home() -> void:
 # ---------------------------------------------------------------------------
 # Contact & Support
 # ---------------------------------------------------------------------------
+func show_account_panel() -> void:
+    # Overlay panel — does NOT clear the home screen behind it.
+    var overlay := ColorRect.new()
+    overlay.color = Color(0.0, 0.0, 0.0, 0.0)
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 600
+    overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+    root_layer.add_child(overlay)
+    # Fade in
+    var fade := create_tween()
+    fade.tween_property(overlay, "color:a", 0.55, 0.15)
+
+    var panel := Panel.new()
+    panel.size = Vector2(520, 360)
+    panel.position = Vector2(640 - 260, 360 - 180)
+    panel.z_index = 610
+    panel.add_theme_stylebox_override("panel", style(Color(0.06, 0.09, 0.18), 16))
+    root_layer.add_child(panel)
+
+    # Close when clicking outside the panel
+    overlay.gui_input.connect(func(ev):
+        if ev is InputEventMouseButton and ev.pressed:
+            if not panel.get_rect().has_point(overlay.get_local_mouse_position()):
+                overlay.queue_free(); panel.queue_free()
+    )
+
+    centered_label("MY ACCOUNT", Vector2(20, 18), Vector2(480, 28), 22, panel).add_theme_color_override("font_color", GOLD_COLOR)
+
+    # ── Sign-in status ─────────────────────────────────────────────────────────
+    var is_signed_in := not NetworkManager.user_id.is_empty()
+    var status_text := "Signed in" if is_signed_in else "Not signed in"
+    var status_color := Color(0.45, 1.0, 0.60) if is_signed_in else Color(1.0, 0.55, 0.35)
+    var status_lbl := centered_label(status_text, Vector2(20, 54), Vector2(480, 24), 14, panel)
+    status_lbl.add_theme_color_override("font_color", status_color)
+
+    # ── Gamer ID row ───────────────────────────────────────────────────────────
+    label("GAMER ID", Vector2(30, 100), Vector2(200, 22), 13, panel).add_theme_color_override("font_color", Color(0.72, 0.78, 0.90))
+    label("Shown to other players and in your header.", Vector2(30, 120), Vector2(460, 20), 12, panel).add_theme_color_override("font_color", Color(0.55, 0.60, 0.70))
+
+    var name_input := LineEdit.new()
+    var current_name := str(NetworkManager.account_profile.get("display_name", "")).strip_edges()
+    name_input.text = current_name
+    name_input.placeholder_text = "Choose a gamer ID…"
+    name_input.position = Vector2(30, 148)
+    name_input.size = Vector2(340, 44)
+    name_input.add_theme_font_size_override("font_size", ui_font_size(17))
+    panel.add_child(name_input)
+
+    var save_status := label("", Vector2(30, 284), Vector2(460, 24), 13, panel)
+    save_status.add_theme_color_override("font_color", Color(0.45, 1.0, 0.60))
+
+    var save_btn := button("SAVE ID", Vector2(382, 148), Vector2(108, 44), func():
+        var new_name := name_input.text.strip_edges()
+        if new_name.length() < 2:
+            save_status.text = "Gamer ID must be at least 2 characters."
+            save_status.add_theme_color_override("font_color", Color(1.0, 0.55, 0.35))
+            return
+        if new_name.length() > 24:
+            save_status.text = "Gamer ID must be 24 characters or fewer."
+            save_status.add_theme_color_override("font_color", Color(1.0, 0.55, 0.35))
+            return
+        save_status.text = "Saving…"
+        save_status.add_theme_color_override("font_color", Color(0.72, 0.78, 0.90))
+        var ok := await NetworkManager.update_display_name(new_name)
+        if ok:
+            save_status.text = "Gamer ID saved! ✓"
+            save_status.add_theme_color_override("font_color", Color(0.45, 1.0, 0.60))
+            # Refresh the home screen header to show the new name immediately.
+            await get_tree().create_timer(0.8).timeout
+            overlay.queue_free(); panel.queue_free()
+            show_home()
+        else:
+            save_status.text = "Save failed — check your connection and try again."
+            save_status.add_theme_color_override("font_color", Color(1.0, 0.55, 0.35))
+    , panel)
+    save_btn.add_theme_font_size_override("font_size", ui_font_size(14))
+
+    # ── Divider ────────────────────────────────────────────────────────────────
+    var div := ColorRect.new()
+    div.color = Color(0.20, 0.25, 0.38)
+    div.position = Vector2(30, 220)
+    div.size = Vector2(460, 1)
+    panel.add_child(div)
+
+    # ── Sign out ───────────────────────────────────────────────────────────────
+    label("Want to switch accounts or sign in on a different device?", Vector2(30, 232), Vector2(460, 20), 12, panel).add_theme_color_override("font_color", Color(0.55, 0.60, 0.70))
+
+    var signout_btn := button("RETURN TO SIGN IN", Vector2(30, 258), Vector2(220, 44), func():
+        overlay.queue_free(); panel.queue_free()
+        NetworkManager.sign_out_account()
+        show_launch_screen()
+    , panel)
+    signout_btn.add_theme_font_size_override("font_size", ui_font_size(13))
+
+    button("CLOSE", Vector2(268, 258), Vector2(100, 44), func():
+        overlay.queue_free(); panel.queue_free()
+    , panel)
+
 func show_contact_support() -> void:
     clear_screen(); add_background(0.72)
     header("CONTACT & SUPPORT", "Questions, concerns, or a bug to report? We read every message.")
