@@ -817,6 +817,18 @@ func _ready() -> void:
         # the next lesson — that would loop them through the whole Academy.
         show_home()
         return
+    # Fast-path back to Home after a normal battle — skip login since the
+    # player is already authenticated. Flag written by _return_to_main_menu()
+    # and the HOME button in the battle scene.
+    var _nav_cfg := ConfigFile.new()
+    if _nav_cfg.load("user://nav.cfg") == OK \
+            and bool(_nav_cfg.get_value("nav", "return_from_battle", false)):
+        _nav_cfg.set_value("nav", "return_from_battle", false)
+        _nav_cfg.save("user://nav.cfg")
+        cards = load_cards()
+        load_profile()
+        show_home()
+        return
     if not get_viewport().size_changed.is_connected(_on_viewport_size_changed):
         get_viewport().size_changed.connect(_on_viewport_size_changed)
     if not AccessManager.authentication_finished.is_connected(_on_access_authentication_finished):
@@ -1686,6 +1698,34 @@ func show_home() -> void:
     art.clip_contents = true
     art_frame.add_child(art)
 
+    # ── Animated showcase enhancements ──────────────────────────────────────
+    # Subtle portrait breathing — makes the home screen feel alive without
+    # the full layered-art system.
+    var art_tween := create_tween().set_loops()
+    art_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    art_tween.tween_property(art, "position:y", -6.0, 2.6)
+    art_tween.tween_property(art, "position:y",  0.0, 2.6)
+
+    # Class-coloured glow overlay pulses on top of the portrait.
+    var glow_overlay := ColorRect.new()
+    glow_overlay.color = Color(class_color(active_class), 0.0)
+    glow_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    glow_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    art_frame.add_child(glow_overlay)
+    var glow_tween := create_tween().set_loops()
+    glow_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    glow_tween.tween_property(glow_overlay, "color:a", 0.10, 2.0)
+    glow_tween.tween_property(glow_overlay, "color:a", 0.03, 2.0)
+
+    # Corner accent sparkles — four class-colored dots at portrait corners.
+    for corner_pos in [Vector2(4,4), Vector2(520,4), Vector2(4,330), Vector2(520,330)]:
+        var dot := ColorRect.new()
+        dot.color = class_color(active_class).lightened(0.4)
+        dot.position = corner_pos
+        dot.size = Vector2(8, 8)
+        dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        art_frame.add_child(dot)
+
     if sponsor_leader_unlocked:
         var skin_toggle := button(
             "SPONSOR SKIN: ON" if selected_leader_skin == "sponsor" else "SPONSOR SKIN: OFF",
@@ -1718,14 +1758,27 @@ func show_home() -> void:
     right.size = Vector2(402, 430)
     right.add_theme_stylebox_override("panel", style(Color(0.08, 0.11, 0.20), 14))
     main.add_child(right)
+    # Class accent header bar
+    var accent_bar_r := ColorRect.new(); accent_bar_r.position = Vector2(0, 0); accent_bar_r.size = Vector2(402, 4); accent_bar_r.color = class_color(active_class); right.add_child(accent_bar_r)
+
     label("RECOVERY CHALLENGE", Vector2(20, 18), Vector2(362, 32), 20, right).add_theme_color_override("font_color", GOLD_COLOR)
-    label("Win 3 matches with " + active_class + ".", Vector2(20, 58), Vector2(362, 30), 15, right)
     var challenge_progress := int(recovery_challenge_progress.get(active_class, 0))
-    var progress_bg := ColorRect.new(); progress_bg.position = Vector2(20, 98); progress_bg.size = Vector2(362, 12); progress_bg.color = Color(0.05,0.06,0.09); right.add_child(progress_bg)
-    var progress := ColorRect.new(); progress.position = Vector2(20, 98); progress.size = Vector2(362.0 * (float(challenge_progress) / 3.0), 12); progress.color = class_color(active_class); right.add_child(progress)
-    label("%d / 3" % challenge_progress, Vector2(20, 116), Vector2(362, 24), 13, right).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    label("DAILY REFLECTION", Vector2(20, 160), Vector2(362, 30), 18, right).add_theme_color_override("font_color", GOLD_COLOR)
-    var reflection := label("Progress begins with one honest choice. Keep moving forward.", Vector2(20, 198), Vector2(362, 76), 15, right)
+    var wins_remaining := 3 - challenge_progress
+    var challenge_line := label("Win %d more match%s with %s to complete this week's challenge." % [wins_remaining, "es" if wins_remaining != 1 else "", active_class], Vector2(20, 54), Vector2(362, 36), 14, right)
+    challenge_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    var progress_bg := ColorRect.new(); progress_bg.position = Vector2(20, 98); progress_bg.size = Vector2(362, 14); progress_bg.color = Color(0.05,0.06,0.09); right.add_child(progress_bg)
+    var progress := ColorRect.new(); progress.position = Vector2(20, 98); progress.size = Vector2(362.0 * (float(challenge_progress) / 3.0), 14); progress.color = class_color(active_class); right.add_child(progress)
+    # Progress pip markers
+    for pip in range(1, 3):
+        var pip_mark := ColorRect.new(); pip_mark.position = Vector2(20 + 362.0 * pip / 3.0 - 1, 96); pip_mark.size = Vector2(2, 18); pip_mark.color = Color(0.08, 0.11, 0.20); right.add_child(pip_mark)
+    label("%d / 3 wins" % challenge_progress, Vector2(20, 118), Vector2(362, 22), 12, right).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
+    # Thin separator
+    var sep := ColorRect.new(); sep.position = Vector2(16, 150); sep.size = Vector2(370, 1); sep.color = Color(class_color(active_class), 0.25); right.add_child(sep)
+
+    label("DAILY REFLECTION", Vector2(20, 162), Vector2(362, 28), 16, right).add_theme_color_override("font_color", GOLD_COLOR)
+    var reflection := label("Progress begins with one honest choice. Keep moving forward.", Vector2(20, 196), Vector2(362, 72), 14, right)
+    reflection.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     reflection.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     var enter := button("ENTER BATTLE", Vector2(20, 300), Vector2(362, 64), start_battle, right)
     enter.add_theme_font_size_override("font_size", ui_font_size(22))

@@ -206,8 +206,10 @@ func set_state(new_state: State) -> void:
 		node.modulate  = Color.WHITE
 		node.scale     = Vector2.ONE
 
-	# Re-apply focal shift on flat art after a reset
-	if _art:
+	# Re-apply focal shift on flat art — only for larger frames.
+	# In the 200×200 in-battle frame the negative shift clips the portrait
+	# against the Button's clip_contents boundary; show it centred instead.
+	if _art and _sz.x > 250:
 		var foc_x: float = _FOCAL_X.get(_class_name_value.to_lower(), 0.0)
 		_art.position = Vector2(foc_x, 0.0)
 
@@ -231,10 +233,27 @@ func get_state() -> State:
 # ── Animation implementations ─────────────────────────────────────────────────
 
 func _play_idle() -> void:
-	# ANIMATION DISABLED — rendering verification mode.
-	# All layers and flat art render statically so portrait framing can be
-	# confirmed correct before any motion is re-added.
-	pass
+	# Gentle breathing animation on flat composite (or body layer if layered).
+	# Deferred so get_tree() is available; guard if node was freed before timer.
+	var target := _art if _art else _layer_body
+	if target == null:
+		return
+	if not is_inside_tree():
+		await tree_entered
+	if _idle_tween:
+		_idle_tween.kill()
+	_idle_tween = create_tween().set_loops()
+	_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_idle_tween.tween_property(target, "position:y", -5.0, 2.4)
+	_idle_tween.tween_property(target, "position:y",  0.0, 2.4)
+	# Layered path: also drift hair gently and schedule blinks
+	if _layer_hair != null:
+		var hair_tween := create_tween().set_loops()
+		hair_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		hair_tween.tween_property(_layer_hair, "position:x",  3.5, 1.9)
+		hair_tween.tween_property(_layer_hair, "position:x", -3.5, 1.9)
+	if _layer_head != null and _head_blink_tex != null:
+		_schedule_blink()
 
 func _schedule_blink() -> void:
 	if _layer_head == null or _head_blink_tex == null or _current_state != State.IDLE:

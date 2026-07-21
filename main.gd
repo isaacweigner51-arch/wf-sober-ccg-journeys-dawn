@@ -1877,7 +1877,9 @@ func build_ui() -> void:
     build_evolution_panel()
 
     var restart := _make_header_pill_button("RESTART", Vector2(1165, 10)); restart.tooltip_text = "Restart this battle"; restart.pressed.connect(func(): get_tree().reload_current_scene()); add_child(restart)
-    var home := _make_header_pill_button("HOME", Vector2(1062, 10)); home.pressed.connect(func(): get_tree().change_scene_to_file("res://main.tscn")); add_child(home)
+    var home := _make_header_pill_button("HOME", Vector2(1062, 10)); home.pressed.connect(func():
+        var _nav := ConfigFile.new(); _nav.set_value("nav","return_from_battle",true); _nav.save("user://nav.cfg")
+        get_tree().change_scene_to_file("res://main.tscn")); add_child(home)
 
     overlay = ColorRect.new(); overlay.color = Color(0, 0, 0, 0.68); overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); overlay.visible = false; overlay.mouse_filter = Control.MOUSE_FILTER_STOP; add_child(overlay)
     apply_mobile_touch_targets()
@@ -6341,6 +6343,10 @@ func _return_to_main_menu() -> void:
         game_over_layer.queue_free()
     game_over = false
     busy = false
+    # Signal menu.gd to skip the login screen and go straight to Home.
+    var _nav := ConfigFile.new()
+    _nav.set_value("nav", "return_from_battle", true)
+    _nav.save("user://nav.cfg")
     var err := get_tree().change_scene_to_file("res://main.tscn")
     if err != OK:
         push_error("Could not return to main menu: %s" % err)
@@ -7078,7 +7084,7 @@ func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
     for slot in range(3):
         var holder := Panel.new()
         holder.position = Vector2(slot * 182.0, 2)
-        holder.size = Vector2(slot_width, 52)
+        holder.size = Vector2(slot_width, 72)
         area.add_child(holder)
         if slot < amulets.size():
             var accent := class_accent_color(str(amulets[slot].get("faction", amulets[slot].get("class", ""))))
@@ -7115,20 +7121,18 @@ func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
 
             # Invisible hover target — lets mouse enter so tooltip fires.
             # Must NOT be disabled (disabled nodes eat no mouse events in Godot 4).
-            var b := Button.new()
-            b.flat = true
-            b.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-            b.focus_mode = Control.FOCUS_NONE
-            b.mouse_filter = Control.MOUSE_FILTER_PASS
-            b.tooltip_text = str(amulets[slot].get("display_text", ""))
-            # Make the button visually invisible but still hoverable
-            var empty_style := StyleBoxEmpty.new()
-            b.add_theme_stylebox_override("normal",   empty_style)
-            b.add_theme_stylebox_override("hover",    empty_style)
-            b.add_theme_stylebox_override("pressed",  empty_style)
-            b.add_theme_stylebox_override("disabled", empty_style)
-            b.add_theme_stylebox_override("focus",    empty_style)
-            holder.add_child(b)
+            # Effect text shown permanently — tooltip approach was unreliable.
+            var effect_text := str(amulets[slot].get("display_text", ""))
+            if not effect_text.is_empty():
+                var fx_lbl := Label.new()
+                fx_lbl.text = effect_text
+                fx_lbl.position = Vector2(8, 44)
+                fx_lbl.size = Vector2(slot_width - 14, 26)
+                fx_lbl.add_theme_font_size_override("font_size", ui_font(8))
+                fx_lbl.add_theme_color_override("font_color", Color(0.76, 0.82, 0.95))
+                fx_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+                fx_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                holder.add_child(fx_lbl)
         else:
             # Empty slot — hide entirely so the battlefield center stays clean.
             holder.visible = false
