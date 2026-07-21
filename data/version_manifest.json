@@ -11,6 +11,14 @@
   "card_count": 195,
   "sections": [
     {
+      "category": "What's New in 0.9.3 (hotfix)",
+      "items": [
+        "Leader portraits fixed in Battle Prep — full painting now shown, not a zoomed close-up of scales/feathers.",
+        "Leader portrait now visible in the active battle screen (was blank/missing).",
+        "Amulets on the field now show their effect when you hover over them (tooltip was silently broken)."
+      ]
+    },
+    {
       "category": "What's New in 0.9.2",
       "items": [
         "Battle Preparation screen rebuilt: deck list (left), card preview + mana curve (center), leader portrait + actions (right).",
