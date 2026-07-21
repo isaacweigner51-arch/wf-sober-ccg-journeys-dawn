@@ -723,6 +723,12 @@ var collection_filter_class := "All"
 var collection_filter_rarity := "All"
 var collection_search_query := ""
 var _collection_focus_search_next := false
+# Deck Builder filter state — persists across filter interactions within a session.
+var _db_owned_only    := false
+var _db_cost_filter   := -1    # -1 = all costs; 7 = "7+"
+var _db_rarity_filter := ""    # "" = all rarities
+var _db_type_filter   := ""    # "" = all types
+var _db_search_text   := ""
 # When true, the collection/crafting binder only shows cards the player
 # doesn't yet own at their copy limit -- the direct answer to "which card do
 # I craft with these Vials I just earned?" without scrolling past cards
@@ -6149,141 +6155,924 @@ func show_deck_preview() -> void:
     button("EDIT THIS DECK", Vector2(264, 656), Vector2(220, 48), show_deck_builder)
 
 func show_deck_builder() -> void:
-    clear_screen(); add_background(0.82)
-    var deck_subtitle := "Slot %d — %s" % [editing_deck_slot_idx + 1, str(deck_slots[editing_deck_slot_idx].get("name","Deck"))] if editing_deck_slot_idx >= 0 and editing_deck_slot_idx < deck_slots.size() else "Separate saved deck for every class"
-    header("DECK BUILDER", "%s • Exactly 40 cards • Class plus Neutral" % deck_subtitle)
-    currency_bar()
-    # Back button: go to deck manager if editing a slot, else home.
-    var back_cb: Callable = (func():
-        if editing_deck_slot_idx >= 0:
-            save_profile()
-            editing_deck_slot_idx = -1
-            show_deck_manager()
-        else:
-            show_home())
-    button("BACK", Vector2(28, 662), Vector2(160, 42), back_cb)
+    clear_screen()
+
+    # Full-screen dark background — no battle UI visible behind it
+    var bg := ColorRect.new()
+    bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    bg.color = Color(0.030, 0.035, 0.058, 1.0)
+    bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    root_layer.add_child(bg)
+
     if selected_class == "":
-        label("CHOOSE A CLASS FIRST",Vector2(380,245),Vector2(520,60),34).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-        label("Your class unlocks a starter deck. Pack pulls can then be added here.",Vector2(340,320),Vector2(600,70),19).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-        button("CHOOSE MY CLASS",Vector2(485,420),Vector2(310,60),show_class_choice)
+        var prompt_vb := VBoxContainer.new()
+        prompt_vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        prompt_vb.alignment = BoxContainer.ALIGNMENT_CENTER
+        prompt_vb.add_theme_constant_override("separation", 16)
+        root_layer.add_child(prompt_vb)
+        var pl := Label.new(); pl.text = "CHOOSE A CLASS FIRST"
+        pl.add_theme_font_size_override("font_size", 30)
+        pl.add_theme_color_override("font_color", GOLD_COLOR)
+        pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; prompt_vb.add_child(pl)
+        var pl2 := Label.new()
+        pl2.text = "Your class unlocks a starter deck. Pack pulls can then be added here."
+        pl2.add_theme_font_size_override("font_size", 16)
+        pl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; prompt_vb.add_child(pl2)
+        var pb := Button.new(); pb.text = "CHOOSE MY CLASS"
+        pb.custom_minimum_size = Vector2(280, 56); pb.add_theme_font_size_override("font_size", 18)
+        pb.add_theme_stylebox_override("normal", style(GOLD_COLOR, 10))
+        pb.pressed.connect(show_class_choice); prompt_vb.add_child(pb)
         return
-    # Only show class switcher when NOT editing a specific named slot
-    # (editing a slot fixes its class; switching would mutate the slot class unintentionally).
-    if editing_deck_slot_idx < 0:
-        var class_row := HBoxContainer.new(); class_row.position=Vector2(45,180); class_row.size=Vector2(500,45); root_layer.add_child(class_row)
-        for c in CLASSES:
-            var b:=Button.new()
-            b.text=str(c)
-            b.custom_minimum_size=Vector2(115,40)
-            b.pressed.connect(switch_deck_class.bind(str(c)))
-            class_row.add_child(b)
+
+    # Root layout: vertical stack
+    var root_vbox := VBoxContainer.new()
+    root_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    root_vbox.add_theme_constant_override("separation", 0)
+    root_layer.add_child(root_vbox)
+
+    _build_db_header(root_vbox)
+
+    var content := HBoxContainer.new()
+    content.size_flags_vertical = Control.SIZE_FILL | Control.SIZE_EXPAND
+    content.add_theme_constant_override("separation", 0)
+    root_vbox.add_child(content)
+
+    _build_db_filter_column(content)
+    _build_db_card_grid(content)
+    _build_db_deck_panel(content)
+
+func _build_db_header(parent: Control) -> void:
+    var hp := Panel.new()
+    hp.custom_minimum_size = Vector2(0, 72)
+    hp.size_flags_horizontal = Control.SIZE_FILL
+    var hs := StyleBoxFlat.new()
+    hs.bg_color = Color(0.018, 0.022, 0.040, 1.0)
+    hs.border_color = Color(0.22, 0.17, 0.07)
+    hs.set_border_width_all(0); hs.border_width_bottom = 2
+    hp.add_theme_stylebox_override("panel", hs)
+    parent.add_child(hp)
+
+    var back := Button.new()
+    back.text = "BACK"
+    back.position = Vector2(12, 16); back.size = Vector2(110, 40)
+    back.add_theme_font_size_override("font_size", 14)
+    back.add_theme_stylebox_override("normal", style(Color(0.55, 0.45, 0.22), 8))
+    back.add_theme_stylebox_override("hover", style(GOLD_COLOR, 8))
+    back.pressed.connect(func():
+        save_profile()
+        editing_deck_slot_idx = -1
+        show_deck_manager())
+    hp.add_child(back)
+
+    var title := Label.new()
+    title.text = "DECK BUILDER"
+    title.add_theme_font_size_override("font_size", 24)
+    title.add_theme_color_override("font_color", GOLD_COLOR)
+    title.position = Vector2(138, 8); title.size = Vector2(300, 32)
+    hp.add_child(title)
+
+    var deck_name := "Select a deck slot"
+    if editing_deck_slot_idx >= 0 and editing_deck_slot_idx < deck_slots.size():
+        deck_name = str(deck_slots[editing_deck_slot_idx].get("name", "Deck %d" % (editing_deck_slot_idx + 1)))
+    var sub := Label.new()
+    sub.text = "%s  |  40 cards  |  Class + Neutral  |  Copy limits apply" % deck_name
+    sub.add_theme_font_size_override("font_size", 12)
+    sub.add_theme_color_override("font_color", Color(0.62, 0.62, 0.74))
+    sub.position = Vector2(138, 44); sub.size = Vector2(600, 22)
+    hp.add_child(sub)
+
+    var curr := Label.new()
+    curr.text = "GOLD %d  |  VIALS %d  |  PACKS %d" % [gold_balance, dust_balance, pack_inventory]
+    curr.add_theme_font_size_override("font_size", 14)
+    curr.add_theme_color_override("font_color", Color(0.85, 0.72, 0.35))
+    curr.position = Vector2(756, 22); curr.size = Vector2(510, 28)
+    curr.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    hp.add_child(curr)
+
+func _db_sep(parent: Control) -> void:
+    var sep := HSeparator.new()
+    var ss := StyleBoxFlat.new()
+    ss.bg_color = Color(0.18, 0.18, 0.28, 0.40)
+    sep.add_theme_stylebox_override("separator", ss)
+    parent.add_child(sep)
+
+func _build_db_filter_column(parent: Control) -> void:
+    var pc := PanelContainer.new()
+    pc.custom_minimum_size = Vector2(210, 0)
+    pc.size_flags_vertical = Control.SIZE_FILL
+    var ps := StyleBoxFlat.new()
+    ps.bg_color = Color(0.024, 0.030, 0.050, 1.0)
+    ps.border_color = Color(0.12, 0.10, 0.05)
+    ps.set_border_width_all(0); ps.border_width_right = 1
+    pc.add_theme_stylebox_override("panel", ps)
+    parent.add_child(pc)
+
+    var mc := MarginContainer.new()
+    mc.add_theme_constant_override("margin_left", 10)
+    mc.add_theme_constant_override("margin_right", 10)
+    mc.add_theme_constant_override("margin_top", 10)
+    mc.add_theme_constant_override("margin_bottom", 10)
+    pc.add_child(mc)
+
+    var vb := VBoxContainer.new()
+    vb.add_theme_constant_override("separation", 8)
+    vb.size_flags_vertical = Control.SIZE_FILL
+    mc.add_child(vb)
+
+    # Header row
+    var fhdr := HBoxContainer.new(); vb.add_child(fhdr)
+    var fhdr_lbl := Label.new(); fhdr_lbl.text = "FILTERS"
+    fhdr_lbl.add_theme_font_size_override("font_size", 14)
+    fhdr_lbl.add_theme_color_override("font_color", GOLD_COLOR)
+    fhdr_lbl.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    fhdr.add_child(fhdr_lbl)
+    var clear_btn := Button.new(); clear_btn.text = "X CLEAR"
+    clear_btn.add_theme_font_size_override("font_size", 11)
+    clear_btn.custom_minimum_size = Vector2(60, 24)
+    clear_btn.add_theme_stylebox_override("normal", style(Color(0.45, 0.28, 0.18), 5))
+    clear_btn.pressed.connect(func():
+        _db_owned_only = false; _db_cost_filter = -1
+        _db_rarity_filter = ""; _db_type_filter = ""; _db_search_text = ""
+        show_deck_builder())
+    fhdr.add_child(clear_btn)
+
+    _db_sep(vb)
+
+    # Search
+    var srch_lbl := Label.new(); srch_lbl.text = "SEARCH"
+    srch_lbl.add_theme_font_size_override("font_size", 11)
+    srch_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    vb.add_child(srch_lbl)
+    var srch_row := HBoxContainer.new()
+    srch_row.add_theme_constant_override("separation", 4)
+    vb.add_child(srch_row)
+    var search_field := LineEdit.new()
+    search_field.placeholder_text = "Card name..."
+    search_field.text = _db_search_text
+    search_field.add_theme_font_size_override("font_size", 13)
+    search_field.custom_minimum_size = Vector2(0, 30)
+    search_field.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    srch_row.add_child(search_field)
+    var srch_go := Button.new(); srch_go.text = "GO"
+    srch_go.custom_minimum_size = Vector2(30, 30)
+    srch_go.add_theme_font_size_override("font_size", 12)
+    srch_go.add_theme_stylebox_override("normal", style(Color(0.35, 0.45, 0.62), 6))
+    srch_go.pressed.connect(func(): _db_search_text = search_field.text; show_deck_builder())
+    srch_row.add_child(srch_go)
+    search_field.text_submitted.connect(func(txt: String): _db_search_text = txt; show_deck_builder())
+
+    _db_sep(vb)
+
+    # Class tabs
+    var cls_lbl := Label.new(); cls_lbl.text = "CLASS"
+    cls_lbl.add_theme_font_size_override("font_size", 11)
+    cls_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    vb.add_child(cls_lbl)
+    if editing_deck_slot_idx >= 0:
+        var fixed_lbl := Label.new()
+        fixed_lbl.text = selected_deck_class.to_upper() + " (locked)"
+        fixed_lbl.add_theme_font_size_override("font_size", 13)
+        fixed_lbl.add_theme_color_override("font_color", class_color(selected_deck_class).lightened(0.25))
+        vb.add_child(fixed_lbl)
     else:
-        # Show a read-only label indicating which class deck this slot belongs to.
-        label("SLOT %d — %s CLASS DECK" % [editing_deck_slot_idx + 1, selected_deck_class.to_upper()], Vector2(45,185), Vector2(500,36), 18).add_theme_color_override("font_color", class_color(selected_deck_class).lightened(0.2))
-    var scroll := ScrollContainer.new(); scroll.position=Vector2(45,240); scroll.size=Vector2(780,400); root_layer.add_child(scroll)
-    var grid := GridContainer.new(); grid.columns=5; grid.add_theme_constant_override("h_separation",12); grid.add_theme_constant_override("v_separation",12); scroll.add_child(grid)
+        var cls_grid := GridContainer.new(); cls_grid.columns = 2
+        cls_grid.add_theme_constant_override("h_separation", 4)
+        cls_grid.add_theme_constant_override("v_separation", 4)
+        vb.add_child(cls_grid)
+        for c in CLASSES:
+            var cb := Button.new(); cb.text = str(c)
+            cb.add_theme_font_size_override("font_size", 12)
+            cb.custom_minimum_size = Vector2(82, 30)
+            if str(c) == selected_deck_class:
+                cb.add_theme_stylebox_override("normal", solid_style(class_color(str(c)).darkened(0.1), 6))
+                cb.add_theme_color_override("font_color", Color(0.05, 0.05, 0.05))
+            else:
+                cb.add_theme_stylebox_override("normal", style(class_color(str(c)).darkened(0.35), 6))
+            cb.pressed.connect(switch_deck_class.bind(str(c)))
+            cls_grid.add_child(cb)
+
+    _db_sep(vb)
+
+    # Cost filter
+    var cost_lbl := Label.new(); cost_lbl.text = "COST"
+    cost_lbl.add_theme_font_size_override("font_size", 11)
+    cost_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    vb.add_child(cost_lbl)
+    var cost_grid := GridContainer.new(); cost_grid.columns = 5
+    cost_grid.add_theme_constant_override("h_separation", 3)
+    cost_grid.add_theme_constant_override("v_separation", 3)
+    vb.add_child(cost_grid)
+    for pair in [[-1,"ALL"],[0,"0"],[1,"1"],[2,"2"],[3,"3"],[4,"4"],[5,"5"],[6,"6"],[7,"7+"]]:
+        var cv: int = pair[0]; var ct: String = str(pair[1])
+        var cb2 := Button.new(); cb2.text = ct
+        cb2.add_theme_font_size_override("font_size", 11)
+        cb2.custom_minimum_size = Vector2(28, 24)
+        if _db_cost_filter == cv:
+            cb2.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 5))
+            cb2.add_theme_color_override("font_color", Color(0.05, 0.05, 0.05))
+        else:
+            cb2.add_theme_stylebox_override("normal", style(Color(0.30, 0.24, 0.09), 5))
+        cb2.pressed.connect(func(): _db_cost_filter = cv; show_deck_builder())
+        cost_grid.add_child(cb2)
+
+    _db_sep(vb)
+
+    # Rarity filter
+    var rar_lbl := Label.new(); rar_lbl.text = "RARITY"
+    rar_lbl.add_theme_font_size_override("font_size", 11)
+    rar_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    vb.add_child(rar_lbl)
+    var rar_grid := GridContainer.new(); rar_grid.columns = 4
+    rar_grid.add_theme_constant_override("h_separation", 3)
+    rar_grid.add_theme_constant_override("v_separation", 3)
+    vb.add_child(rar_grid)
+    var rar_vals := ["","Bronze","Silver","Gold","Epic","Legendary","Signature Platinum"]
+    var rar_txts := ["ALL","BRZ","SIL","GOLD","EPIC","LEG","SIG"]
+    for i in rar_vals.size():
+        var rv: String = rar_vals[i]; var rt: String = rar_txts[i]
+        var rb := Button.new(); rb.text = rt
+        rb.add_theme_font_size_override("font_size", 10)
+        rb.custom_minimum_size = Vector2(36, 24)
+        if _db_rarity_filter == rv:
+            rb.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 5))
+            rb.add_theme_color_override("font_color", Color(0.05, 0.05, 0.05))
+        else:
+            rb.add_theme_stylebox_override("normal", style(Color(0.30, 0.24, 0.09), 5))
+        rb.pressed.connect(func(): _db_rarity_filter = rv; show_deck_builder())
+        rar_grid.add_child(rb)
+
+    _db_sep(vb)
+
+    # Type filter
+    var type_lbl := Label.new(); type_lbl.text = "TYPE"
+    type_lbl.add_theme_font_size_override("font_size", 11)
+    type_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    vb.add_child(type_lbl)
+    var type_grid := GridContainer.new(); type_grid.columns = 4
+    type_grid.add_theme_constant_override("h_separation", 3)
+    type_grid.add_theme_constant_override("v_separation", 3)
+    vb.add_child(type_grid)
+    for tpair in [["","ALL"],["Follower","FOL"],["Amulet","AMU"],["Spell","SPL"]]:
+        var tv: String = tpair[0]; var tt: String = tpair[1]
+        var tb := Button.new(); tb.text = tt
+        tb.add_theme_font_size_override("font_size", 11)
+        tb.custom_minimum_size = Vector2(36, 24)
+        if _db_type_filter == tv:
+            tb.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 5))
+            tb.add_theme_color_override("font_color", Color(0.05, 0.05, 0.05))
+        else:
+            tb.add_theme_stylebox_override("normal", style(Color(0.30, 0.24, 0.09), 5))
+        tb.pressed.connect(func(): _db_type_filter = tv; show_deck_builder())
+        type_grid.add_child(tb)
+
+    _db_sep(vb)
+
+    # Owned-only toggle
+    var owned_btn := Button.new()
+    owned_btn.text = ("CHECK OWNED ONLY" if _db_owned_only else "CIRCLE OWNED ONLY")
+    owned_btn.text = ("%s OWNED ONLY" % ("YES" if _db_owned_only else "NO"))
+    owned_btn.add_theme_font_size_override("font_size", 12)
+    owned_btn.custom_minimum_size = Vector2(0, 32)
+    if _db_owned_only:
+        owned_btn.add_theme_stylebox_override("normal", solid_style(Color(0.28, 0.65, 0.38), 8))
+        owned_btn.add_theme_color_override("font_color", Color(0.04, 0.04, 0.04))
+    else:
+        owned_btn.add_theme_stylebox_override("normal", style(Color(0.28, 0.48, 0.28), 8))
+    owned_btn.pressed.connect(func(): _db_owned_only = !_db_owned_only; show_deck_builder())
+    vb.add_child(owned_btn)
+
+    var spacer := Control.new()
+    spacer.size_flags_vertical = Control.SIZE_FILL | Control.SIZE_EXPAND
+    vb.add_child(spacer)
+
+func _db_card_passes_filter(cd: Dictionary) -> bool:
+    var card_class := str(cd.get("class", ""))
+    var is_deck_class := (card_class == selected_deck_class)
+    var is_neutral := (card_class == "Neutral" or card_class == "Universal")
+    if not is_deck_class and not is_neutral: return false
+    var id := str(cd.get("id", ""))
+    if _db_owned_only and int(collection_owned.get(id, 0)) <= 0: return false
+    if _db_cost_filter >= 0:
+        var cv := int(cd.get("cost", 0))
+        if _db_cost_filter == 7:
+            if cv < 7: return false
+        elif cv != _db_cost_filter:
+            return false
+    if _db_rarity_filter != "" and str(cd.get("rarity", "")) != _db_rarity_filter: return false
+    if _db_type_filter != "" and str(cd.get("type", "")) != _db_type_filter: return false
+    if _db_search_text.strip_edges() != "":
+        var q := _db_search_text.strip_edges().to_lower()
+        if not str(cd.get("name", "")).to_lower().contains(q) and not str(cd.get("effect", "")).to_lower().contains(q):
+            return false
+    return true
+
+func _build_db_card_grid(parent: Control) -> void:
+    var pc := PanelContainer.new()
+    pc.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    pc.size_flags_vertical = Control.SIZE_FILL
+    var ps := StyleBoxFlat.new()
+    ps.bg_color = Color(0.022, 0.028, 0.046, 1.0)
+    ps.set_border_width_all(0)
+    pc.add_theme_stylebox_override("panel", ps)
+    parent.add_child(pc)
+
+    var mc := MarginContainer.new()
+    mc.add_theme_constant_override("margin_left", 12)
+    mc.add_theme_constant_override("margin_right", 12)
+    mc.add_theme_constant_override("margin_top", 10)
+    mc.add_theme_constant_override("margin_bottom", 10)
+    mc.size_flags_vertical = Control.SIZE_FILL
+    pc.add_child(mc)
+
+    var vb := VBoxContainer.new()
+    vb.add_theme_constant_override("separation", 8)
+    vb.size_flags_vertical = Control.SIZE_FILL
+    mc.add_child(vb)
+
+    var shown := 0
+    for cd2 in cards:
+        if _db_card_passes_filter(cd2): shown += 1
+    var cnt_lbl := Label.new()
+    cnt_lbl.text = "COLLECTION  -  %d cards shown" % shown
+    cnt_lbl.add_theme_font_size_override("font_size", 13)
+    cnt_lbl.add_theme_color_override("font_color", Color(0.52, 0.52, 0.66))
+    vb.add_child(cnt_lbl)
+
+    var scroll := ScrollContainer.new()
+    scroll.size_flags_vertical = Control.SIZE_FILL | Control.SIZE_EXPAND
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    vb.add_child(scroll)
+
+    var grid := GridContainer.new()
+    grid.columns = 4
+    grid.add_theme_constant_override("h_separation", 14)
+    grid.add_theme_constant_override("v_separation", 14)
+    scroll.add_child(grid)
+
     for cd in cards:
-        if str(cd["class"]) != selected_deck_class and str(cd["class"]) != "Neutral": continue
+        if not _db_card_passes_filter(cd): continue
         var id := str(cd["id"])
         var rarity := str(cd["rarity"])
         var owned := int(collection_owned.get(id, 0))
-        var box:=VBoxContainer.new()
-        box.custom_minimum_size=Vector2(140,235)
-        var cp := card_panel(cd,Vector2.ZERO,Vector2(135,170))
-        if owned <= 0:
-            cp.modulate = Color(0.48,0.52,0.60,0.90)
-        box.add_child(cp)
-        if owned > 0:
-            var add:=Button.new()
-            var allowed := mini(owned,int(COPY_LIMITS.get(rarity,1)))
-            add.text="ADD (%d/%d)" % [count_in_deck(id),allowed]
-            add.disabled=saved_deck.size()>=40 or count_in_deck(id)>=allowed
-            add.pressed.connect(add_card_to_deck.bind(id))
-            box.add_child(add)
-        elif CRAFT_COSTS.has(rarity):
-            var craft := Button.new()
-            var cost := int(CRAFT_COSTS[rarity])
-            craft.text = "CREATE %s" % _fmt_vial_cost(cost)
-            craft.disabled = dust_balance < cost
-            craft.pressed.connect(craft_from_deck_builder.bind(id))
-            box.add_child(craft)
-        else:
-            var locked := Label.new()
-            locked.text = "PACK ONLY"
-            locked.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-            box.add_child(locked)
-        grid.add_child(box)
-    var side:=Panel.new(); side.position=Vector2(860,180); side.size=Vector2(360,460); side.add_theme_stylebox_override("panel",style(class_color(selected_deck_class),14)); root_layer.add_child(side)
-    var deck_leader_frame := Panel.new()
-    deck_leader_frame.position = Vector2(92, 10)
-    deck_leader_frame.size = Vector2(176, 132)
-    deck_leader_frame.clip_contents = true
-    deck_leader_frame.add_theme_stylebox_override("panel", style(class_color(selected_deck_class).lightened(0.12), 12))
-    side.add_child(deck_leader_frame)
-    var deck_leader_art := TextureRect.new()
-    deck_leader_art.texture = class_leader_texture(selected_deck_class)
-    deck_leader_art.position = Vector2(6, 6)
-    deck_leader_art.size = Vector2(164, 120)
-    deck_leader_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    deck_leader_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    deck_leader_art.clip_contents = true
-    deck_leader_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    deck_leader_frame.add_child(deck_leader_art)
-    label("%s DECK" % selected_deck_class.to_upper(),Vector2(20,146),Vector2(320,28),22,side).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    var validation_label := label("%d / 40 CARDS  •  %s" % [saved_deck.size(),deck_validation_text()],Vector2(16,176),Vector2(328,36),13,side)
-    validation_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    validation_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    validation_label.add_theme_color_override("font_color", GOLD_COLOR if saved_deck.size() == 40 and deck_validation_text().begins_with("DECK VALID") else Color(1.0,0.55,0.5))
 
-    # A scrollable list of exactly what's in this deck right now -- with a
-    # per-card remove button -- replaces the old "REMOVE LAST" button, which
-    # forced players to remove cards in the reverse order they were added
-    # instead of picking the specific card they wanted out.
-    var deck_counts: Dictionary = {}
-    var deck_order: Array = []
+        var box := VBoxContainer.new()
+        box.custom_minimum_size = Vector2(152, 254)
+
+        var cp := card_panel(cd, Vector2.ZERO, Vector2(152, 210))
+        if owned <= 0:
+            cp.modulate = Color(0.44, 0.48, 0.58, 0.82)
+        var tap_btn := Button.new()
+        tap_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        tap_btn.flat = true
+        var esb := StyleBoxEmpty.new()
+        tap_btn.add_theme_stylebox_override("normal", esb)
+        tap_btn.add_theme_stylebox_override("hover", esb)
+        tap_btn.add_theme_stylebox_override("pressed", esb)
+        var captured_cd: Dictionary = cd.duplicate()
+        tap_btn.pressed.connect(func(): _show_db_card_preview(captured_cd))
+        cp.add_child(tap_btn)
+        box.add_child(cp)
+
+        if owned > 0:
+            var allowed := mini(owned, int(COPY_LIMITS.get(rarity, 1)))
+            var in_deck := count_in_deck(id)
+            var add_row := HBoxContainer.new()
+            add_row.custom_minimum_size = Vector2(152, 32)
+            add_row.add_theme_constant_override("separation", 4)
+            var chip := Label.new()
+            chip.text = "%d/%d" % [in_deck, allowed]
+            chip.add_theme_font_size_override("font_size", 12)
+            chip.add_theme_color_override("font_color", GOLD_COLOR if in_deck > 0 else Color(0.45, 0.45, 0.55))
+            chip.custom_minimum_size = Vector2(34, 30)
+            chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+            add_row.add_child(chip)
+            var add_btn := Button.new(); add_btn.text = "+ ADD"
+            add_btn.add_theme_font_size_override("font_size", 12)
+            add_btn.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+            add_btn.custom_minimum_size = Vector2(0, 30)
+            var can_add := (editing_deck_slot_idx >= 0 and saved_deck.size() < 40 and in_deck < allowed)
+            add_btn.disabled = not can_add
+            if editing_deck_slot_idx < 0:
+                add_btn.tooltip_text = "Select a deck slot first"
+            elif not can_add:
+                add_btn.tooltip_text = "Limit reached"
+            add_btn.add_theme_stylebox_override("normal", style(Color(0.22, 0.52, 0.28), 7))
+            add_btn.add_theme_stylebox_override("hover", solid_style(Color(0.28, 0.62, 0.34), 7))
+            add_btn.pressed.connect(add_card_to_deck.bind(id))
+            add_row.add_child(add_btn)
+            box.add_child(add_row)
+        elif CRAFT_COSTS.has(rarity):
+            var cost_v := int(CRAFT_COSTS[rarity])
+            var craft_btn := Button.new()
+            craft_btn.text = "CREATE %s" % _fmt_vial_cost(cost_v)
+            craft_btn.add_theme_font_size_override("font_size", 11)
+            craft_btn.custom_minimum_size = Vector2(152, 30)
+            craft_btn.disabled = dust_balance < cost_v
+            craft_btn.add_theme_stylebox_override("normal", style(Color(0.42, 0.35, 0.16), 7))
+            craft_btn.pressed.connect(craft_from_deck_builder.bind(id))
+            box.add_child(craft_btn)
+        else:
+            var locked_lbl := Label.new(); locked_lbl.text = "PACK ONLY"
+            locked_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            locked_lbl.add_theme_font_size_override("font_size", 11)
+            locked_lbl.add_theme_color_override("font_color", Color(0.42, 0.42, 0.52))
+            locked_lbl.custom_minimum_size = Vector2(152, 28)
+            box.add_child(locked_lbl)
+
+        grid.add_child(box)
+
+    if grid.get_child_count() == 0:
+        var empty_lbl := Label.new()
+        empty_lbl.text = "No cards match the current filters."
+        empty_lbl.add_theme_font_size_override("font_size", 16)
+        empty_lbl.add_theme_color_override("font_color", Color(0.48, 0.48, 0.62))
+        empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        grid.add_child(empty_lbl)
+
+func _build_db_deck_panel(parent: Control) -> void:
+    var pc := PanelContainer.new()
+    pc.custom_minimum_size = Vector2(314, 0)
+    pc.size_flags_vertical = Control.SIZE_FILL
+    var ps := StyleBoxFlat.new()
+    ps.bg_color = Color(0.020, 0.025, 0.042, 1.0)
+    ps.border_color = Color(0.12, 0.10, 0.05)
+    ps.set_border_width_all(0); ps.border_width_left = 1
+    pc.add_theme_stylebox_override("panel", ps)
+    parent.add_child(pc)
+
+    var mc := MarginContainer.new()
+    mc.add_theme_constant_override("margin_left", 10)
+    mc.add_theme_constant_override("margin_right", 10)
+    mc.add_theme_constant_override("margin_top", 10)
+    mc.add_theme_constant_override("margin_bottom", 10)
+    mc.size_flags_vertical = Control.SIZE_FILL
+    pc.add_child(mc)
+
+    var vb := VBoxContainer.new()
+    vb.add_theme_constant_override("separation", 8)
+    vb.size_flags_vertical = Control.SIZE_FILL
+    mc.add_child(vb)
+
+    _build_db_slot_strip(vb)
+    _db_sep(vb)
+
+    if editing_deck_slot_idx < 0:
+        var hint := Label.new()
+        hint.text = "Select a slot above to start building."
+        hint.add_theme_font_size_override("font_size", 14)
+        hint.add_theme_color_override("font_color", Color(0.48, 0.48, 0.64))
+        hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        vb.add_child(hint)
+        return
+
+    var slot: Dictionary = deck_slots[editing_deck_slot_idx]
+    var slot_class := str(slot.get("class", "Hope"))
+
+    var leader_row := HBoxContainer.new()
+    leader_row.custom_minimum_size = Vector2(0, 88)
+    leader_row.add_theme_constant_override("separation", 10)
+    vb.add_child(leader_row)
+
+    var lf := Panel.new()
+    lf.custom_minimum_size = Vector2(70, 86); lf.clip_contents = true
+    lf.add_theme_stylebox_override("panel", style(class_color(slot_class).darkened(0.25), 8))
+    leader_row.add_child(lf)
+    var la := TextureRect.new()
+    la.texture = class_leader_texture(slot_class)
+    la.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    la.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    la.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    la.clip_contents = true; la.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    lf.add_child(la)
+
+    var info_vb := VBoxContainer.new()
+    info_vb.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    info_vb.add_theme_constant_override("separation", 3)
+    leader_row.add_child(info_vb)
+
+    var dname_lbl := Label.new()
+    dname_lbl.text = str(slot.get("name", "Deck %d" % (editing_deck_slot_idx + 1)))
+    dname_lbl.add_theme_font_size_override("font_size", 15)
+    dname_lbl.add_theme_color_override("font_color", GOLD_COLOR)
+    dname_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    info_vb.add_child(dname_lbl)
+
+    var dclass_lbl := Label.new()
+    dclass_lbl.text = slot_class.to_upper()
+    dclass_lbl.add_theme_font_size_override("font_size", 12)
+    dclass_lbl.add_theme_color_override("font_color", class_color(slot_class).lightened(0.22))
+    info_vb.add_child(dclass_lbl)
+
+    var is_valid := deck_validation_text().begins_with("DECK VALID")
+    var valid_lbl := Label.new()
+    valid_lbl.text = "%d / 40  -  %s" % [saved_deck.size(), "VALID" if is_valid else "INVALID"]
+    valid_lbl.add_theme_font_size_override("font_size", 12)
+    valid_lbl.add_theme_color_override("font_color", GOLD_COLOR if is_valid else Color(1.0, 0.45, 0.40))
+    info_vb.add_child(valid_lbl)
+
+    var rename_btn := Button.new(); rename_btn.text = "RENAME"
+    rename_btn.add_theme_font_size_override("font_size", 11)
+    rename_btn.custom_minimum_size = Vector2(0, 24)
+    rename_btn.add_theme_stylebox_override("normal", style(Color(0.38, 0.32, 0.14), 5))
+    rename_btn.pressed.connect(func(): _show_db_rename_overlay())
+    info_vb.add_child(rename_btn)
+
+    _build_db_cost_curve(vb, saved_deck)
+    _db_sep(vb)
+
+    var dl_hdr := Label.new(); dl_hdr.text = "DECK LIST  (cost, then name)"
+    dl_hdr.add_theme_font_size_override("font_size", 11)
+    dl_hdr.add_theme_color_override("font_color", Color(0.52, 0.52, 0.66))
+    vb.add_child(dl_hdr)
+
+    var list_scroll := ScrollContainer.new()
+    list_scroll.size_flags_vertical = Control.SIZE_FILL | Control.SIZE_EXPAND
+    list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    vb.add_child(list_scroll)
+
+    var list_vb := VBoxContainer.new()
+    list_vb.add_theme_constant_override("separation", 3)
+    list_vb.size_flags_horizontal = Control.SIZE_FILL
+    list_scroll.add_child(list_vb)
+    _build_db_deck_list_entries(list_vb)
+
+    _db_sep(vb)
+
+    var act_vb := VBoxContainer.new()
+    act_vb.add_theme_constant_override("separation", 5)
+    vb.add_child(act_vb)
+    var row1 := HBoxContainer.new()
+    row1.add_theme_constant_override("separation", 5)
+    act_vb.add_child(row1)
+    var dup_btn := Button.new(); dup_btn.text = "DUPLICATE"
+    dup_btn.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    dup_btn.add_theme_font_size_override("font_size", 12)
+    dup_btn.add_theme_stylebox_override("normal", style(Color(0.28, 0.50, 0.40), 7))
+    dup_btn.pressed.connect(func():
+        _duplicate_deck_slot(editing_deck_slot_idx)
+        editing_deck_slot_idx = -1
+        show_deck_manager())
+    row1.add_child(dup_btn)
+    var del_btn := Button.new(); del_btn.text = "DELETE"
+    del_btn.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    del_btn.add_theme_font_size_override("font_size", 12)
+    del_btn.add_theme_stylebox_override("normal", style(Color(0.62, 0.16, 0.16), 7))
+    del_btn.pressed.connect(func(): _confirm_delete_slot(editing_deck_slot_idx))
+    row1.add_child(del_btn)
+    var reset_btn := Button.new(); reset_btn.text = "RESET TO STARTER"
+    reset_btn.add_theme_font_size_override("font_size", 12)
+    reset_btn.custom_minimum_size = Vector2(0, 32)
+    reset_btn.add_theme_stylebox_override("normal", style(Color(0.42, 0.34, 0.14), 7))
+    reset_btn.pressed.connect(func(): build_starter_deck(selected_deck_class); save_profile(); show_deck_builder())
+    act_vb.add_child(reset_btn)
+
+func _build_db_slot_strip(parent: Control) -> void:
+    var hdr := Label.new()
+    hdr.text = "CUSTOM DECKS  (%d / %d)" % [deck_slots.size(), MAX_DECK_SLOTS]
+    hdr.add_theme_font_size_override("font_size", 12)
+    hdr.add_theme_color_override("font_color", GOLD_COLOR)
+    parent.add_child(hdr)
+
+    var grid := GridContainer.new(); grid.columns = 4
+    grid.add_theme_constant_override("h_separation", 4)
+    grid.add_theme_constant_override("v_separation", 4)
+    parent.add_child(grid)
+
+    for i in range(MAX_DECK_SLOTS):
+        var slot_btn := Button.new()
+        slot_btn.custom_minimum_size = Vector2(68, 46)
+        slot_btn.add_theme_font_size_override("font_size", 10)
+        var is_active := (i == editing_deck_slot_idx)
+        if i < deck_slots.size():
+            var sl: Dictionary = deck_slots[i]
+            var sl_cls := str(sl.get("class", "Hope"))
+            var sl_name := str(sl.get("name", "Deck %d" % (i + 1)))
+            var card_count := int(Array(sl.get("cards", [])).size())
+            slot_btn.text = "%d. %s\n%d/40" % [i + 1, sl_name.left(7), card_count]
+            slot_btn.tooltip_text = sl_name
+            if is_active:
+                slot_btn.add_theme_stylebox_override("normal", solid_style(class_color(sl_cls), 6))
+                slot_btn.add_theme_color_override("font_color", Color(0.04, 0.04, 0.04))
+            else:
+                slot_btn.add_theme_stylebox_override("normal", style(class_color(sl_cls).darkened(0.52), 6))
+            var ci := i
+            slot_btn.pressed.connect(func(): _open_slot_in_deck_builder(ci))
+        else:
+            slot_btn.text = "%d.\nNEW" % (i + 1)
+            slot_btn.tooltip_text = "Create new deck in slot %d" % (i + 1)
+            slot_btn.add_theme_stylebox_override("normal", style(Color(0.16, 0.20, 0.34), 6))
+            slot_btn.add_theme_color_override("font_color", Color(0.44, 0.54, 0.82))
+            slot_btn.pressed.connect(func(): _show_create_slot_overlay())
+        grid.add_child(slot_btn)
+
+func _build_db_cost_curve(parent: Control, deck: Array) -> void:
+    if deck.is_empty(): return
+    var cl := Label.new(); cl.text = "MANA CURVE"
+    cl.add_theme_font_size_override("font_size", 11)
+    cl.add_theme_color_override("font_color", Color(0.52, 0.52, 0.66))
+    parent.add_child(cl)
+
+    var buckets := [0, 0, 0, 0, 0, 0, 0, 0]
+    for id in deck:
+        var cdd := card_by_id(str(id))
+        if cdd.is_empty(): continue
+        buckets[mini(int(cdd.get("cost", 0)), 7)] += 1
+    var max_b := 1
+    for b in buckets:
+        if b > max_b: max_b = b
+
+    var hbox := HBoxContainer.new()
+    hbox.custom_minimum_size = Vector2(0, 52)
+    hbox.add_theme_constant_override("separation", 3)
+    parent.add_child(hbox)
+    for i in range(8):
+        var col := VBoxContainer.new()
+        col.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+        col.add_theme_constant_override("separation", 2)
+        hbox.add_child(col)
+        var bar_h := 28
+        var bar_bg := Panel.new(); bar_bg.custom_minimum_size = Vector2(0, bar_h)
+        bar_bg.size_flags_horizontal = Control.SIZE_FILL
+        var bg_s := StyleBoxFlat.new(); bg_s.bg_color = Color(0.08, 0.10, 0.18)
+        bg_s.set_corner_radius_all(4)
+        bar_bg.add_theme_stylebox_override("panel", bg_s); col.add_child(bar_bg)
+        if buckets[i] > 0:
+            var fill_h := int(float(buckets[i]) / float(max_b) * bar_h)
+            var fill := Panel.new()
+            fill.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+            fill.offset_top = bar_h - fill_h; fill.offset_bottom = 0
+            var fs := StyleBoxFlat.new()
+            fs.bg_color = Color(0.35, 0.50, 0.92, 0.88).lerp(GOLD_COLOR, float(i) / 7.0)
+            fs.set_corner_radius_all(3)
+            fill.add_theme_stylebox_override("panel", fs); bar_bg.add_child(fill)
+        var cnt_l := Label.new()
+        cnt_l.text = str(buckets[i]) if buckets[i] > 0 else ""
+        cnt_l.add_theme_font_size_override("font_size", 10)
+        cnt_l.add_theme_color_override("font_color", Color(0.68, 0.68, 0.82))
+        cnt_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; col.add_child(cnt_l)
+        var lbl_c := Label.new()
+        lbl_c.text = str(i) if i < 7 else "7+"
+        lbl_c.add_theme_font_size_override("font_size", 10)
+        lbl_c.add_theme_color_override("font_color", Color(0.44, 0.44, 0.54))
+        lbl_c.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; col.add_child(lbl_c)
+
+func _build_db_deck_list_entries(parent: Control) -> void:
+    if saved_deck.is_empty():
+        var el := Label.new(); el.text = "No cards added yet."
+        el.add_theme_font_size_override("font_size", 13)
+        el.add_theme_color_override("font_color", Color(0.40, 0.40, 0.52))
+        parent.add_child(el)
+        return
+    var counts: Dictionary = {}
     for id in saved_deck:
-        var key := str(id)
-        if not deck_counts.has(key):
-            deck_order.append(key)
-        deck_counts[key] = int(deck_counts.get(key, 0)) + 1
-    var list_panel := Panel.new()
-    list_panel.position = Vector2(14, 216)
-    list_panel.size = Vector2(332, 178)
-    list_panel.add_theme_stylebox_override("panel", style(Color(0.03,0.035,0.06,0.85), 8))
-    side.add_child(list_panel)
-    if deck_order.is_empty():
-        centered_label("No cards added yet.", Vector2(0,70), Vector2(332,28), 14, list_panel)
-    else:
-        var list_scroll := ScrollContainer.new()
-        list_scroll.position = Vector2(6,6); list_scroll.size = Vector2(320,166)
-        list_panel.add_child(list_scroll)
-        var list_box := VBoxContainer.new()
-        list_box.custom_minimum_size = Vector2(310,0)
-        list_box.add_theme_constant_override("separation", 4)
-        list_scroll.add_child(list_box)
-        for id in deck_order:
-            var cd := card_by_id(id)
-            if cd.is_empty(): continue
-            var row := HBoxContainer.new()
-            row.custom_minimum_size = Vector2(310,26)
-            var swatch := ColorRect.new()
-            swatch.color = class_color(str(cd.get("class","Neutral")))
-            swatch.custom_minimum_size = Vector2(6,22)
-            row.add_child(swatch)
-            var row_label := Label.new()
-            row_label.text = " x%d  %s" % [int(deck_counts[id]), str(cd.get("name","Card"))]
-            row_label.custom_minimum_size = Vector2(230,22)
-            row_label.add_theme_font_size_override("font_size", 13)
-            row_label.clip_text = true
-            row.add_child(row_label)
-            var remove_btn := Button.new()
-            remove_btn.text = "−"
-            remove_btn.custom_minimum_size = Vector2(28,24)
-            remove_btn.tooltip_text = "Remove one copy"
-            remove_btn.pressed.connect(remove_one_from_deck.bind(id))
-            row.add_child(remove_btn)
-            list_box.add_child(row)
-    button("RESET STARTER DECK",Vector2(45,402),Vector2(270,42),func(): build_starter_deck(selected_deck_class); save_profile(); show_deck_builder(),side)
+        counts[str(id)] = int(counts.get(str(id), 0)) + 1
+    var order: Array = counts.keys()
+    order.sort_custom(func(a: String, b: String) -> bool:
+        var ca := card_by_id(a); var cbb := card_by_id(b)
+        var ca_cost := int(ca.get("cost", 0)) if not ca.is_empty() else 99
+        var cb_cost := int(cbb.get("cost", 0)) if not cbb.is_empty() else 99
+        if ca_cost != cb_cost: return ca_cost < cb_cost
+        var na := str(ca.get("name", a)) if not ca.is_empty() else a
+        var nb := str(cbb.get("name", b)) if not cbb.is_empty() else b
+        return na < nb)
+    for id in order:
+        var cd := card_by_id(id)
+        if cd.is_empty(): continue
+        var row := HBoxContainer.new()
+        row.custom_minimum_size = Vector2(0, 30)
+        row.add_theme_constant_override("separation", 4)
+        var cost_p := Panel.new(); cost_p.custom_minimum_size = Vector2(24, 28)
+        var cs := StyleBoxFlat.new(); cs.bg_color = Color(0.10, 0.16, 0.30)
+        cs.set_corner_radius_all(5)
+        cost_p.add_theme_stylebox_override("panel", cs)
+        var cost_l := Label.new(); cost_l.text = str(cd.get("cost", "?"))
+        cost_l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        cost_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        cost_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        cost_l.add_theme_font_size_override("font_size", 12)
+        cost_l.add_theme_color_override("font_color", Color(0.70, 0.85, 1.0))
+        cost_p.add_child(cost_l); row.add_child(cost_p)
+        var cx := Label.new(); cx.text = "x%d" % int(counts[id])
+        cx.custom_minimum_size = Vector2(22, 28)
+        cx.add_theme_font_size_override("font_size", 12)
+        cx.add_theme_color_override("font_color", GOLD_COLOR)
+        cx.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; row.add_child(cx)
+        var sw := ColorRect.new()
+        sw.color = class_color(str(cd.get("class", "Neutral")))
+        sw.custom_minimum_size = Vector2(4, 28); row.add_child(sw)
+        var nl := Label.new(); nl.text = str(cd.get("name", id))
+        nl.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+        nl.custom_minimum_size = Vector2(0, 28)
+        nl.add_theme_font_size_override("font_size", 12)
+        nl.clip_text = true; nl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        row.add_child(nl)
+        var rb := Button.new(); rb.text = "-"
+        rb.custom_minimum_size = Vector2(26, 28)
+        rb.add_theme_font_size_override("font_size", 14)
+        rb.add_theme_stylebox_override("normal", style(Color(0.55, 0.18, 0.18), 5))
+        rb.tooltip_text = "Remove one copy"
+        rb.pressed.connect(remove_one_from_deck.bind(id))
+        row.add_child(rb)
+        parent.add_child(row)
+
+func _show_db_card_preview(card_data: Dictionary) -> void:
+    var id := str(card_data.get("id", ""))
+    var rarity := str(card_data.get("rarity", "Bronze"))
+    var owned := int(collection_owned.get(id, 0))
+    var in_deck := count_in_deck(id)
+    var allowed := mini(owned, int(COPY_LIMITS.get(rarity, 1)))
+
+    var overlay := Panel.new()
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 800
+    var ov_s := StyleBoxFlat.new(); ov_s.bg_color = Color(0.0, 0.0, 0.0, 0.70)
+    ov_s.set_border_width_all(0)
+    overlay.add_theme_stylebox_override("panel", ov_s)
+    root_layer.add_child(overlay)
+
+    var esb := StyleBoxEmpty.new()
+    var close_bg := Button.new()
+    close_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    close_bg.flat = true
+    close_bg.add_theme_stylebox_override("normal", esb)
+    close_bg.add_theme_stylebox_override("hover", esb)
+    close_bg.pressed.connect(func(): overlay.queue_free())
+    overlay.add_child(close_bg)
+
+    var pv := Panel.new()
+    pv.position = Vector2(285, 72); pv.size = Vector2(710, 576)
+    pv.z_index = 1
+    var pv_s := StyleBoxFlat.new()
+    pv_s.bg_color = Color(0.032, 0.040, 0.065, 0.97)
+    pv_s.border_color = GOLD_COLOR; pv_s.set_border_width_all(2)
+    pv_s.set_corner_radius_all(16)
+    pv_s.shadow_color = Color(0, 0, 0, 0.70); pv_s.shadow_size = 22
+    pv.add_theme_stylebox_override("panel", pv_s)
+    overlay.add_child(pv)
+
+    var eat := Button.new(); eat.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    eat.flat = true; eat.add_theme_stylebox_override("normal", esb)
+    eat.add_theme_stylebox_override("hover", esb)
+    pv.add_child(eat)
+
+    var cp2 := card_panel(card_data, Vector2(22, 22), Vector2(272, 370))
+    pv.add_child(cp2)
+
+    var ix := 312.0
+    var nl2 := label(str(card_data.get("name", "")), Vector2(ix, 22), Vector2(374, 36), 22, pv)
+    nl2.add_theme_color_override("font_color", GOLD_COLOR)
+    var cl2 := label("%s  -  %s  -  Cost %s" % [str(card_data.get("class","")), rarity, str(card_data.get("cost","?"))], Vector2(ix, 62), Vector2(374, 22), 13, pv)
+    cl2.add_theme_color_override("font_color", class_color(str(card_data.get("class","Neutral"))).lightened(0.18))
+    label("Type: %s" % str(card_data.get("type","Follower")), Vector2(ix, 88), Vector2(374, 22), 13, pv).add_theme_color_override("font_color", Color(0.60, 0.60, 0.72))
+
+    var stat_y := 116.0
+    if card_data.has("attack") and card_data.has("health"):
+        var sl2 := label("ATK %s  /  HP %s" % [str(card_data.get("attack","?")), str(card_data.get("health","?"))], Vector2(ix, stat_y), Vector2(240, 26), 16, pv)
+        sl2.add_theme_color_override("font_color", Color(0.88, 0.84, 0.62))
+        stat_y += 34.0
+
+    var eff := label(str(card_data.get("effect","No effect.")), Vector2(ix, stat_y), Vector2(376, 200), 14, pv)
+    eff.add_theme_color_override("font_color", Color(0.86, 0.86, 0.92))
+    eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+    label("Owned: %d  -  In deck: %d / %d" % [owned, in_deck, allowed], Vector2(ix, 328), Vector2(376, 22), 13, pv).add_theme_color_override("font_color", Color(0.60, 0.75, 0.60))
+
+    button("CLOSE", Vector2(ix, 368), Vector2(120, 38), func(): overlay.queue_free(), pv)
+    if editing_deck_slot_idx >= 0 and owned > 0:
+        var add_pv := button("+ ADD TO DECK", Vector2(ix + 130, 368), Vector2(210, 38),
+            func(): add_card_to_deck(id); overlay.queue_free(), pv)
+        if saved_deck.size() >= 40 or in_deck >= allowed:
+            add_pv.disabled = true
+        if in_deck > 0:
+            button("- REMOVE", Vector2(ix, 416), Vector2(160, 36),
+                func(): remove_one_from_deck(id); overlay.queue_free(), pv)
+
+func _show_create_slot_overlay() -> void:
+    if deck_slots.size() >= MAX_DECK_SLOTS: return
+
+    var overlay := Panel.new()
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 900
+    var ov_s := StyleBoxFlat.new(); ov_s.bg_color = Color(0, 0, 0, 0.70)
+    ov_s.set_border_width_all(0)
+    overlay.add_theme_stylebox_override("panel", ov_s)
+    root_layer.add_child(overlay)
+
+    var esb := StyleBoxEmpty.new()
+    var bg_btn := Button.new(); bg_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    bg_btn.flat = true; bg_btn.add_theme_stylebox_override("normal", esb)
+    bg_btn.add_theme_stylebox_override("hover", esb)
+    bg_btn.pressed.connect(func(): overlay.queue_free())
+    overlay.add_child(bg_btn)
+
+    var box := Panel.new()
+    box.position = Vector2(388, 162); box.size = Vector2(504, 396)
+    box.z_index = 1; box.add_theme_stylebox_override("panel", style(GOLD_COLOR, 16))
+    overlay.add_child(box)
+
+    var eat := Button.new(); eat.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    eat.flat = true; eat.add_theme_stylebox_override("normal", esb)
+    eat.add_theme_stylebox_override("hover", esb)
+    box.add_child(eat)
+
+    label("CREATE NEW DECK", Vector2(22, 20), Vector2(460, 36), 22, box).add_theme_color_override("font_color", GOLD_COLOR)
+    label("Choose a class and give your deck a name.", Vector2(22, 58), Vector2(460, 22), 13, box).add_theme_color_override("font_color", Color(0.62, 0.62, 0.72))
+    label("CLASS", Vector2(22, 90), Vector2(100, 22), 12, box).add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+
+    var chosen := [selected_class if selected_class != "" else "Hope"]
+    var cls_hbox := HBoxContainer.new()
+    cls_hbox.position = Vector2(22, 112); cls_hbox.size = Vector2(460, 50)
+    cls_hbox.add_theme_constant_override("separation", 8)
+    box.add_child(cls_hbox)
+
+    var cbs: Array = []
+    for c in CLASSES:
+        var cb3 := Button.new(); cb3.text = str(c)
+        cb3.custom_minimum_size = Vector2(105, 46)
+        cb3.add_theme_font_size_override("font_size", 14)
+        cbs.append(cb3); cls_hbox.add_child(cb3)
+
+    var refresh_cls: Callable
+    refresh_cls = func():
+        for i in cbs.size():
+            var c2: String = CLASSES[i]
+            if c2 == chosen[0]:
+                cbs[i].add_theme_stylebox_override("normal", solid_style(class_color(c2).darkened(0.08), 8))
+                cbs[i].add_theme_color_override("font_color", Color(0.04, 0.04, 0.04))
+            else:
+                cbs[i].add_theme_stylebox_override("normal", style(class_color(c2).darkened(0.40), 8))
+                cbs[i].remove_theme_color_override("font_color")
+    refresh_cls.call()
+    for i in cbs.size():
+        var c3: String = CLASSES[i]
+        cbs[i].pressed.connect(func(): chosen[0] = c3; refresh_cls.call())
+
+    label("DECK NAME", Vector2(22, 174), Vector2(200, 22), 12, box).add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    var name_edit := LineEdit.new()
+    name_edit.position = Vector2(22, 196); name_edit.size = Vector2(460, 42)
+    name_edit.placeholder_text = "My Deck"
+    name_edit.add_theme_font_size_override("font_size", 16)
+    box.add_child(name_edit)
+
+    button("CANCEL", Vector2(22, 298), Vector2(200, 50), func(): overlay.queue_free(), box)
+    button("CREATE DECK", Vector2(240, 298), Vector2(240, 50),
+        func():
+            var dname := name_edit.text.strip_edges()
+            if dname.is_empty(): dname = "My %s Deck" % chosen[0]
+            deck_slots.append({"name": dname, "class": chosen[0], "cards": []})
+            save_profile()
+            overlay.queue_free()
+            _open_slot_in_deck_builder(deck_slots.size() - 1),
+        box)
+
+func _show_db_rename_overlay() -> void:
+    if editing_deck_slot_idx < 0 or editing_deck_slot_idx >= deck_slots.size(): return
+    var cur_name := str(deck_slots[editing_deck_slot_idx].get("name", "Deck %d" % (editing_deck_slot_idx + 1)))
+
+    var overlay := Panel.new()
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 900
+    var ov_s := StyleBoxFlat.new(); ov_s.bg_color = Color(0, 0, 0, 0.65)
+    ov_s.set_border_width_all(0)
+    overlay.add_theme_stylebox_override("panel", ov_s)
+    root_layer.add_child(overlay)
+
+    var esb := StyleBoxEmpty.new()
+    var bg_btn := Button.new(); bg_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    bg_btn.flat = true; bg_btn.add_theme_stylebox_override("normal", esb)
+    bg_btn.add_theme_stylebox_override("hover", esb)
+    bg_btn.pressed.connect(func(): overlay.queue_free())
+    overlay.add_child(bg_btn)
+
+    var box := Panel.new()
+    box.position = Vector2(388, 242); box.size = Vector2(504, 236)
+    box.z_index = 1; box.add_theme_stylebox_override("panel", style(GOLD_COLOR, 16))
+    overlay.add_child(box)
+
+    var eat := Button.new(); eat.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    eat.flat = true; eat.add_theme_stylebox_override("normal", esb)
+    eat.add_theme_stylebox_override("hover", esb)
+    box.add_child(eat)
+
+    label("RENAME DECK", Vector2(22, 20), Vector2(460, 34), 20, box).add_theme_color_override("font_color", GOLD_COLOR)
+    var name_edit := LineEdit.new()
+    name_edit.position = Vector2(22, 68); name_edit.size = Vector2(460, 44)
+    name_edit.text = cur_name
+    name_edit.add_theme_font_size_override("font_size", 16)
+    box.add_child(name_edit)
+    name_edit.select_all()
+
+    button("CANCEL", Vector2(22, 132), Vector2(200, 50), func(): overlay.queue_free(), box)
+    button("SAVE NAME", Vector2(240, 132), Vector2(240, 50),
+        func():
+            var new_name := name_edit.text.strip_edges()
+            if not new_name.is_empty():
+                deck_slots[editing_deck_slot_idx]["name"] = new_name
+                save_profile()
+                overlay.queue_free()
+                show_deck_builder(),
+        box)
 
 func add_card_to_deck(id: String) -> void:
     var cd := card_by_id(id)
