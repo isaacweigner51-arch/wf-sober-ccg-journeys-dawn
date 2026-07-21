@@ -142,27 +142,17 @@ func _setup_nodes(sz: Vector2) -> void:
 		# a per-class focal-point X-shift so the face stays centred regardless of
 		# where the artist placed it within the composition.
 		_art = TextureRect.new()
-		# IMPORTANT: expand_mode and stretch_mode must be set BEFORE texture and
-		# size.  In Godot 4, assigning expand_mode after size triggers a relayout
-		# that resets size to the texture's natural dimensions (the root cause of
-		# the portrait rendering bug — TextureRect ended up 465×335 instead of
-		# 412×408, making COVERED show the painting at nearly 1:1 scale).
+		# expand_mode + stretch_mode set BEFORE texture — avoids Godot 4 relayout
+		# bug where setting expand_mode after size resets size to tex dimensions.
 		_art.expand_mode  = TextureRect.EXPAND_IGNORE_SIZE
-		_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		_art.clip_contents = false
 		_art.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-
-		_art.texture = _resolve_flat_texture()
-
-		# Focal shift: offset the rect so the portrait's focal point (the
-		# character's face) is centred in the visible clip region.
-		var foc_x: float = _FOCAL_X.get(_class_name_value.to_lower(), 0.0)
-		var art_w := sz.x + absf(foc_x)
-		var art_h := sz.y
-		_art.position           = Vector2(foc_x, 0.0)
-		_art.custom_minimum_size = Vector2(art_w, art_h)   # lock against layout
-		_art.size               = Vector2(art_w, art_h)
-		_art.pivot_offset       = Vector2(art_w * 0.5, art_h * 0.5)
+		_art.texture          = _resolve_flat_texture()
+		_art.position         = Vector2.ZERO
+		_art.custom_minimum_size = sz
+		_art.size             = sz
+		_art.pivot_offset     = sz * 0.5
 		add_child(_art)
 
 func _make_layer(part: String, sz: Vector2) -> TextureRect:
@@ -186,16 +176,10 @@ func _make_layer(part: String, sz: Vector2) -> TextureRect:
 func _resolve_flat_texture() -> Texture2D:
 	if _class_name_value.to_lower() == "sponsor":
 		return _load_texture_res("res://assets/cards/full/jd-080.jpg")
-	var base: Texture2D = _load_texture_res("res://assets/leaders/%s.png" % _class_name_value.to_lower())
-	if base == null:
-		return null
-	var margin := base.get_width() * 0.045
-	var iw := base.get_width()  - margin * 2.0
-	var ih := base.get_height() - margin * 2.0
-	var atlas := AtlasTexture.new()
-	atlas.atlas = base
-	atlas.region = Rect2(margin, margin, iw, ih * 0.72)   # top 72% = head + shoulders + torso
-	return atlas
+	# Return the raw texture — no atlas crop, no focal offset.
+	# The paintings are shown full-frame with CENTERED so the character is
+	# always visible regardless of where in the canvas they sit.
+	return _load_texture_res("res://assets/leaders/%s.png" % _class_name_value.to_lower())
 
 func _class_color() -> Color:
 	match _class_name_value:
