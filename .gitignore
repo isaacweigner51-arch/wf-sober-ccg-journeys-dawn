@@ -60,3 +60,8 @@ android_keystore/
 export_credentials.cfg
 wf_v084/android_keystore/
 wf_v084/export_credentials.cfg
+build/
+*.pck
+*.exe
+*.aab
+*.apk
