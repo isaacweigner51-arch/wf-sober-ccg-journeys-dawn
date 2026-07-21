@@ -770,6 +770,9 @@ var whats_new_checked_this_session := false
 # and apply. Any path that leaves this false will block all save uploads so an
 # empty/default local save can never overwrite real cloud data.
 var _cloud_safe_to_upload := false
+# Snapshot of the last successfully fetched cloud save, used by the upload
+# integrity check to block uploads that would regress collection/progress.
+var _last_cloud_snapshot: Dictionary = {}
 const SUPPORT_EMAIL := "walkingfreeagain@gmail.com"
 
 func ensure_home_music() -> void:
@@ -1060,9 +1063,75 @@ func _queue_cloud_upload() -> void:
     if not _cloud_safe_to_upload:
         push_error("CLOUD UPLOAD ── BLOCKED: cloud profile was not safely fetched and applied — refusing to overwrite cloud data with local state")
         return
-    print("CLOUD UPLOAD ── uploading for user_id=%s  gold=%d vials=%d packs=%d cards=%d" % [
+    var outgoing := _serialize_profile_for_cloud()
+    if not _upload_integrity_ok(outgoing):
+        push_error("CLOUD UPLOAD ── BLOCKED: integrity check failed — outgoing save would regress cloud progress")
+        return
+    print("CLOUD UPLOAD ── ALLOWED  user_id=%s  gold=%d vials=%d packs=%d cards=%d" % [
         NetworkManager.user_id, gold_balance, dust_balance, pack_inventory, collection_owned.size()])
-    await NetworkManager.upload_save_data(_serialize_profile_for_cloud())
+    await NetworkManager.upload_save_data(outgoing)
+
+## Compare the outgoing save against the last known cloud snapshot.
+## Returns false (and logs the reason) if the upload would regress any
+## critical progress field. Always returns true when there is no prior snapshot.
+func _upload_integrity_ok(outgoing: Dictionary) -> bool:
+    if _last_cloud_snapshot.is_empty():
+        print("CLOUD INTEGRITY ── no prior snapshot, first sync allowed")
+        return true
+
+    # ── Collection must never shrink ──────────────────────────────────────────
+    var snap_coll: Variant = _last_cloud_snapshot.get("collection", {})
+    var out_coll: Variant  = outgoing.get("collection", {})
+    if snap_coll is Dictionary and out_coll is Dictionary:
+        var snap_owned: Variant = (snap_coll as Dictionary).get("owned", {})
+        var out_owned: Variant  = (out_coll  as Dictionary).get("owned", {})
+        var snap_n := (snap_owned as Dictionary).size() if snap_owned is Dictionary else 0
+        var out_n  := (out_owned  as Dictionary).size() if out_owned  is Dictionary else 0
+        if out_n < snap_n:
+            push_error("CLOUD INTEGRITY ── FAIL: collection would shrink %d -> %d cards" % [snap_n, out_n])
+            return false
+
+    # ── Economy must not crater (allow normal spending, block total wipe) ──────
+    var snap_econ: Variant = _last_cloud_snapshot.get("economy", {})
+    var out_econ: Variant  = outgoing.get("economy", {})
+    if snap_econ is Dictionary and out_econ is Dictionary:
+        var snap_gold := int((snap_econ as Dictionary).get("gold", 0))
+        var out_gold  := int((out_econ  as Dictionary).get("gold", 0))
+        # Block upload if gold would drop by more than 90% AND cloud had >500 gold.
+        # Legitimate spending never wipes a whole balance in one save cycle.
+        if snap_gold > 500 and out_gold < int(snap_gold * 0.10):
+            push_error("CLOUD INTEGRITY ── FAIL: gold would drop %d -> %d (>90%% loss)" % [snap_gold, out_gold])
+            return false
+
+    # ── Academy must not regress ───────────────────────────────────────────────
+    var snap_acad: Variant = _last_cloud_snapshot.get("academy", {})
+    var out_acad: Variant  = outgoing.get("academy", {})
+    if snap_acad is Dictionary and out_acad is Dictionary:
+        var snap_complete := _safe_bool((snap_acad as Dictionary).get("complete", false))
+        var out_complete  := _safe_bool((out_acad  as Dictionary).get("complete", false))
+        var snap_step     := int((snap_acad as Dictionary).get("step", 0))
+        var out_step      := int((out_acad  as Dictionary).get("step", 0))
+        if snap_complete and not out_complete:
+            push_error("CLOUD INTEGRITY ── FAIL: academy.complete would regress true -> false")
+            return false
+        if out_step < snap_step:
+            push_error("CLOUD INTEGRITY ── FAIL: academy.step would regress %d -> %d" % [snap_step, out_step])
+            return false
+
+    # ── Trials must not shrink ────────────────────────────────────────────────
+    var snap_trials: Variant = _last_cloud_snapshot.get("trials", {})
+    var out_trials: Variant  = outgoing.get("trials", {})
+    if snap_trials is Dictionary and out_trials is Dictionary:
+        var snap_cleared: Variant = (snap_trials as Dictionary).get("cleared", {})
+        var out_cleared: Variant  = (out_trials  as Dictionary).get("cleared", {})
+        var snap_n2 := (snap_cleared as Dictionary).size() if snap_cleared is Dictionary else 0
+        var out_n2  := (out_cleared  as Dictionary).size() if out_cleared  is Dictionary else 0
+        if out_n2 < snap_n2:
+            push_error("CLOUD INTEGRITY ── FAIL: trials.cleared would shrink %d -> %d" % [snap_n2, out_n2])
+            return false
+
+    print("CLOUD INTEGRITY ── OK")
+    return true
 
 func _serialize_profile_for_cloud() -> Dictionary:
     saved_decks[selected_deck_class] = saved_deck.duplicate()
@@ -1111,61 +1180,111 @@ func _safe_bool(v: Variant) -> bool:
 ## Returns true on success, false if anything goes wrong.
 ## The caller MUST NOT upload to Supabase when this returns false.
 func _apply_cloud_profile(data: Dictionary) -> bool:
-    # Merge cloud data into the local ConfigFile, never downgrading progress.
-    # Rule: local wins whenever it represents MORE progress than the cloud value.
+    # Merge cloud save Dictionary into the local ConfigFile.
+    # Rules: progress never regresses; collection never shrinks; decks only
+    # replaced by cloud when cloud is non-empty; pending_rewards applied once.
     if data.is_empty():
         return true
-
-    if not (data is Dictionary):
-        push_error("CLOUD MERGE: data is not a Dictionary — aborting merge")
-        return false
 
     var cfg := ConfigFile.new()
     cfg.load(SAVE_PATH)
 
     for section in data.keys():
+        if section == "pending_rewards":
+            continue  # Handled separately below
         var sec_data: Variant = data[section]
         if not (sec_data is Dictionary):
-            push_warning("CLOUD MERGE: section '%s' value is not a Dictionary (got %s) — skipping" % [section, typeof(sec_data)])
+            push_warning("CLOUD MERGE: section '%s' is not a Dictionary (type=%d) — skipping" % [section, typeof(sec_data)])
             continue
         for key in sec_data.keys():
             var cloud_val: Variant = sec_data[key]
             var local_val: Variant = cfg.get_value(section, key, null)
 
-            # ── Never regress boolean progress flags ──────────────────────────
-            if section == "academy" and key in ["complete", "reward_claimed"]:
-                cfg.set_value(section, key, _safe_bool(local_val) or _safe_bool(cloud_val))
-                continue
-            if section == "trials" and key in ["sponsor_leader_unlocked", "sponsor_sleeve_unlocked", "sponsor_defeated"]:
+            # ── Boolean progress flags: OR — never regress ─────────────────────
+            if (section == "academy" and key in ["complete", "reward_claimed"]) or \
+               (section == "trials" and key in ["sponsor_leader_unlocked",
+                    "sponsor_sleeve_unlocked", "sponsor_defeated"]):
                 cfg.set_value(section, key, _safe_bool(local_val) or _safe_bool(cloud_val))
                 continue
 
-            # ── Never regress numeric progress counters ───────────────────────
-            if section == "academy" and key == "step":
+            # ── Numeric progress counters: max — never regress ─────────────────
+            if (section == "academy" and key == "step") or \
+               (section == "economy" and key in ["gold", "dust", "packs"]) or \
+               (section == "packs" and key in ["platinum_pity", "legendary_pity", "opened"]):
                 cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
                 continue
+
+            # ── challenge.recovery_progress: {class: int}, max per key ────────
             if section == "challenge" and key == "recovery_progress":
-                # recovery_challenge_progress is a Dictionary {class_name: int}.
-                # Merge per-key, keeping the higher progress value.
-                var local_dict: Dictionary = local_val if local_val is Dictionary else {}
-                var cloud_dict: Dictionary = cloud_val if cloud_val is Dictionary else {}
-                var merged_dict := local_dict.duplicate()
-                for cls in cloud_dict.keys():
-                    merged_dict[cls] = maxi(int(merged_dict.get(cls, 0)), int(cloud_dict[cls]))
-                cfg.set_value(section, key, merged_dict)
+                var ld: Dictionary = local_val if local_val is Dictionary else {}
+                var cd: Dictionary = cloud_val if cloud_val is Dictionary else {}
+                var md := ld.duplicate()
+                for cls in cd.keys():
+                    md[cls] = maxi(int(md.get(cls, 0)), int(cd[cls]))
+                cfg.set_value(section, key, md)
                 continue
 
-            # ── Never regress earned currency or pack inventory ───────────────
-            if section == "economy" and key in ["gold", "dust", "packs"]:
-                cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
+            # ── collection.owned: {card_id: count}, max per key ───────────────
+            # NEVER reduce a card count — union with cloud by taking the higher value.
+            if section == "collection" and key == "owned":
+                var ld: Dictionary = local_val if local_val is Dictionary else {}
+                var cd: Dictionary = cloud_val if cloud_val is Dictionary else {}
+                var md := ld.duplicate()
+                for card_id in cd.keys():
+                    md[card_id] = maxi(int(md.get(card_id, 0)), int(cd[card_id]))
+                cfg.set_value(section, key, md)
+                print("APPLY collection.owned  : local=%d  cloud=%d  merged=%d" % [
+                    ld.size(), cd.size(), md.size()])
                 continue
 
-            # ── Pity counters: keep whichever is higher (more progress) ───────
-            if section == "packs" and key in ["platinum_pity", "legendary_pity"]:
-                cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
+            # ── trials.cleared: {trial_key: bool}, union ──────────────────────
+            # Never un-clear a trial that either side considers cleared.
+            if section == "trials" and key == "cleared":
+                var ld: Dictionary = local_val if local_val is Dictionary else {}
+                var cd: Dictionary = cloud_val if cloud_val is Dictionary else {}
+                var md := ld.duplicate()
+                for trial_key in cd.keys():
+                    if _safe_bool(cd[trial_key]):
+                        md[trial_key] = true
+                cfg.set_value(section, key, md)
+                print("APPLY trials.cleared    : local=%d  cloud=%d  merged=%d" % [
+                    ld.size(), cd.size(), md.size()])
                 continue
 
-            # ── Never regress array progress (union of both) ──────────────────
+            # ── deck_slots.slots: cloud wins wholesale ─────────────────────────
+            if section == "deck_slots" and key == "slots":
+                if cloud_val is Array:
+                    cfg.set_value(section, key, cloud_val)
+                continue
+
+            # ── deck.cards / decks.by_class: cloud wins ONLY if non-empty ─────
+            # An empty cloud deck must NOT erase a valid local deck.  This covers
+            # the partial-overwrite failure mode where a default local save was
+            # previously uploaded, setting deck.cards=[] in Supabase.
+            if section == "deck" and key == "cards":
+                var cloud_nonempty := cloud_val is Array and not (cloud_val as Array).is_empty()
+                if cloud_nonempty:
+                    cfg.set_value(section, key, cloud_val)
+                print("APPLY deck.cards        : cloud_cards=%d  %s" % [
+                    (cloud_val as Array).size() if cloud_val is Array else 0,
+                    "APPLIED" if cloud_nonempty else "KEPT LOCAL (cloud empty)"])
+                continue
+
+            if section == "decks" and key == "by_class":
+                if cloud_val is Dictionary:
+                    var cloud_has_any := false
+                    for cls_key in (cloud_val as Dictionary).keys():
+                        var v: Variant = (cloud_val as Dictionary)[cls_key]
+                        if v is Array and not (v as Array).is_empty():
+                            cloud_has_any = true
+                            break
+                    if cloud_has_any:
+                        cfg.set_value(section, key, cloud_val)
+                    print("APPLY decks.by_class    : cloud_has_content=%s  %s" % [
+                        str(cloud_has_any), "APPLIED" if cloud_has_any else "KEPT LOCAL (cloud empty)"])
+                continue
+
+            # ── Other Array fields: union ──────────────────────────────────────
             if cloud_val is Array:
                 var merged: Array = (local_val.duplicate() if local_val is Array else [])
                 for entry in cloud_val:
@@ -1174,20 +1293,43 @@ func _apply_cloud_profile(data: Dictionary) -> bool:
                 cfg.set_value(section, key, merged)
                 continue
 
-            # ── Deck slots: cloud wins wholesale (most-recent edit from any device) ──
-            if section == "deck_slots" and key == "slots" and cloud_val is Array:
-                cfg.set_value(section, key, cloud_val)
-                continue
-            # ── All other fields: cloud wins (deck config, daily state, etc.) ─
+            # ── All other fields: cloud wins ───────────────────────────────────
             cfg.set_value(section, key, cloud_val)
+
+    # ── Apply pending_rewards if present in cloud save ────────────────────────
+    # pending_rewards = {gold: int, vials: int, packs: int}
+    # Applied once here then must be cleared from Supabase by the caller.
+    if data.has("pending_rewards"):
+        var pr: Variant = data["pending_rewards"]
+        if pr is Dictionary:
+            var pg := int(pr.get("gold", 0))
+            var pv := int(pr.get("vials", 0))
+            var pp := int(pr.get("packs", 0))
+            if pg > 0 or pv > 0 or pp > 0:
+                print("APPLY pending_rewards   : +gold=%d  +vials=%d  +packs=%d" % [pg, pv, pp])
+                cfg.set_value("economy", "gold",  int(cfg.get_value("economy", "gold",  0)) + pg)
+                cfg.set_value("economy", "dust",  int(cfg.get_value("economy", "dust",  0)) + pv)
+                cfg.set_value("economy", "packs", int(cfg.get_value("economy", "packs", 0)) + pp)
 
     var save_err := cfg.save(SAVE_PATH)
     if save_err != OK:
-        push_error("CLOUD MERGE: cfg.save() failed with error %d — local file unchanged, aborting upload" % save_err)
+        push_error("CLOUD MERGE: cfg.save() failed (error %d) — upload aborted" % save_err)
         return false
 
-    print("CLOUD MERGE: merged save data successfully (progress-safe)")
+    # ── Per-section summary ────────────────────────────────────────────────────
+    var aft := ConfigFile.new(); aft.load(SAVE_PATH)
+    print("APPLY economy          : gold=%d  vials=%d  packs=%d" % [
+        int(aft.get_value("economy", "gold", 0)),
+        int(aft.get_value("economy", "dust", 0)),
+        int(aft.get_value("economy", "packs", 0))])
+    print("APPLY academy          : complete=%s  step=%d  reward_claimed=%s" % [
+        str(_safe_bool(aft.get_value("academy", "complete", false))),
+        int(aft.get_value("academy", "step", 0)),
+        str(_safe_bool(aft.get_value("academy", "reward_claimed", false)))])
+    print("APPLY decks            : deck.cards=%d" % (aft.get_value("deck", "cards", []) as Array).size())
+    print("CLOUD MERGE            : SUCCESS")
     return true
+
 
 func _on_cloud_save_loaded(data: Dictionary, fetch_ok: bool) -> void:
     # ── Snapshot local state before any merge ─────────────────────────────────
@@ -1224,7 +1366,8 @@ func _on_cloud_save_loaded(data: Dictionary, fetch_ok: bool) -> void:
         _apply_granted_vials()
         return
 
-    # ── Remote save found — merge, cloud data is king for rewards ─────────────
+    # ── Remote save found — store snapshot for integrity checks, then merge ─────
+    _last_cloud_snapshot = data.duplicate(true)
     print("CLOUD SYNC ── ACTION : applying cloud save (%d sections, local wins on progress)" % data.size())
     var merge_ok := _apply_cloud_profile(data)
     if not merge_ok:

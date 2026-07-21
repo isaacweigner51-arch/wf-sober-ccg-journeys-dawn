@@ -59,6 +59,19 @@
   "whats_new": [
     {
       "version": "0.9.1",
+      "title": "Cloud Save Merge Hardening",
+      "items": [
+        "collection.owned now merged with max-per-card-id (card count can never decrease from a cloud merge)",
+        "trials.cleared now merged as a union (cleared trials can never be un-cleared by a stale cloud state)",
+        "deck.cards and decks.by_class: empty cloud deck no longer erases a valid local deck",
+        "Upload integrity check: blocks any upload that would shrink the collection, crash gold >90%, regress academy, or lose trial clears",
+        "Last cloud snapshot stored per-session for the integrity comparison",
+        "pending_rewards section in cloud save applied automatically then preserved until cleared",
+        "Per-section apply logs: APPLY collection.owned, trials.cleared, deck.cards, decks.by_class, economy, academy"
+      ]
+    },
+    {
+      "version": "0.9.1",
       "title": "Cloud Save Safety Overhaul",
       "items": [
         "Upload gate: local saves can NEVER overwrite cloud data until the cloud profile is confirmed fetched and applied",
