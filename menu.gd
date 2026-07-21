@@ -1526,7 +1526,7 @@ func show_home() -> void:
     var top := Panel.new()
     top.position = Vector2(16, 12)
     top.size = Vector2(1248, 64)
-    top.add_theme_stylebox_override("panel", style(Color(0.38, 0.30, 0.17), 12))
+    top.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.13), 12))
     root_layer.add_child(top)
 
     var avatar := TextureRect.new()
@@ -1553,7 +1553,7 @@ func show_home() -> void:
     var nav := Panel.new()
     nav.position = Vector2(16, 88)
     nav.size = Vector2(218, 616)
-    nav.add_theme_stylebox_override("panel", style(Color(0.24, 0.20, 0.14), 14))
+    nav.add_theme_stylebox_override("panel", style(Color(0.05, 0.07, 0.14), 14))
     root_layer.add_child(nav)
     var brand := centered_label("JOURNEY'S\nDAWN", Vector2(14, 20), Vector2(190, 72), 27, nav)
     brand.add_theme_color_override("font_color", GOLD_COLOR)
@@ -1611,7 +1611,7 @@ func show_home() -> void:
     var main := Panel.new()
     main.position = Vector2(248, 88)
     main.size = Vector2(1016, 616)
-    main.add_theme_stylebox_override("panel", style(Color(0.17, 0.24, 0.34), 16))
+    main.add_theme_stylebox_override("panel", style(Color(0.06, 0.09, 0.17), 16))
     root_layer.add_child(main)
 
     centered_label("CHOOSE YOUR LEADER", Vector2(20, 10), Vector2(976, 34), 22, main).add_theme_color_override("font_color", GOLD_COLOR)
@@ -1716,7 +1716,7 @@ func show_home() -> void:
     var right := Panel.new()
     right.position = Vector2(590, 114)
     right.size = Vector2(402, 430)
-    right.add_theme_stylebox_override("panel", style(Color(0.30, 0.24, 0.18), 14))
+    right.add_theme_stylebox_override("panel", style(Color(0.08, 0.11, 0.20), 14))
     main.add_child(right)
     label("RECOVERY CHALLENGE", Vector2(20, 18), Vector2(362, 32), 20, right).add_theme_color_override("font_color", GOLD_COLOR)
     label("Win 3 matches with " + active_class + ".", Vector2(20, 58), Vector2(362, 30), 15, right)
@@ -3733,9 +3733,11 @@ func show_match_deck_selection() -> void:
     add_background(0.88)
     header("BATTLE PREPARATION", "Choose your champion and deck, then face your opponent.")
 
+    # Shell height = 608 so bottom of screen (100+608=708) stays within 720.
+    # This keeps both BEGIN BATTLE and PRACTICE MODE visible without scrolling.
     var shell := Panel.new()
     shell.position = Vector2(6, 100)
-    shell.size = Vector2(1268, 654)
+    shell.size = Vector2(1268, 608)
     shell.clip_contents = false
     shell.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.10), 0))
     root_layer.add_child(shell)
@@ -3743,7 +3745,7 @@ func show_match_deck_selection() -> void:
     # Left panel: all deck categories (MY DECKS / STARTER / OWNER)
     var left_p := Panel.new()
     left_p.position = Vector2(0, 0)
-    left_p.size = Vector2(268, 654)
+    left_p.size = Vector2(268, 608)
     left_p.add_theme_stylebox_override("panel", style(Color(0.05, 0.08, 0.14), 0))
     shell.add_child(left_p)
     _bp_build_deck_list(left_p)
@@ -3751,7 +3753,7 @@ func show_match_deck_selection() -> void:
     # Battle stage: cinematic MY LEADER vs OPPONENT display
     var stage := Panel.new()
     stage.position = Vector2(270, 0)
-    stage.size = Vector2(998, 654)
+    stage.size = Vector2(998, 608)
     stage.clip_contents = true
     stage.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.10), 0))
     shell.add_child(stage)
@@ -4175,19 +4177,19 @@ func _bp_build_battle_stage(stage: Panel) -> void:
     # Dual tinted backgrounds — each leader's class color bleeds into their half
     var bg_my := ColorRect.new()
     bg_my.color = Color(my_col.r * 0.12, my_col.g * 0.12, my_col.b * 0.18, 1.0)
-    bg_my.position = Vector2.ZERO; bg_my.size = Vector2(408, 654)
+    bg_my.position = Vector2.ZERO; bg_my.size = Vector2(408, 608)
     bg_my.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_my)
 
     var bg_vs := ColorRect.new()
     bg_vs.color = Color(0.02, 0.03, 0.06, 1.0)
-    bg_vs.position = Vector2(408, 0); bg_vs.size = Vector2(100, 654)
+    bg_vs.position = Vector2(408, 0); bg_vs.size = Vector2(100, 608)
     bg_vs.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_vs)
 
     var bg_opp := ColorRect.new()
     bg_opp.color = Color(opp_col.r * 0.12, opp_col.g * 0.12, opp_col.b * 0.18, 1.0)
-    bg_opp.position = Vector2(508, 0); bg_opp.size = Vector2(490, 654)
+    bg_opp.position = Vector2(508, 0); bg_opp.size = Vector2(490, 608)
     bg_opp.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_opp)
 
@@ -4202,7 +4204,7 @@ func _bp_build_battle_stage(stage: Panel) -> void:
     elif battle_select_mode not in ["meta", "final_boss", "prebuilt"]:
         is_valid = false
 
-    var begin_b := button("\u2694  BEGIN BATTLE", Vector2(0, 538), Vector2(998, 62),
+    var begin_b := button("\u2694  BEGIN BATTLE", Vector2(0, 480), Vector2(998, 62),
         func(): _bp_start_battle(false), stage)
     begin_b.add_theme_font_size_override("font_size", ui_font_size(22))
     if is_valid:
@@ -4214,14 +4216,14 @@ func _bp_build_battle_stage(stage: Panel) -> void:
         begin_b.disabled = true
 
     var prac_b := button("PRACTICE MODE  \u2022  Long timer  \u2022  No ranked rewards",
-        Vector2(0, 602), Vector2(998, 50), func(): _bp_start_battle(true), stage)
+        Vector2(0, 546), Vector2(998, 50), func(): _bp_start_battle(true), stage)
     prac_b.add_theme_font_size_override("font_size", ui_font_size(13))
     prac_b.add_theme_stylebox_override("normal", style(Color(0.12, 0.26, 0.16), 0))
     if not is_valid: prac_b.disabled = true
 
 ## MY LEADER zone — x=0, w=408
 func _bp_build_my_leader_zone(parent: Control, my_class: String, my_col: Color) -> void:
-    var PX := 8; var PY := 8; var PW := 392; var PH := 408
+    var PX := 8; var PY := 8; var PW := 392; var PH := 352
 
     # Outer zone glow (behind the framed portrait)
     var glow := ColorRect.new()
@@ -4357,7 +4359,7 @@ func _bp_build_vs_zone(parent: Control) -> void:
 ## OPPONENT zone — x=508, w=490
 func _bp_build_opp_zone(parent: Control, opp_class: String, opp_col: Color) -> void:
     var OX := 508; var OW := 490
-    var PX := OX + 10; var PY := 8; var PW := 470; var PH := 408
+    var PX := OX + 10; var PY := 8; var PW := 470; var PH := 352
 
     # Pulsing aura (slightly offset phase from MY side for visual interest)
     var glow := ColorRect.new()
