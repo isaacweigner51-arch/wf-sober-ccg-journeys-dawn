@@ -36,3 +36,297 @@ id = "QEsFxMpcbwvD3Iz-cIyTl"
 uri = "file://release_keystore.zip"
 type = "unspecified"
 title = "release.jks — Android Release Keystore"
+
+[[outputs]]
+id = "fU1ZQWWz1K7l_rlAd6GFj"
+uri = "file://attached_assets/generated_audio/speech_speech.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "ddUxarGeNT-b6sH2IBMvO"
+uri = "file://attached_assets/generated_audio/speech_speech_2.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "XjUGrznJVGQOMbOHwm1mF"
+uri = "file://attached_assets/generated_audio/speech_speech_3.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "MUzCokJ49IzJN49fg_Wko"
+uri = "file://attached_assets/generated_audio/speech_speech_4.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "yfTlgAjkOeqURW0HjkozB"
+uri = "file://attached_assets/generated_audio/speech_speech_5.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "SRlsCF4Hafok56C5JA83k"
+uri = "file://attached_assets/generated_audio/speech_speech_6.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "-_GuS6zGr9EXhG81QRDLu"
+uri = "file://attached_assets/generated_audio/speech_speech_7.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "Y1hiJwPN4YDjDdeDzbY_l"
+uri = "file://attached_assets/generated_audio/speech_speech_8.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "KvY6X-AJCxQftX0FJe-or"
+uri = "file://attached_assets/generated_audio/speech_speech_9.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "uoe7qSHJX3PKlDPjEYwSh"
+uri = "file://attached_assets/generated_audio/speech_speech_10.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "kyZAys2DygfZGvymenKDF"
+uri = "file://attached_assets/generated_audio/speech_speech_11.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "utZHgtt96w_jhUoLmY4zz"
+uri = "file://attached_assets/generated_audio/speech_speech_12.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "Z1ySUYtJzQOfuWiFVxDC9"
+uri = "file://attached_assets/generated_audio/speech_speech_13.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "dGF0Rlok-Eagn2MnaS6pl"
+uri = "file://attached_assets/generated_audio/speech_speech_14.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "59vX4pjF4i00o4gcdVnQp"
+uri = "file://attached_assets/generated_audio/speech_speech_15.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "-RwIdIFqHWdGgATw1XiFh"
+uri = "file://attached_assets/generated_audio/speech_speech_16.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "OWHm0b5V9UgkfC15jXjDC"
+uri = "file://attached_assets/generated_audio/speech_speech_17.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "4W01uyeQJIxEyCUbqK29S"
+uri = "file://attached_assets/generated_audio/speech_speech_18.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "9NPopQEERhUN43jFYovgn"
+uri = "file://attached_assets/generated_audio/speech_speech_19.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "PowjXtsWfjgbintDuwf2R"
+uri = "file://attached_assets/generated_audio/speech_speech_20.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "gNsilbgV0vioxES9jDNEb"
+uri = "file://attached_assets/generated_audio/speech_speech_21.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "5-JqFgJn3GWp3tYn2wJjm"
+uri = "file://attached_assets/generated_audio/speech_speech_22.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "m6gygY9enPAnabPFZVZFN"
+uri = "file://attached_assets/generated_audio/speech_speech_23.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "dL7dezy6ubRIt_k5gxK74"
+uri = "file://attached_assets/generated_audio/speech_speech_24.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "uQLrdkgK1q89dgZIAeKsR"
+uri = "file://attached_assets/generated_audio/speech_speech_25.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "YBXvDjWb0CmDejS87Nra7"
+uri = "file://attached_assets/generated_audio/speech_speech_26.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "FAQLrm4a1XNuVreS74zMO"
+uri = "file://attached_assets/generated_audio/speech_speech_27.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "MHpNsad6dD8gZVNQ83XG5"
+uri = "file://attached_assets/generated_audio/speech_speech_28.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "9z8_fFPkaKfkGyrpsPpMl"
+uri = "file://attached_assets/generated_audio/speech_speech_29.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "aXv26g8mFEJKqPDLeAm54"
+uri = "file://attached_assets/generated_audio/speech_speech_30.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "5WeUvNERgpVOQVuHYcrIf"
+uri = "file://attached_assets/generated_audio/speech_speech_31.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "GIWfW4nfDNDg-yxAm6zTl"
+uri = "file://attached_assets/generated_audio/speech_speech_32.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "pxUa3x-a3jWlR9aJpj_Sg"
+uri = "file://attached_assets/generated_audio/speech_speech_33.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "MtIO8LAMcJ5DNKJXBkW7H"
+uri = "file://attached_assets/generated_audio/speech_speech_34.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "-Cpwy4P3hb9iPJUWeUOCR"
+uri = "file://attached_assets/generated_audio/speech_speech_35.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "m0ZwQKGiCbITTHE8O4g2S"
+uri = "file://attached_assets/generated_audio/speech_speech_36.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "pyZJx2XymDF9I8rwzg1zC"
+uri = "file://attached_assets/generated_audio/speech_speech_37.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "23dMs06yrErevwm0aZehe"
+uri = "file://attached_assets/generated_audio/speech_speech_38.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "BP-bJa-gTw43mn0kkVJOc"
+uri = "file://attached_assets/generated_audio/speech_speech_39.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "Tc0MGl4nuKaxegTEx6PMq"
+uri = "file://attached_assets/generated_audio/speech_speech_40.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "56nS1aEwf_6GS6lQgH64p"
+uri = "file://attached_assets/generated_audio/speech_speech_41.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "uOZ9cRMJMXzDkx7YQwAh-"
+uri = "file://attached_assets/generated_audio/speech_speech_42.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "ZYKYiZzM7gW63tNHURzv2"
+uri = "file://attached_assets/generated_audio/speech_speech_43.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "DMTarqaUo7hLLqcxek2HU"
+uri = "file://attached_assets/generated_audio/speech_speech_44.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "NeYmTxcpI799GnrE2Ioc_"
+uri = "file://attached_assets/generated_audio/speech_speech_45.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "Vs8oCSSTO7aM21glYAnje"
+uri = "file://attached_assets/generated_audio/speech_speech_46.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "ToI90yv5x5PuEn2nrL0al"
+uri = "file://attached_assets/generated_audio/speech_speech_47.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "gqVJwxRchEM1sBkcWz6Ew"
+uri = "file://attached_assets/generated_audio/speech_speech_48.mp3"
+type = "audio"
+title = "speech"
+
+[[outputs]]
+id = "4L_lkUdY7-kmqTCwTbfa0"
+uri = "file://attached_assets/generated_audio/speech_speech_49.mp3"
+type = "audio"
+title = "speech"
