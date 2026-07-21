@@ -1,5 +1,7 @@
 extends Control
 
+const _LeaderView := preload("res://leader_view.gd")
+
 const STARTING_HEALTH := 20
 const BATTLE_BARK_HEALTH_THRESHOLD := 7
 const BATTLE_BARK_COOLDOWN := 3.0
@@ -1949,15 +1951,11 @@ func leader_art_for(faction_name: String) -> String:
         _: return "res://assets/leaders/player.png"
 
 func update_leader_visual(leader: Button, faction_name: String, player_side: bool) -> void:
-    var portrait := leader.get_node_or_null("Portrait") as TextureRect
-    if portrait != null:
-        # The card-art image doesn't have the leader paintings' baked-in top
-        # 60% framing, so it's shown uncropped rather than through the
-        # leader-portrait crop meant for the full-scene illustrations.
-        var leader_texture: Texture2D = load(leader_art_for(faction_name)) as Texture2D if faction_name == "Sponsor" else leader_portrait_texture(leader_art_for(faction_name))
-        portrait.texture = leader_texture
-        portrait.visible = leader_texture != null
-        portrait.modulate = Color.WHITE
+    # Drive the single authoritative LeaderView — same layered art, same registry,
+    # same focal offsets as Battle Prep and every other screen.
+    var lv := leader.get_node_or_null("LeaderPortrait")
+    if lv != null:
+        lv.setup(faction_name, Vector2(200, 200))
     var name_label := leader.get_node_or_null("NameLabel") as Label
     if name_label != null:
         name_label.text = leader_name_for(faction_name)
@@ -3134,27 +3132,15 @@ func make_leader(label_text: String, pos: Vector2, player_side: bool) -> Button:
     leader.add_theme_stylebox_override("pressed", style_empty)
     leader.add_theme_stylebox_override("focus",   style_empty)
 
-    # Deep atmospheric background; class-tinted in _start_leader_class_aura().
-    var aura_bg := ColorRect.new()
-    aura_bg.name = "AuraBg"
-    aura_bg.color = Color(0.03, 0.05, 0.10, 1.0)
-    aura_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    aura_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    leader.add_child(aura_bg)
-
-    # Full-frame portrait — edge to edge, COVERED so the face always fills the frame.
-    var portrait := TextureRect.new()
-    portrait.name = "Portrait"
-    portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    portrait.texture = leader_portrait_texture(
-        "res://assets/leaders/player.png" if player_side else "res://assets/leaders/enemy.png")
-    portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    portrait.clip_contents = false
-    portrait.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-    portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    leader.add_child(portrait)
-    start_leader_idle(portrait)
+    # Animated leader portrait — layered art (body/head/hair/blink/aura) with
+    # idle breathing, hair sway, and blinking handled by LeaderView.
+    # Class is set by update_leader_visual() once faction_name is known.
+    var lv := _LeaderView.new()
+    lv.name = "LeaderPortrait"
+    lv.position = Vector2.ZERO
+    lv.size = Vector2(200, 200)
+    lv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    leader.add_child(lv)
 
     # Gradient scrim fades the portrait into the name area.
     var scrim := ColorRect.new()
