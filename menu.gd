@@ -1,5 +1,6 @@
 extends Control
 
+const _LeaderView := preload("res://leader_view.gd")
 const GOLD_COLOR := Color(0.95, 0.78, 0.34)
 const PANEL := Color(0.025, 0.045, 0.08, 0.97)
 const SAVE_PATH := "user://journeys_dawn_profile.cfg"
@@ -4222,8 +4223,7 @@ func _bp_build_battle_stage(stage: Panel) -> void:
 func _bp_build_my_leader_zone(parent: Control, my_class: String, my_col: Color) -> void:
     var PX := 8; var PY := 8; var PW := 392; var PH := 408
 
-    # Pulsing class aura behind portrait (NOTE: flat art — this IS the full extent
-    # of "idle animation" possible without separate body-part layers)
+    # Outer zone glow (behind the framed portrait)
     var glow := ColorRect.new()
     glow.color = Color(my_col, 0.07)
     glow.position = Vector2(0, 0); glow.size = Vector2(408, PY + PH + 4)
@@ -4245,29 +4245,20 @@ func _bp_build_my_leader_zone(parent: Control, my_class: String, my_col: Color) 
     frame.add_theme_stylebox_override("panel", fs)
     parent.add_child(frame)
 
-    # Art with per-leader focal offset applied
-    var art := TextureRect.new()
-    art.texture = class_leader_texture(my_class)
-    var foc_x := float(LEADER_FOCAL_PX.get(my_class.to_lower(), 0))
-    art.position = Vector2(foc_x, 0.0)
-    art.size = Vector2(float(PW) + absf(foc_x), float(PH))
-    art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    art.clip_contents = true; art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    art.pivot_offset = Vector2(float(PW) * 0.5, float(PH) * 0.5)
-    frame.add_child(art)
+    # LeaderView: layered animated portrait (blink, hair sway, aura pulse)
+    var lv := _LeaderView.new()
+    lv.setup(my_class, Vector2(PW, PH))
+    lv.pivot_offset = Vector2(PW * 0.5, PH * 0.5)
+    frame.add_child(lv)
 
-    # Entrance animation: portrait scales from 0.96 → 1.0 on screen load.
-    # NOTE: this moves the ENTIRE flat image. Blinking eyes / chest breathing /
-    # hair sway all require separate per-body-part PNG layers — not possible
-    # with the current single composite art files.
-    art.scale = Vector2(0.96, 0.96)
-    var at := art.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    at.tween_property(art, "scale", Vector2.ONE, 0.38)
+    # Entrance scale animation on the whole view
+    lv.scale = Vector2(0.96, 0.96)
+    var at := lv.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    at.tween_property(lv, "scale", Vector2.ONE, 0.38)
 
-    # Subtle class tint overlay
+    # Subtle class tint overlay (sits above LeaderView, below badges)
     var tint := ColorRect.new()
-    tint.color = Color(my_col, 0.10)
+    tint.color = Color(my_col, 0.08)
     tint.position = Vector2.ZERO; tint.size = Vector2(PW, PH)
     tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
     frame.add_child(tint)
@@ -4390,24 +4381,20 @@ func _bp_build_opp_zone(parent: Control, opp_class: String, opp_col: Color) -> v
     frame.add_theme_stylebox_override("panel", fs)
     parent.add_child(frame)
 
-    var art := TextureRect.new()
-    art.texture = class_leader_texture(opp_class)
-    var foc_x := float(LEADER_FOCAL_PX.get(opp_class.to_lower(), 0))
-    art.position = Vector2(foc_x, 0.0)
-    art.size = Vector2(float(PW) + absf(foc_x), float(PH))
-    art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    art.clip_contents = true; art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    art.pivot_offset = Vector2(float(PW) * 0.5, float(PH) * 0.5)
-    frame.add_child(art)
+    # LeaderView: layered animated portrait (blink, hair sway, aura pulse)
+    var lv_opp := _LeaderView.new()
+    lv_opp.setup(opp_class, Vector2(PW, PH))
+    lv_opp.pivot_offset = Vector2(PW * 0.5, PH * 0.5)
+    frame.add_child(lv_opp)
 
-    # Entrance animation (offset phase for visual interest)
-    art.scale = Vector2(0.96, 0.96)
-    var at := art.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    at.tween_property(art, "scale", Vector2.ONE, 0.42)
+    # Entrance animation (slightly offset from MY side)
+    lv_opp.scale = Vector2(0.96, 0.96)
+    var at := lv_opp.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    at.tween_property(lv_opp, "scale", Vector2.ONE, 0.42)
 
+    # Subtle class tint overlay
     var tint := ColorRect.new()
-    tint.color = Color(opp_col, 0.10)
+    tint.color = Color(opp_col, 0.08)
     tint.position = Vector2.ZERO; tint.size = Vector2(PW, PH)
     tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
     frame.add_child(tint)

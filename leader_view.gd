@@ -1,51 +1,20 @@
 # leader_view.gd
-# A dedicated animated display node for a class leader.
+# Animated leader portrait node.  Stacks transparent PNG layers for real animation
+# when the layered art files are present; falls back gracefully to the flat composite.
 #
-# ═══════════════════════════════════════════════════════════════════════════════
-# HONEST ART-LIMITATION NOTICE — READ BEFORE USING
-# ═══════════════════════════════════════════════════════════════════════════════
-# The current leader artwork (assets/leaders/*.png) is a set of SINGLE FLAT
-# COMPOSITE PNGs — each file bakes the character, background, lighting, and
-# every detail into ONE layer. True per-body-part animation is NOT POSSIBLE
-# with flat art because there are no separate layers to move independently.
+# Layer stack (bottom → top):
+#   aura_bg      — class-color pulse glow (ColorRect, always)
+#   _layer_body  — torso / clothing (static)
+#   _layer_head  — face + neck (gentle idle drift; texture-swapped for blink)
+#   _layer_hair  — hair (sways ±3 px in X, offset phase from head)
+#   _art         — flat composite fallback (only when !has_layered_art)
 #
-# What the requested animations actually need:
-#
-#   IDLE blinking        → separate "eyes" PNG with open/closed frames OR a
-#                          sub-region crop that covers only the eye area — but
-#                          the crop position differs per character and the eye
-#                          background behind closed eyelids is baked into the
-#                          composite, so closing the "eyes" sub-rect reveals
-#                          the wrong background color. IMPOSSIBLE with flat art.
-#
-#   Chest breathing      → separate torso/body layer that moves up/down. The
-#                          current art merges body + bg + clothing into one
-#                          pixel — moving it moves everything. NOT POSSIBLE.
-#
-#   Subtle hair movement → separate hair layer with alpha. Same constraint.
-#
-#   Mouth movement       → separate mouth layer. Same constraint.
-#
-# What IS achievable with flat art (these are approximations, not true anim):
-#   • Whole-image position drift (simulates head sway — the user has already
-#     seen and rejected this for the home screen; documented here for clarity)
-#   • Whole-image scale breathing (same caveat)
-#   • Modulate flash for DAMAGED / HEALED
-#   • Scale/position snap for ABILITY / DEFEAT / VICTORY
-#
-# What new art is required for true animation:
-#   Supply one set of PNG files per leader, all with transparent backgrounds:
-#       hope_body.png    — static torso / lower body / bg
-#       hope_head.png    — head (slight position drift on IDLE)
-#       hope_eyes.png    — eyes only (blink by toggling between open/closed sub-region)
-#       hope_hair.png    — hair (subtle X sway on IDLE)
-#       hope_larm.png    — left arm (raises on ABILITY)
-#       hope_rarm.png    — right arm
-#       hope_aura.png    — glow ring (pulsing scale+alpha on IDLE)
-#   Place all at the same canvas size, then stack them as separate TextureRects
-#   in _setup_nodes(). The state machine below already calls _anim_layer_*
-#   stubs — swap the stub bodies for real Tween calls on the correct layers.
-# ═══════════════════════════════════════════════════════════════════════════════
+# Layered art file convention  (1024×1024 PNG, transparent bg):
+#   assets/leaders/<class>_body.png
+#   assets/leaders/<class>_head.png
+#   assets/leaders/<class>_head_blink.png
+#   assets/leaders/<class>_hair.png
+#   assets/leaders/<class>_aura.png   (optional particle effect overlay)
 
 class_name LeaderView
 extends Control
@@ -63,11 +32,7 @@ enum State {
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-## Whether layered art files exist for this class (set to true when real art ships).
-## When false the node uses whole-image approximations and logs a reminder.
-var has_layered_art := false
-
-## Emitted after a one-shot state (DAMAGED, HEALED, etc.) animation finishes.
+## Emitted after a one-shot state animation finishes.
 signal animation_finished(state: State)
 
 # ── Private state ─────────────────────────────────────────────────────────────
@@ -76,16 +41,18 @@ var _class_name_value: String = ""
 var _current_state: State = State.IDLE
 var _idle_tween: Tween = null
 var _state_tween: Tween = null
+var has_layered_art := false   # auto-set in setup()
 
-# Art layers — all allocated in _setup_nodes(), only populated when layered
-# art exists.  _art is always populated (flat fallback).
-var _art: TextureRect = null        # flat composite — always used
-var _layer_body: TextureRect = null # layered art: torso + bg
-var _layer_head: TextureRect = null # layered art: head (position-drifts on IDLE)
-var _layer_eyes: TextureRect = null # layered art: eyes (blink)
-var _layer_hair: TextureRect = null # layered art: hair (sways on IDLE)
-var _layer_arms: TextureRect = null # layered art: arms (raise on ABILITY)
-var _layer_aura: TextureRect = null # layered art: glow ring
+# Art layers
+var _art: TextureRect = null         # flat composite fallback
+var _layer_body: TextureRect = null  # torso + clothing (static)
+var _layer_head: TextureRect = null  # face (drifts + blinks)
+var _layer_hair: TextureRect = null  # hair (sways)
+var _layer_aura: TextureRect = null  # optional aura overlay
+
+# Blink textures swapped onto _layer_head
+var _head_open_tex: Texture2D = null
+var _head_blink_tex: Texture2D = null
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -97,51 +64,61 @@ func setup(class_name_str: String, size_vec: Vector2) -> void:
 	custom_minimum_size = size_vec
 	size = size_vec
 	clip_contents = true
+
+	# Auto-detect layered art
+	var body_path := "res://assets/leaders/%s_body.png" % class_name_str.to_lower()
+	has_layered_art = ResourceLoader.exists(body_path)
+
 	_setup_nodes(size_vec)
-	if not has_layered_art:
-		push_warning("LeaderView: %s uses flat art — blinking/hair/chest anim not possible. See leader_view.gd for required art format." % class_name_str)
 	set_state(State.IDLE)
 
 func _setup_nodes(sz: Vector2) -> void:
 	for ch in get_children():
 		ch.queue_free()
 
-	# Aura glow behind everything (visible even without layered art)
+	# Aura glow — behind everything
 	var aura_bg := ColorRect.new()
-	aura_bg.color = Color(_class_color(), 0.0)  # starts invisible; IDLE pulses it
+	aura_bg.color = Color(_class_color(), 0.0)
 	aura_bg.position = Vector2.ZERO
 	aura_bg.size = sz
 	aura_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	aura_bg.name = "AuraBg"
 	add_child(aura_bg)
 
-	# Flat composite — always present
-	_art = TextureRect.new()
-	_art.texture = _resolve_texture()
-	_art.position = Vector2.ZERO
-	_art.size = sz
-	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	_art.clip_contents = true
-	_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_art.pivot_offset = sz * 0.5
-	add_child(_art)
-
-	# Layered art stubs — populated by the caller when real art ships.
-	# Order matters: body → head → eyes → hair → arms → aura (front)
 	if has_layered_art:
 		_layer_body = _make_layer("body", sz)
 		_layer_head = _make_layer("head", sz)
-		_layer_eyes = _make_layer("eyes", sz)
 		_layer_hair = _make_layer("hair", sz)
-		_layer_arms = _make_layer("arms", sz)
-		_layer_aura = _make_layer("aura", sz)
-		# Hide the flat composite when real layers are present
-		_art.visible = false
+
+		# Cache both head textures for blink swap
+		_head_open_tex = _layer_head.texture
+		var blink_path := "res://assets/leaders/%s_head_blink.png" % _class_name_value.to_lower()
+		if ResourceLoader.exists(blink_path):
+			_head_blink_tex = load(blink_path)
+
+		# Optional aura layer on top
+		var aura_path := "res://assets/leaders/%s_aura.png" % _class_name_value.to_lower()
+		if ResourceLoader.exists(aura_path):
+			_layer_aura = _make_layer("aura", sz)
+			_layer_aura.modulate.a = 0.0  # starts invisible; IDLE fades it in
+	else:
+		# Flat composite fallback
+		_art = TextureRect.new()
+		_art.texture = _resolve_flat_texture()
+		_art.position = Vector2.ZERO
+		_art.size = sz
+		_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		_art.clip_contents = true
+		_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_art.pivot_offset = sz * 0.5
+		add_child(_art)
 
 func _make_layer(part: String, sz: Vector2) -> TextureRect:
+	var path := "res://assets/leaders/%s_%s.png" % [_class_name_value.to_lower(), part]
 	var t := TextureRect.new()
-	t.texture = _resolve_layer_texture(part)
+	if ResourceLoader.exists(path):
+		t.texture = load(path)
 	t.position = Vector2.ZERO
 	t.size = sz
 	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -154,26 +131,19 @@ func _make_layer(part: String, sz: Vector2) -> TextureRect:
 
 # ── Texture resolution ────────────────────────────────────────────────────────
 
-func _resolve_texture() -> Texture2D:
+func _resolve_flat_texture() -> Texture2D:
 	if _class_name_value.to_lower() == "sponsor":
 		return load("res://assets/cards/full/jd-080.jpg")
 	var base: Texture2D = load("res://assets/leaders/%s.png" % _class_name_value.to_lower())
 	if base == null:
 		return null
-	var margin: float = base.get_width() * 0.045
-	var iw: float = base.get_width() - margin * 2.0
-	var ih: float = base.get_height() - margin * 2.0
+	var margin := base.get_width() * 0.045
+	var iw := base.get_width() - margin * 2.0
+	var ih := base.get_height() - margin * 2.0
 	var atlas := AtlasTexture.new()
 	atlas.atlas = base
-	atlas.region = Rect2(margin, margin, iw, ih * 0.6)
+	atlas.region = Rect2(margin, margin, iw, ih * 0.72)   # 72% = head + shoulders + torso
 	return atlas
-
-func _resolve_layer_texture(part: String) -> Texture2D:
-	# Looks for "assets/leaders/<class>_<part>.png" — e.g. "hope_eyes.png"
-	var path := "res://assets/leaders/%s_%s.png" % [_class_name_value.to_lower(), part]
-	if ResourceLoader.exists(path):
-		return load(path)
-	return null  # missing layer — that slot just renders nothing (transparent)
 
 func _class_color() -> Color:
 	match _class_name_value:
@@ -190,12 +160,16 @@ func set_state(new_state: State) -> void:
 	if _idle_tween: _idle_tween.kill(); _idle_tween = null
 	if _state_tween: _state_tween.kill(); _state_tween = null
 
-	# Reset all art layers to neutral
-	for node in [_art, _layer_head, _layer_eyes, _layer_hair, _layer_arms, _layer_aura]:
+	# Reset layers to neutral
+	for node in [_art, _layer_head, _layer_hair, _layer_body, _layer_aura]:
 		if node == null: continue
 		node.position = Vector2.ZERO
 		node.modulate = Color.WHITE
 		node.scale = Vector2.ONE
+
+	# Restore open-eye texture after any blink-swap
+	if _layer_head and _head_open_tex:
+		_layer_head.texture = _head_open_tex
 
 	match new_state:
 		State.IDLE:       _play_idle()
@@ -211,70 +185,80 @@ func get_state() -> State:
 	return _current_state
 
 # ── Animation implementations ─────────────────────────────────────────────────
-# Each function has two code paths:
-#   A) has_layered_art = true  → tweens individual layers (real animation)
-#   B) has_layered_art = false → tweens _art whole (approximation, labeled)
 
 func _play_idle() -> void:
+	var aura_bg := get_node_or_null("AuraBg") as ColorRect
+
 	if has_layered_art:
-		# ── TRUE ANIMATION (layered art) ──
-		# Head: gentle left-right drift
+		# ── HEAD: gentle left-right drift (2px, 2.4s) ──
 		if _layer_head:
 			_idle_tween = create_tween().set_loops()
 			_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			_idle_tween.tween_property(_layer_head, "position:x", -3.0, 2.0)
-			_idle_tween.tween_property(_layer_head, "position:x",  2.5, 2.0)
-		# Hair: slight sway (offset from head)
+			_idle_tween.tween_property(_layer_head, "position:x", -2.5, 2.4)
+			_idle_tween.tween_property(_layer_head, "position:x",  2.0, 2.4)
+
+		# ── HAIR: slight sway with offset phase (~±3px, 2.7s) ──
 		if _layer_hair:
-			var hair_tween := create_tween().set_loops()
-			hair_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			hair_tween.tween_property(_layer_hair, "position:x", -2.0, 2.3)
-			hair_tween.tween_property(_layer_hair, "position:x",  1.8, 2.3)
-		# Eyes: blink every ~4 seconds
-		if _layer_eyes:
+			var ht := create_tween().set_loops()
+			ht.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			ht.tween_property(_layer_hair, "position:x", -3.5, 2.7)
+			ht.tween_property(_layer_hair, "position:x",  3.0, 2.7)
+
+		# ── BLINK: texture-swap every 3–5.5 seconds ──
+		if _layer_head and _head_blink_tex:
 			_schedule_blink()
-		# Aura: pulse opacity
+
+		# ── AURA OVERLAY: fade in then pulse ──
 		if _layer_aura:
-			var aura_t := create_tween().set_loops()
-			aura_t.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			aura_t.tween_property(_layer_aura, "modulate:a", 0.65, 1.6)
-			aura_t.tween_property(_layer_aura, "modulate:a", 1.00, 1.6)
+			var at := create_tween().set_loops()
+			at.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			at.tween_property(_layer_aura, "modulate:a", 0.55, 1.8)
+			at.tween_property(_layer_aura, "modulate:a", 0.20, 1.8)
+
+		# ── AURA BG: class-color pulse ──
+		if aura_bg:
+			var bt := create_tween().set_loops()
+			bt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			bt.tween_property(aura_bg, "color:a", 0.14, 2.2)
+			bt.tween_property(aura_bg, "color:a", 0.03, 2.2)
 	else:
-		# ── APPROXIMATION (flat art) ──
-		# NOTE: this moves the entire image. The user has already seen and
-		# rejected this effect; it is kept here so the node has some life
-		# while real art is pending, but it is NOT blinking or chest breathing.
-		_idle_tween = create_tween().set_loops()
-		_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		_idle_tween.tween_property(_art, "position:x", -2.5, 2.2)
-		_idle_tween.tween_property(_art, "position:x",  2.0, 2.2)
+		# ── Flat art: whole-image gentle scale breathing ──
+		if aura_bg:
+			var bt := create_tween().set_loops()
+			bt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			bt.tween_property(aura_bg, "color:a", 0.16, 2.2)
+			bt.tween_property(aura_bg, "color:a", 0.02, 2.2)
+		if _art:
+			_idle_tween = create_tween().set_loops()
+			_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			_idle_tween.tween_property(_art, "scale", Vector2(1.008, 1.008), 2.8)
+			_idle_tween.tween_property(_art, "scale", Vector2.ONE, 2.8)
 
 func _schedule_blink() -> void:
-	# Blink: animate a sub-region crop of _layer_eyes to simulate closing.
-	# Requires _layer_eyes to have an AtlasTexture with eye-open and eye-closed
-	# regions pre-defined. This stub calls itself recursively every ~4s.
-	if _layer_eyes == null or _current_state != State.IDLE: return
+	if _layer_head == null or _head_blink_tex == null or _current_state != State.IDLE:
+		return
 	await get_tree().create_timer(randf_range(3.0, 5.5)).timeout
-	if _current_state != State.IDLE or _layer_eyes == null: return
-	var blink := create_tween().set_trans(Tween.TRANS_LINEAR)
-	# Close eyes: scale Y to near-zero at pivot = eye center (simulate lid close)
-	blink.tween_property(_layer_eyes, "scale:y", 0.08, 0.07)
-	blink.tween_property(_layer_eyes, "scale:y", 1.00, 0.10)
-	await blink.finished
+	if _current_state != State.IDLE or _layer_head == null:
+		return
+	# Snap to blink frame, wait one frame, snap back
+	_layer_head.texture = _head_blink_tex
+	await get_tree().create_timer(0.10).timeout
+	if _layer_head and _head_open_tex:
+		_layer_head.texture = _head_open_tex
 	_schedule_blink()
 
 func _play_selected() -> void:
-	# Slight lean forward (scale up from center) + brighter aura
 	var target := _layer_head if has_layered_art and _layer_head else _art
+	if target == null: return
 	target.pivot_offset = target.size * 0.5
 	_state_tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_state_tween.tween_property(target, "scale", Vector2(1.04, 1.04), 0.35)
 	_play_idle()
 
 func _play_damaged() -> void:
-	# Flash white → recoil left → recover
-	var target := _art if not has_layered_art else _layer_head
+	var target := (_layer_head if has_layered_art and _layer_head else _art)
 	if target == null: target = _art
+	if target == null: return
 	_state_tween = create_tween().set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 	_state_tween.tween_property(target, "modulate", Color(2.2, 2.2, 2.2), 0.06)
 	_state_tween.tween_property(target, "position:x", -20.0, 0.09)
@@ -283,8 +267,8 @@ func _play_damaged() -> void:
 	_state_tween.tween_callback(func(): animation_finished.emit(State.DAMAGED); set_state(State.IDLE))
 
 func _play_healed() -> void:
-	# Green glow flash → posture lift
-	var target := _art
+	var target := _art if _art else _layer_body
+	if target == null: return
 	_state_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_state_tween.tween_property(target, "modulate", Color(0.60, 1.55, 0.72), 0.22)
 	_state_tween.tween_property(target, "position:y", -7.0, 0.28)
@@ -293,9 +277,9 @@ func _play_healed() -> void:
 	_state_tween.tween_callback(func(): animation_finished.emit(State.HEALED); set_state(State.IDLE))
 
 func _play_ability() -> void:
-	# Forward lunge + class-color flash
-	var target := _layer_arms if has_layered_art and _layer_arms else _art
+	var target := (_layer_head if has_layered_art and _layer_head else _art)
 	if target == null: target = _art
+	if target == null: return
 	_state_tween = create_tween()
 	_state_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_state_tween.set_parallel(true)
@@ -309,8 +293,8 @@ func _play_ability() -> void:
 	_state_tween.chain().tween_callback(func(): animation_finished.emit(State.ABILITY); set_state(State.IDLE))
 
 func _play_victory() -> void:
-	# Confident size-up + warm gold tint + resume idle
-	var target := _art
+	var target := (_art if _art else _layer_body)
+	if target == null: return
 	target.pivot_offset = target.size * 0.5
 	_state_tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_state_tween.tween_property(target, "scale", Vector2(1.055, 1.055), 0.50)
@@ -318,24 +302,21 @@ func _play_victory() -> void:
 	_play_idle()
 
 func _play_defeat() -> void:
-	# Head lowers, aura fades, desaturates — no loop
-	var target := _layer_head if has_layered_art and _layer_head else _art
+	var target := (_layer_head if has_layered_art and _layer_head else _art)
 	if target == null: target = _art
+	if target == null: return
 	_state_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	_state_tween.tween_property(target, "position:y",  14.0, 0.65)
 	_state_tween.tween_property(target, "modulate", Color(0.52, 0.52, 0.58), 0.80)
-	# Aura dims
-	if has_layered_art and _layer_aura:
-		var aura_t := create_tween()
-		aura_t.tween_property(_layer_aura, "modulate:a", 0.0, 1.0)
+	if _layer_aura:
+		var at := create_tween()
+		at.tween_property(_layer_aura, "modulate:a", 0.0, 1.0)
 
 func _play_voice_line() -> void:
-	# With flat art: mouth movement is impossible (no mouth layer).
-	# Approximate: subtle scale pulse on the whole portrait.
-	# With layered art: tween _layer_mouth sub-region or y-scale.
-	if has_layered_art:
-		push_warning("LeaderView: VOICE_LINE requires a mouth layer — implement _layer_mouth in _setup_nodes()")
-	var target := _art
+	# With flat art the mouth layer doesn't exist.
+	# Approximate: subtle scale pulse on the head/whole portrait.
+	var target := (_layer_head if has_layered_art and _layer_head else _art)
+	if target == null: return
 	_state_tween = create_tween().set_loops(3)
 	_state_tween.tween_property(target, "scale", Vector2(1.010, 1.018), 0.11)
 	_state_tween.tween_property(target, "scale", Vector2.ONE, 0.11)

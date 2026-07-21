@@ -1,5 +1,5 @@
 {
-  "version": "0.9.2",
+  "version": "0.9.3",
   "build_name": "Battle Prep Overhaul",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
@@ -14,13 +14,13 @@
       "category": "What's New in 0.9.2",
       "items": [
         "Battle Preparation screen rebuilt: deck list (left), card preview + mana curve (center), leader portrait + actions (right).",
-        "All custom deck slots now selectable from Battle Prep — no longer locked to the active deck.",
+        "All custom deck slots now selectable from Battle Prep \u2014 no longer locked to the active deck.",
         "Each slot shows card count, class, valid/invalid badge, and validation reason inline.",
         "EDIT, COPY, RENAME, DELETE actions available per slot directly from Battle Prep.",
-        "Prebuilt starter decks listed with a one-tap COPY → CUSTOM option.",
+        "Prebuilt starter decks listed with a one-tap COPY \u2192 CUSTOM option.",
         "BEGIN BATTLE disabled and grayed when the selected deck is invalid.",
         "PRACTICE mode button added (long timer, no rewards).",
-        "Opponent picker rebuilt as a compact 2×2 class grid with a mini leader portrait.",
+        "Opponent picker rebuilt as a compact 2\u00d72 class grid with a mini leader portrait.",
         "Home screen leader portraits now use per-leader focal offsets (LEADER_FOCAL_PX) so each character's face centres correctly.",
         "New LeaderView node (leader_view.gd): 8-state animation machine (IDLE, SELECTED, DAMAGED, HEALED, ABILITY, VICTORY, DEFEAT, VOICE_LINE) with layered-art upgrade path documented inline."
       ]
@@ -28,25 +28,25 @@
     {
       "category": "New Features",
       "items": [
-        "Multi-deck slots — save up to 8 named custom decks and switch between them any time.",
-        "Trial deck picker — choose which of your custom decks to bring into each Trial before it starts.",
-        "Deck Manager screen — create, edit, duplicate, and delete deck slots all in one place.",
-        "Drag-to-attack — drag a unit card onto an enemy to attack instead of tapping to select."
+        "Multi-deck slots \u2014 save up to 8 named custom decks and switch between them any time.",
+        "Trial deck picker \u2014 choose which of your custom decks to bring into each Trial before it starts.",
+        "Deck Manager screen \u2014 create, edit, duplicate, and delete deck slots all in one place.",
+        "Drag-to-attack \u2014 drag a unit card onto an enemy to attack instead of tapping to select."
       ]
     },
     {
       "category": "Animation Polish",
       "items": [
-        "Hit stop — every attack freezes for 0.04–0.07 s on impact before damage resolves, making hits feel heavier.",
-        "Directional screen shake — shake now pushes toward the point of impact then rebounds, scaled by rarity (Bronze: barely perceptible → Platinum: satisfying).",
-        "Art lunge — the card's artwork zooms and shifts inside the frame during the strike; the character looks like it's pressing forward.",
-        "Damage numbers redesigned — pop in large, spring-bounce to natural size, drift upward, fade smoothly. Heavy or rarity-scaled hits display in gold at a larger size.",
+        "Hit stop \u2014 every attack freezes for 0.04\u20130.07 s on impact before damage resolves, making hits feel heavier.",
+        "Directional screen shake \u2014 shake now pushes toward the point of impact then rebounds, scaled by rarity (Bronze: barely perceptible \u2192 Platinum: satisfying).",
+        "Art lunge \u2014 the card's artwork zooms and shifts inside the frame during the strike; the character looks like it's pressing forward.",
+        "Damage numbers redesigned \u2014 pop in large, spring-bounce to natural size, drift upward, fade smoothly. Heavy or rarity-scaled hits display in gold at a larger size.",
         "Projectiles accelerate with cubic easing, brighten at 72% of travel, and burst larger on arrival.",
         "Impact package: bright central flash + expanding shockwave ring added to every hit.",
-        "Idle animations locked during combat — breathing, float, and orbiting orbs pause cleanly while a card attacks or dies, then resume.",
-        "Buff flash — stat increases trigger a scale-pop and colored glow on the affected card with a floating stat label.",
+        "Idle animations locked during combat \u2014 breathing, float, and orbiting orbs pause cleanly while a card attacks or dies, then resume.",
+        "Buff flash \u2014 stat increases trigger a scale-pop and colored glow on the affected card with a floating stat label.",
         "Healing particles, recovery sparkle burst, and relapse entry wisp added to matching game events.",
-        "Evolution shockwave — all four evolution tiers (Standard, Epic, Legendary, Platinum) fire an expanding ring on completion.",
+        "Evolution shockwave \u2014 all four evolution tiers (Standard, Epic, Legendary, Platinum) fire an expanding ring on completion.",
         "Legendary and Platinum followers now stand out in idle with larger orbiting dots, wider orbit radius, brighter halos, and rarity-scaled border glow.",
         "Graphics quality levels (Low / Medium / High) gate spark counts, orb rendering, and ring VFX for performance."
       ]
@@ -54,7 +54,7 @@
     {
       "category": "Balance Changes",
       "items": [
-        "Hope class — 10-card buff pass improving healing synergy, leader-heal triggers, and late-game power.",
+        "Hope class \u2014 10-card buff pass improving healing synergy, leader-heal triggers, and late-game power.",
         "Deck copy limits tightened: Legendaries now cap at 2 copies per deck; Platinums cap at 1 copy."
       ]
     },
@@ -62,57 +62,27 @@
       "category": "Bug Fixes",
       "items": [
         "Courage 'Never Quit' survive-buff (Never Quit, JD-023, JD-089, JD-146) now triggers correctly after a unit survives lethal damage.",
-        "Battle deck mode now correctly routes custom slot decks into the fight — no more falling back to the class prebuilt silently.",
-        "Art clipped inside card frame — Legendary float and parallax drift can no longer overflow the card border."
+        "Battle deck mode now correctly routes custom slot decks into the fight \u2014 no more falling back to the class prebuilt silently.",
+        "Art clipped inside card frame \u2014 Legendary float and parallax drift can no longer overflow the card border."
       ]
     }
   ],
   "new_cards": [],
   "upcoming_events": [
-    "More seasonal content and cards are in development — check back after future updates."
+    "More seasonal content and cards are in development \u2014 check back after future updates."
   ],
   "whats_new": [
+    "\u2726 Leader portraits are now animated \u2014 watch for natural blinking, hair movement, and class aura glow",
+    "\u2726 Each class has a new multi-layer art set: Hope (star-robed celestial), Courage (fire-armored warrior), Serenity (teal-robed sage), Purpose (geometric commander)",
+    "\u2726 Cinematic Battle Prep screen redesigned \u2014 MY LEADER vs OPPONENT face off with VS divider",
+    "\u2726 Portrait crop widened \u2014 shows head, shoulders, and torso"
+  ],
+  "build": "v0.9.3 \u2022 ANIMATED LEADERS",
+  "changelog": [
     {
-      "version": "0.9.1",
-      "title": "Cloud Save Merge Hardening",
-      "items": [
-        "collection.owned now merged with max-per-card-id (card count can never decrease from a cloud merge)",
-        "trials.cleared now merged as a union (cleared trials can never be un-cleared by a stale cloud state)",
-        "deck.cards and decks.by_class: empty cloud deck no longer erases a valid local deck",
-        "Upload integrity check: blocks any upload that would shrink the collection, crash gold >90%, regress academy, or lose trial clears",
-        "Last cloud snapshot stored per-session for the integrity comparison",
-        "pending_rewards section in cloud save applied automatically then preserved until cleared",
-        "Per-section apply logs: APPLY collection.owned, trials.cleared, deck.cards, decks.by_class, economy, academy"
-      ]
-    },
-    {
-      "version": "0.9.1",
-      "title": "Cloud Save Safety Overhaul",
-      "items": [
-        "Upload gate: local saves can NEVER overwrite cloud data until the cloud profile is confirmed fetched and applied",
-        "Failed network fetch now locks the upload gate — no upload happens over unknown cloud state",
-        "Removed spurious account_authenticated(false) emission from general HTTP requests (fixes login-loop bug)",
-        "recovery_vials column now read and applied as dust after every login, then cleared on server",
-        "Full login-flow logging: every stage from button press to HOME SCREEN OPENED now prints with values",
-        "Corrupt or null save_data treated as fetch failure — upload blocked until resolved",
-        "First-sync logic preserved: new accounts still upload local progress correctly"
-      ]
-    },
-    {
-      "version": "0.9.1",
-      "title": "Deck Builder Redesign",
-      "items": [
-        "Full three-column layout: Filters | Collection | Deck Panel",
-        "Solid dark background — battle board no longer visible behind Deck Builder",
-        "Inline custom deck slot switcher (8 slots) with Create New Deck support",
-        "Card grid now shows 4 larger cards per row with readable names, cost, rarity",
-        "Tap any card to open a full preview with effect text, owned count, Add/Remove controls",
-        "Deck list sorted by cost then name, with mana curve bar chart",
-        "Cost, Rarity, Type, and Owned-only filters with Search in left column",
-        "Rename, Duplicate, Delete, and Reset to Starter controls in deck panel",
-        "Create New Deck overlay with class selector and name entry",
-        "All existing deck logic, cloud save, copy limits, and validation preserved"
-      ]
+      "version": "0.9.3",
+      "date": "2026-07-21",
+      "notes": "Animated leader portraits \u2014 layered art (blink, hair sway, aura glow) for all 4 classes."
     }
   ]
 }
