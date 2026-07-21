@@ -49,6 +49,10 @@ const KEYWORD_EXAMPLE_CARDS := [
 ]
 const COPY_LIMITS := {"Bronze":3, "Silver":3, "Gold":3, "Epic":3, "Legendary":2, "Platinum":1, "Signature Gold":2, "Signature Platinum":1}
 const MAX_DECK_SLOTS := 8
+# Per-leader horizontal display shift in pixels applied to the art TextureRect
+# inside its clipped container. Negative = move character LEFT in the frame.
+# Tune each leader individually until the face / upper body is well-centred.
+const LEADER_FOCAL_PX := {"hope": -20, "courage": -55, "serenity": -40, "purpose": -50}
 const DUST_VALUES := {"Bronze":12, "Silver":37, "Gold":125, "Epic":625, "Legendary":875, "Platinum":1125, "Signature Platinum":1125}
 const CRAFT_COSTS := {"Bronze":50, "Silver":150, "Gold":500, "Epic":2500, "Legendary":3500, "Platinum":4500, "Signature Platinum":4500}
 const DAILY_REWARDS := [
@@ -1665,8 +1669,12 @@ func show_home() -> void:
 
     var art := TextureRect.new()
     art.texture = current_leader_texture(active_class)
-    art.position = Vector2.ZERO
-    art.size = art_frame.size
+    # Shift the portrait horizontally so each leader's face centres in the frame.
+    # Because art_frame has clip_contents=true, a negative position moves the
+    # art left; expanding the width keeps the COVERED texture filling the frame.
+    var _focal_x := float(LEADER_FOCAL_PX.get(active_class.to_lower(), 0))
+    art.position = Vector2(_focal_x, 0.0)
+    art.size = Vector2(art_frame.size.x + absf(_focal_x), art_frame.size.y)
     art.custom_minimum_size = Vector2.ZERO
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     # COVERED, not CENTERED: this frame (532x344) is much wider than the
@@ -3708,110 +3716,630 @@ func _battle_preview_stats(class_name_value: String, mode_value: String) -> Dict
     }
 
 func show_match_deck_selection() -> void:
-    if battle_select_class == "":
-        battle_select_class = selected_class if selected_class != "" else "Hope"
+    # ── Defaults ─────────────────────────────────────────────────────────────
     if battle_opponent_class == "":
         battle_opponent_class = "Courage"
-    if battle_select_mode != "custom" and not AccessManager.role_at_least(AccessManager.ROLE_OWNER):
-        battle_select_mode = "custom"
     battle_opponent_mode = "prebuilt"
+    # Auto-select the first custom slot so the screen is never empty
+    if last_battle_deck_idx < 0 and deck_slots.size() > 0:
+        last_battle_deck_idx = 0
+        battle_select_class = str(deck_slots[0].get("class", "Hope"))
 
     clear_screen()
     add_background(0.78)
-    header("BATTLE PREPARATION", "Choose leaders and decks, preview them, then begin battle.")
+    header("BATTLE PREPARATION", "Select a deck, review it, choose your opponent, then enter battle.")
 
+    # ── Three-column shell ────────────────────────────────────────────────────
     var shell := Panel.new()
-    shell.position = Vector2(28, 108)
-    shell.size = Vector2(1224, 566)
-    shell.add_theme_stylebox_override("panel", style(Color(0.20, 0.31, 0.48), 18))
+    shell.position = Vector2(12, 100)
+    shell.size = Vector2(1256, 652)
+    shell.add_theme_stylebox_override("panel", style(Color(0.10, 0.16, 0.26), 16))
     root_layer.add_child(shell)
 
-    # Class selectors stay above their own side and never overlap portraits.
-    centered_label("YOUR LEADER", Vector2(28, 12), Vector2(340, 28), 18, shell).add_theme_color_override("font_color", GOLD_COLOR)
-    centered_label("OPPONENT", Vector2(856, 12), Vector2(340, 28), 18, shell).add_theme_color_override("font_color", GOLD_COLOR)
-    for i in range(CLASSES.size()):
-        var c: String = CLASSES[i]
-        var left_b := Button.new()
-        left_b.position = Vector2(28 + (i % 2) * 164, 46 + (i / 2) * 44)
-        left_b.size = Vector2(154, 38)
-        left_b.text = c.to_upper()
-        left_b.add_theme_font_size_override("font_size", ui_font_size(12))
-        left_b.add_theme_stylebox_override("normal", style(class_color(c).lightened(0.10) if c == battle_select_class else Color(0.08,0.12,0.19), 8))
-        left_b.add_theme_color_override("font_color", Color.WHITE)
-        left_b.pressed.connect(func(): _battle_selection_set_class(c))
-        shell.add_child(left_b)
+    # Left (316px) — deck list
+    var left_p := Panel.new()
+    left_p.position = Vector2(6, 6)
+    left_p.size = Vector2(316, 640)
+    left_p.add_theme_stylebox_override("panel", style(Color(0.06, 0.10, 0.18), 12))
+    shell.add_child(left_p)
+    _bp_build_deck_list(left_p)
 
-        var right_b := Button.new()
-        right_b.position = Vector2(868 + (i % 2) * 164, 46 + (i / 2) * 44)
-        right_b.size = Vector2(154, 38)
-        right_b.text = c.to_upper()
-        right_b.add_theme_font_size_override("font_size", ui_font_size(12))
-        right_b.add_theme_stylebox_override("normal", style(class_color(c).lightened(0.10) if c == battle_opponent_class else Color(0.08,0.12,0.19), 8))
-        right_b.add_theme_color_override("font_color", Color.WHITE)
-        right_b.pressed.connect(func(): _battle_selection_set_opponent_class(c))
-        shell.add_child(right_b)
+    # Center (374px) — card preview + curve
+    var center_p := Panel.new()
+    center_p.position = Vector2(328, 6)
+    center_p.size = Vector2(374, 640)
+    center_p.add_theme_stylebox_override("panel", style(Color(0.06, 0.10, 0.18), 12))
+    shell.add_child(center_p)
+    _bp_build_card_preview(center_p)
 
-    _build_battle_leader_panel(battle_select_class, "YOUR LEADER", Vector2(28, 142), shell, false)
-    _build_battle_leader_panel(battle_opponent_class, "COMPUTER", Vector2(868, 142), shell, true)
+    # Right (542px) — leader portrait + actions + battle button
+    var right_p := Panel.new()
+    right_p.position = Vector2(708, 6)
+    right_p.size = Vector2(542, 640)
+    right_p.add_theme_stylebox_override("panel", style(Color(0.06, 0.10, 0.18), 12))
+    shell.add_child(right_p)
+    _bp_build_right_panel(right_p)
 
-    var center := Panel.new()
-    center.position = Vector2(386, 20)
-    center.size = Vector2(452, 466)
-    center.add_theme_stylebox_override("panel", style(Color(0.30, 0.43, 0.66), 16))
-    shell.add_child(center)
-    centered_label("VS", Vector2(176, 8), Vector2(100, 44), 30, center).add_theme_color_override("font_color", GOLD_COLOR)
+    button("\u2190 BACK", Vector2(14, 760), Vector2(160, 40), show_home, root_layer)
 
-    var your_stats: Dictionary = _battle_preview_stats(battle_select_class, battle_select_mode)
-    var opp_stats: Dictionary = _battle_preview_stats(battle_opponent_class, "prebuilt")
+# ── Helpers: data queries ─────────────────────────────────────────────────────
 
-    centered_label("YOUR DECK", Vector2(18, 58), Vector2(198, 28), 16, center)
-    centered_label("AI DECK", Vector2(236, 58), Vector2(198, 28), 16, center)
+## Card IDs for the currently-selected battle deck.
+func _bp_get_selected_ids() -> Array:
+    if last_battle_deck_idx >= 0 and last_battle_deck_idx < deck_slots.size():
+        return Array(deck_slots[last_battle_deck_idx].get("cards", [])).duplicate()
+    return _battle_preview_deck_ids(battle_select_class, "prebuilt")
 
-    var your_modes: Array = [{"id":"custom", "label":"MY DECK"}]
-    if AccessManager.role_at_least(AccessManager.ROLE_OWNER):
-        your_modes.append({"id":"meta", "label":"DEV META"})
-        your_modes.append({"id":"final_boss", "label":"FINAL BOSS"})
-    for i in range(your_modes.size()):
-        var option: Dictionary = Dictionary(your_modes[i])
-        var mode_id := str(option.get("id", "custom"))
-        var b := Button.new()
-        b.position = Vector2(18, 92 + i * 45)
-        b.size = Vector2(198, 38)
-        b.text = str(option.get("label", "DECK"))
-        b.add_theme_font_size_override("font_size", ui_font_size(11))
-        if mode_id == battle_select_mode:
-            b.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 8))
-            b.add_theme_color_override("font_color", Color(0.04,0.06,0.10))
+## Class for the currently-selected battle deck.
+func _bp_get_selected_class() -> String:
+    if last_battle_deck_idx >= 0 and last_battle_deck_idx < deck_slots.size():
+        return str(deck_slots[last_battle_deck_idx].get("class", "Hope"))
+    return battle_select_class
+
+## Validates a deck slot. Returns "VALID" or a short reason string.
+func _bp_slot_validation(slot: Dictionary) -> String:
+    var slot_class := str(slot.get("class", ""))
+    var cards_arr: Array = Array(slot.get("cards", []))
+    if cards_arr.size() != 40:
+        return "%d/40 cards" % cards_arr.size()
+    var counts: Dictionary = {}
+    for card_id in cards_arr:
+        counts[str(card_id)] = int(counts.get(str(card_id), 0)) + 1
+    for card_id in counts.keys():
+        var cd := card_by_id(str(card_id))
+        if cd.is_empty(): continue
+        var limit := int(COPY_LIMITS.get(str(cd.get("rarity", "Bronze")), 3))
+        if int(counts[str(card_id)]) > limit:
+            return "Too many: %s" % str(cd.get("name", card_id))
+        var cc := str(cd.get("class", ""))
+        if cc != slot_class and cc != "Neutral":
+            return "Wrong class: %s" % str(cd.get("name", card_id))
+    return "VALID"
+
+## Deck statistics computed directly from a card ID array.
+func _bp_stats_from_ids(ids: Array) -> Dictionary:
+    var total_cost := 0; var followers := 0; var skills := 0
+    var curve: Array = [0,0,0,0,0,0,0,0,0]
+    for card_id in ids:
+        var cd := card_by_id(str(card_id))
+        if cd.is_empty(): continue
+        var cv := int(cd.get("cost", 0))
+        total_cost += cv
+        curve[mini(cv, 8)] = int(curve[mini(cv, 8)]) + 1
+        var tt := str(cd.get("type", "")).to_lower()
+        var eff := str(cd.get("effect", "")).to_lower()
+        if "amulet" in tt or "recovery skill" in tt or "recovery skill" in eff:
+            skills += 1
+        elif not ("spell" in tt or (int(cd.get("attack", 0)) == 0 and int(cd.get("health", 0)) == 0)):
+            followers += 1
+    var n := maxi(ids.size(), 1)
+    return {"count": ids.size(), "average": float(total_cost) / float(n),
+            "followers": followers, "skills": skills, "curve": curve}
+
+# ── Helpers: state changes ────────────────────────────────────────────────────
+
+## Select a custom slot and refresh.
+func _bp_select_slot(idx: int) -> void:
+    last_battle_deck_idx = idx
+    if idx >= 0 and idx < deck_slots.size():
+        battle_select_class = str(deck_slots[idx].get("class", "Hope"))
+    show_match_deck_selection()
+
+## Select a prebuilt starter deck and refresh.
+func _bp_select_prebuilt(cls: String) -> void:
+    last_battle_deck_idx = -1
+    battle_select_class = cls
+    show_match_deck_selection()
+
+## Launch the battle (or practice mode) using the selected deck.
+func _bp_start_battle(practice: bool) -> void:
+    var sel_class := _bp_get_selected_class()
+    battle_select_class = sel_class
+    if last_battle_deck_idx >= 0 and last_battle_deck_idx < deck_slots.size():
+        var slot_cards: Array = Array(deck_slots[last_battle_deck_idx].get("cards", []))
+        saved_decks[sel_class] = slot_cards.duplicate()
+        selected_deck_class = sel_class
+        saved_deck = slot_cards.duplicate()
+        battle_select_mode = "custom"
+    else:
+        battle_select_mode = "prebuilt"
+    if practice:
+        launch_selected_battle(battle_select_class, battle_select_mode, battle_opponent_class, "prebuilt", "practice")
+    else:
+        launch_selected_battle(battle_select_class, battle_select_mode, battle_opponent_class, "prebuilt")
+
+## Duplicate the selected custom slot.
+func _bp_duplicate_slot() -> void:
+    if last_battle_deck_idx < 0 or last_battle_deck_idx >= deck_slots.size():
+        return
+    if deck_slots.size() >= MAX_DECK_SLOTS:
+        return
+    var orig: Dictionary = Dictionary(deck_slots[last_battle_deck_idx])
+    deck_slots.append({
+        "name": str(orig.get("name", "Deck")) + " (Copy)",
+        "class": str(orig.get("class", "Hope")),
+        "cards": Array(orig.get("cards", [])).duplicate()
+    })
+    last_battle_deck_idx = deck_slots.size() - 1
+    save_profile()
+    show_match_deck_selection()
+
+## Copy a prebuilt recipe into a new custom slot.
+func _bp_copy_prebuilt(cls: String) -> void:
+    if deck_slots.size() >= MAX_DECK_SLOTS:
+        return
+    var ids := _battle_preview_deck_ids(cls, "prebuilt")
+    deck_slots.append({"name": cls + " Starter", "class": cls, "cards": ids.duplicate()})
+    last_battle_deck_idx = deck_slots.size() - 1
+    save_profile()
+    show_match_deck_selection()
+
+## Show a delete-confirmation overlay for the selected slot.
+func _bp_confirm_delete() -> void:
+    if last_battle_deck_idx < 0 or last_battle_deck_idx >= deck_slots.size():
+        return
+    var slot_name := str(deck_slots[last_battle_deck_idx].get("name", "Deck"))
+    var overlay := ColorRect.new()
+    overlay.color = Color(0, 0, 0, 0.72)
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 400
+    root_layer.add_child(overlay)
+    var box := Panel.new()
+    box.position = Vector2(390, 280)
+    box.size = Vector2(500, 210)
+    box.add_theme_stylebox_override("panel", style(Color(0.12, 0.18, 0.28), 16))
+    overlay.add_child(box)
+    centered_label("DELETE DECK?", Vector2(20, 18), Vector2(460, 36), 22, box).add_theme_color_override("font_color", GOLD_COLOR)
+    var msg := centered_label("Delete \"%s\"? This cannot be undone." % slot_name,
+        Vector2(20, 66), Vector2(460, 28), 15, box)
+    msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    var cb := button("CANCEL", Vector2(30, 142), Vector2(196, 46),
+        func(): overlay.queue_free(), box)
+    cb.add_theme_stylebox_override("normal", style(Color(0.20, 0.30, 0.45), 10))
+    var db := button("DELETE", Vector2(274, 142), Vector2(196, 46), func():
+        overlay.queue_free()
+        deck_slots.remove_at(last_battle_deck_idx)
+        last_battle_deck_idx = mini(last_battle_deck_idx, deck_slots.size() - 1)
+        save_profile()
+        show_match_deck_selection()
+    , box)
+    db.add_theme_stylebox_override("normal", solid_style(Color(0.65, 0.22, 0.22), 10))
+    db.add_theme_color_override("font_color", Color.WHITE)
+
+## Show a rename overlay for the selected slot.
+func _bp_rename_overlay() -> void:
+    if last_battle_deck_idx < 0 or last_battle_deck_idx >= deck_slots.size():
+        return
+    var current_name := str(deck_slots[last_battle_deck_idx].get("name", "Deck"))
+    var overlay := ColorRect.new()
+    overlay.color = Color(0, 0, 0, 0.72)
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 400
+    root_layer.add_child(overlay)
+    var box := Panel.new()
+    box.position = Vector2(390, 270)
+    box.size = Vector2(500, 220)
+    box.add_theme_stylebox_override("panel", style(Color(0.12, 0.18, 0.28), 16))
+    overlay.add_child(box)
+    centered_label("RENAME DECK", Vector2(20, 18), Vector2(460, 36), 22, box).add_theme_color_override("font_color", GOLD_COLOR)
+    var name_input := LineEdit.new()
+    name_input.position = Vector2(30, 72)
+    name_input.size = Vector2(440, 48)
+    name_input.text = current_name
+    name_input.select_all_on_focus = true
+    name_input.add_theme_font_size_override("font_size", 20)
+    box.add_child(name_input)
+    name_input.grab_focus()
+    var cb2 := button("CANCEL", Vector2(30, 150), Vector2(196, 46),
+        func(): overlay.queue_free(), box)
+    cb2.add_theme_stylebox_override("normal", style(Color(0.20, 0.30, 0.45), 10))
+    var rb := button("RENAME", Vector2(274, 150), Vector2(196, 46), func():
+        var new_name := name_input.text.strip_edges()
+        if new_name == "": return
+        deck_slots[last_battle_deck_idx]["name"] = new_name
+        save_profile()
+        overlay.queue_free()
+        show_match_deck_selection()
+    , box)
+    rb.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 10))
+    rb.add_theme_color_override("font_color", Color(0.04, 0.06, 0.10))
+    name_input.text_submitted.connect(func(_t: String): rb.pressed.emit())
+
+## Open the deck builder to create a new slot.
+func _bp_open_deck_builder_new() -> void:
+    editing_deck_slot_idx = deck_slots.size()
+    _show_create_slot_overlay()
+
+## Open the deck builder to edit the selected slot.
+func _bp_open_deck_builder_edit() -> void:
+    if last_battle_deck_idx < 0 or last_battle_deck_idx >= deck_slots.size():
+        return
+    editing_deck_slot_idx = last_battle_deck_idx
+    var slot: Dictionary = Dictionary(deck_slots[last_battle_deck_idx])
+    selected_deck_class = str(slot.get("class", "Hope"))
+    saved_deck = Array(slot.get("cards", [])).duplicate()
+    saved_decks[selected_deck_class] = saved_deck.duplicate()
+    show_deck_builder()
+
+# ── Helpers: panel builders ───────────────────────────────────────────────────
+
+func _bp_build_deck_list(parent: Panel) -> void:
+    centered_label("SELECT DECK", Vector2(8, 10), Vector2(300, 26), 15, parent).add_theme_color_override("font_color", GOLD_COLOR)
+
+    var scroll := ScrollContainer.new()
+    scroll.position = Vector2(4, 42)
+    scroll.size = Vector2(308, 592)
+    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    parent.add_child(scroll)
+
+    var vbox := VBoxContainer.new()
+    vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    vbox.add_theme_constant_override("separation", 5)
+    scroll.add_child(vbox)
+
+    # ── Custom deck slots ─────────────────────────────────────────────────────
+    var cust_hdr := Label.new()
+    cust_hdr.text = "\u2500\u2500\u2500 CUSTOM DECKS \u2500\u2500\u2500"
+    cust_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    cust_hdr.add_theme_font_size_override("font_size", ui_font_size(10))
+    cust_hdr.add_theme_color_override("font_color", Color(0.55, 0.72, 0.95))
+    cust_hdr.custom_minimum_size = Vector2(292, 22)
+    vbox.add_child(cust_hdr)
+
+    if deck_slots.is_empty():
+        var empty_lbl := Label.new()
+        empty_lbl.text = "No custom decks yet.\nBuild one in the Deck Builder\nor copy a starter below."
+        empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        empty_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        empty_lbl.add_theme_font_size_override("font_size", ui_font_size(12))
+        empty_lbl.add_theme_color_override("font_color", Color(0.50, 0.56, 0.68))
+        empty_lbl.custom_minimum_size = Vector2(292, 56)
+        vbox.add_child(empty_lbl)
+    else:
+        for i in range(deck_slots.size()):
+            var slot: Dictionary = Dictionary(deck_slots[i])
+            var slot_class := str(slot.get("class", ""))
+            var slot_name := str(slot.get("name", "Deck %d" % (i + 1)))
+            var slot_cards: Array = Array(slot.get("cards", []))
+            var validation := _bp_slot_validation(slot)
+            var valid := validation == "VALID"
+            var is_sel := last_battle_deck_idx == i
+
+            var entry := Panel.new()
+            entry.custom_minimum_size = Vector2(292, 66)
+            var entry_bg := class_color(slot_class).darkened(0.48) if is_sel else Color(0.07, 0.11, 0.19)
+            entry.add_theme_stylebox_override("panel", style(entry_bg, 9))
+            vbox.add_child(entry)
+
+            var cbar := ColorRect.new()
+            cbar.color = class_color(slot_class)
+            cbar.position = Vector2(0, 0); cbar.size = Vector2(4, 66)
+            cbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            entry.add_child(cbar)
+
+            label(slot_name, Vector2(11, 7), Vector2(200, 20), 13, entry)
+            var cls_lbl := label(slot_class.to_upper(), Vector2(11, 27), Vector2(130, 16), 10, entry)
+            cls_lbl.add_theme_color_override("font_color", class_color(slot_class).lightened(0.38))
+
+            var cc_col := Color(0.38, 0.78, 0.50) if slot_cards.size() == 40 else Color(0.85, 0.65, 0.30)
+            centered_label("%d/40" % slot_cards.size(), Vector2(178, 6), Vector2(56, 18), 12, entry).add_theme_color_override("font_color", cc_col)
+
+            var badge_col := Color(0.28, 0.72, 0.42) if valid else Color(0.82, 0.32, 0.32)
+            centered_label("\u2713 VALID" if valid else "\u2717 INVALID", Vector2(178, 25), Vector2(106, 16), 10, entry).add_theme_color_override("font_color", badge_col)
+
+            if not valid:
+                var rl := label(validation, Vector2(11, 48), Vector2(268, 13), 9, entry)
+                rl.add_theme_color_override("font_color", Color(0.80, 0.52, 0.52))
+                rl.clip_text = true
+
+            if is_sel:
+                var ring := Panel.new(); ring.position = Vector2.ZERO
+                ring.size = entry.custom_minimum_size
+                ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                var rs := StyleBoxFlat.new(); rs.bg_color = Color.TRANSPARENT
+                rs.border_color = GOLD_COLOR; rs.set_border_width_all(2)
+                rs.set_corner_radius_all(9)
+                ring.add_theme_stylebox_override("panel", rs)
+                entry.add_child(ring)
+
+            var tap := Button.new(); tap.flat = true
+            tap.focus_mode = Control.FOCUS_NONE; tap.position = Vector2.ZERO
+            tap.size = entry.custom_minimum_size
+            tap.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+            var ci := i
+            tap.pressed.connect(func(): _bp_select_slot(ci))
+            entry.add_child(tap)
+
+    if deck_slots.size() < MAX_DECK_SLOTS:
+        var nb := Button.new()
+        nb.text = "+  CREATE NEW DECK"
+        nb.custom_minimum_size = Vector2(292, 34)
+        nb.add_theme_font_size_override("font_size", ui_font_size(11))
+        nb.add_theme_stylebox_override("normal", style(Color(0.11, 0.18, 0.30), 8))
+        nb.pressed.connect(_bp_open_deck_builder_new)
+        vbox.add_child(nb)
+
+    # ── Prebuilt starters ─────────────────────────────────────────────────────
+    var shdr := Label.new()
+    shdr.text = "\u2500\u2500\u2500 STARTER DECKS \u2500\u2500\u2500"
+    shdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    shdr.add_theme_font_size_override("font_size", ui_font_size(10))
+    shdr.add_theme_color_override("font_color", Color(0.55, 0.72, 0.95))
+    shdr.custom_minimum_size = Vector2(292, 22)
+    vbox.add_child(shdr)
+
+    for cls in CLASSES:
+        var is_pb_sel: bool = (last_battle_deck_idx == -1 and battle_select_class == cls)
+        var pb := Panel.new()
+        pb.custom_minimum_size = Vector2(292, 48)
+        pb.add_theme_stylebox_override("panel", style(
+            class_color(cls).darkened(0.50) if is_pb_sel else Color(0.07, 0.11, 0.19), 8))
+        vbox.add_child(pb)
+
+        var pbbar := ColorRect.new()
+        pbbar.color = class_color(cls); pbbar.position = Vector2(0, 0)
+        pbbar.size = Vector2(4, 48); pbbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        pb.add_child(pbbar)
+
+        label(cls + " Starter", Vector2(11, 8), Vector2(185, 18), 13, pb)
+        var sub_lbl := label("40 cards  \u2713  PREBUILT", Vector2(11, 28), Vector2(185, 14), 9, pb)
+        sub_lbl.add_theme_color_override("font_color", Color(0.42, 0.78, 0.50))
+
+        if is_pb_sel:
+            var pr := Panel.new(); pr.position = Vector2.ZERO
+            pr.size = pb.custom_minimum_size
+            pr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            var prs := StyleBoxFlat.new(); prs.bg_color = Color.TRANSPARENT
+            prs.border_color = GOLD_COLOR; prs.set_border_width_all(2); prs.set_corner_radius_all(8)
+            pr.add_theme_stylebox_override("panel", prs)
+            pb.add_child(pr)
+
+        # Tap to select prebuilt
+        var pbtap := Button.new(); pbtap.flat = true
+        pbtap.focus_mode = Control.FOCUS_NONE; pbtap.position = Vector2.ZERO
+        pbtap.size = Vector2(230, 48)
+        pbtap.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        var ccls: String = str(cls)
+        pbtap.pressed.connect(func(): _bp_select_prebuilt(ccls))
+        pb.add_child(pbtap)
+
+        # COPY -> button: creates a new custom slot from this prebuilt recipe
+        if deck_slots.size() < MAX_DECK_SLOTS:
+            var cpb := Button.new(); cpb.flat = true
+            cpb.focus_mode = Control.FOCUS_NONE; cpb.position = Vector2(236, 0)
+            cpb.size = Vector2(52, 48)
+            cpb.tooltip_text = "Copy to Custom"
+            cpb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+            var ccls2: String = str(cls)
+            cpb.pressed.connect(func(): _bp_copy_prebuilt(ccls2))
+            pb.add_child(cpb)
+            var copy_lbl := centered_label("COPY\n\u2192", Vector2(236, 6), Vector2(52, 36), 9, pb)
+            copy_lbl.add_theme_color_override("font_color", Color(0.65, 0.78, 1.0))
+            copy_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+func _bp_build_card_preview(parent: Panel) -> void:
+    var sel_class := _bp_get_selected_class()
+    var ids := _bp_get_selected_ids()
+
+    centered_label("DECK PREVIEW", Vector2(8, 10), Vector2(358, 24), 14, parent).add_theme_color_override("font_color", GOLD_COLOR)
+
+    if ids.is_empty():
+        centered_label("No deck selected.", Vector2(8, 300), Vector2(358, 40), 14, parent).add_theme_color_override("font_color", Color(0.50, 0.56, 0.68))
+        return
+
+    # Build sorted card rows
+    var counts: Dictionary = {}
+    for cid in ids:
+        counts[str(cid)] = int(counts.get(str(cid), 0)) + 1
+    var rows: Array = []
+    for cid in counts.keys():
+        var cd := card_by_id(str(cid))
+        if cd.is_empty():
+            rows.append({"name": str(cid), "cost": 0, "rarity": "", "count": int(counts[str(cid)]), "card": {}})
         else:
-            b.add_theme_stylebox_override("normal", style(Color(0.20,0.30,0.48), 8))
-        b.pressed.connect(func(): _battle_selection_set_mode(mode_id))
-        center.add_child(b)
+            rows.append({"name": str(cd.get("name", cid)), "cost": int(cd.get("cost", 0)),
+                "rarity": str(cd.get("rarity", "")), "count": int(counts[str(cid)]), "card": cd})
+    rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+        if int(a["cost"]) != int(b["cost"]): return int(a["cost"]) < int(b["cost"])
+        return str(a["name"]) < str(b["name"]))
 
-    var ai_badge := Button.new()
-    ai_badge.position = Vector2(236, 92)
-    ai_badge.size = Vector2(198, 38)
-    ai_badge.text = "LEGAL PREBUILT"
-    ai_badge.disabled = true
-    ai_badge.add_theme_stylebox_override("disabled", style(Color(0.18,0.28,0.44), 8))
-    center.add_child(ai_badge)
+    # Scrollable list
+    var scroll := ScrollContainer.new()
+    scroll.position = Vector2(6, 40)
+    scroll.size = Vector2(362, 460)
+    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    parent.add_child(scroll)
+    var vbox := VBoxContainer.new()
+    vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    vbox.add_theme_constant_override("separation", 3)
+    scroll.add_child(vbox)
 
-    centered_label("%s • %d CARDS" % [battle_select_class.to_upper(), int(your_stats.get("count",0))], Vector2(18, 236), Vector2(198, 26), 13, center).add_theme_color_override("font_color", class_color(battle_select_class).lightened(0.25))
-    centered_label("%s • %d CARDS" % [battle_opponent_class.to_upper(), int(opp_stats.get("count",0))], Vector2(236, 236), Vector2(198, 26), 13, center).add_theme_color_override("font_color", class_color(battle_opponent_class).lightened(0.25))
-    centered_label("AVG %.1f  •  F %d  •  S %d" % [float(your_stats.get("average",0.0)), int(your_stats.get("followers",0)), int(your_stats.get("skills",0))], Vector2(14, 268), Vector2(206, 24), 11, center)
-    centered_label("AVG %.1f  •  F %d  •  S %d" % [float(opp_stats.get("average",0.0)), int(opp_stats.get("followers",0)), int(opp_stats.get("skills",0))], Vector2(232, 268), Vector2(206, 24), 11, center)
-    _draw_curve(center, Array(your_stats.get("curve", [])), Vector2(18, 320), class_color(battle_select_class), 198)
-    _draw_curve(center, Array(opp_stats.get("curve", [])), Vector2(236, 320), class_color(battle_opponent_class), 198)
-    button("PREVIEW YOUR DECK", Vector2(18, 414), Vector2(198, 38), func(): _show_battle_deck_preview(battle_select_class, battle_select_mode, false), center)
-    button("PREVIEW OPPONENT", Vector2(236, 414), Vector2(198, 38), func(): _show_battle_deck_preview(battle_opponent_class, "prebuilt", true), center)
+    for row_data in rows:
+        var row: Dictionary = Dictionary(row_data)
+        var rp := Panel.new()
+        rp.custom_minimum_size = Vector2(340, 34)
+        rp.add_theme_stylebox_override("panel", style(Color(0.07, 0.11, 0.18, 0.95), 6))
+        vbox.add_child(rp)
 
-    button("BACK", Vector2(28, 498), Vector2(180, 54), show_home, shell)
-    var begin := button("BEGIN BATTLE", Vector2(306, 498), Vector2(500, 54), _battle_selection_start, shell)
-    begin.add_theme_font_size_override("font_size", ui_font_size(20))
-    begin.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 14))
-    begin.add_theme_color_override("font_color", Color(0.04,0.06,0.10))
-    var practice_begin := button("PRACTICE\n(long timer, no rewards)", Vector2(820, 498), Vector2(376, 54), _battle_selection_start_practice, shell)
-    practice_begin.add_theme_font_size_override("font_size", ui_font_size(13))
-    practice_begin.add_theme_stylebox_override("normal", style(Color(0.30, 0.55, 0.38), 14))
+        var cbg := ColorRect.new()
+        cbg.color = class_color(sel_class).darkened(0.32)
+        cbg.position = Vector2(0, 0); cbg.size = Vector2(32, 34)
+        cbg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        rp.add_child(cbg)
+        centered_label(str(int(row["cost"])), Vector2(0, 0), Vector2(32, 34), 14, rp).add_theme_color_override("font_color", GOLD_COLOR)
+
+        label("%dx  %s" % [int(row["count"]), str(row["name"])], Vector2(40, 5), Vector2(220, 24), 12, rp)
+        var rar_lbl := centered_label(str(row["rarity"]), Vector2(264, 5), Vector2(70, 24), 9, rp)
+        rar_lbl.add_theme_color_override("font_color", Color(0.68, 0.80, 1.0))
+
+        var rc: Dictionary = row.get("card", {})
+        if not rc.is_empty():
+            var tap := Button.new(); tap.flat = true
+            tap.focus_mode = Control.FOCUS_NONE; tap.position = Vector2.ZERO
+            tap.size = rp.custom_minimum_size
+            tap.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+            var rcb: Dictionary = rc
+            tap.pressed.connect(show_card_preview.bind(rcb))
+            rp.add_child(tap)
+
+    # Curve + stats at bottom
+    var actual_stats := _bp_stats_from_ids(ids)
+    _draw_curve(parent, Array(actual_stats.get("curve", [])), Vector2(8, 508), class_color(sel_class), 358)
+    var stat_txt := "%d cards  \u2022  AVG %.1f  \u2022  %dF  \u2022  %dS" % [
+        ids.size(), float(actual_stats.get("average", 0.0)),
+        int(actual_stats.get("followers", 0)), int(actual_stats.get("skills", 0))]
+    centered_label(stat_txt, Vector2(8, 600), Vector2(358, 20), 10, parent).add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+
+func _bp_build_right_panel(parent: Panel) -> void:
+    var sel_class := _bp_get_selected_class()
+    var is_custom := last_battle_deck_idx >= 0 and last_battle_deck_idx < deck_slots.size()
+    var ids := _bp_get_selected_ids()
+    var valid := true
+    var val_text := "STARTER DECK \u2014 ALWAYS VALID"
+    var slot_name := sel_class + " Starter Deck"
+    if is_custom:
+        var slot: Dictionary = Dictionary(deck_slots[last_battle_deck_idx])
+        slot_name = str(slot.get("name", "Custom Deck"))
+        val_text = _bp_slot_validation(slot)
+        valid = val_text == "VALID"
+
+    # ── Leader portrait ────────────────────────────────────────────────────────
+    var af := Panel.new()
+    af.position = Vector2(8, 8); af.size = Vector2(526, 242)
+    af.clip_contents = true
+    var afs := StyleBoxFlat.new()
+    afs.bg_color = Color(0.008, 0.014, 0.028)
+    afs.set_corner_radius_all(12)
+    afs.border_color = class_color(sel_class); afs.set_border_width_all(2)
+    af.add_theme_stylebox_override("panel", afs)
+    parent.add_child(af)
+
+    var art := TextureRect.new()
+    art.texture = class_leader_texture(sel_class)
+    var foc_x := float(LEADER_FOCAL_PX.get(sel_class.to_lower(), 0))
+    art.position = Vector2(foc_x, 0.0)
+    art.size = Vector2(af.size.x + absf(foc_x), af.size.y)
+    art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    art.clip_contents = true; art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    af.add_child(art)
+
+    # Class banner overlaid at bottom of portrait
+    var banner := Panel.new()
+    banner.position = Vector2(8, 242); banner.size = Vector2(526, 34)
+    var bns := StyleBoxFlat.new()
+    bns.bg_color = Color(class_color(sel_class), 0.88)
+    banner.add_theme_stylebox_override("panel", bns)
+    parent.add_child(banner)
+    centered_label(sel_class.to_upper() + "  \u2022  LEADER", Vector2(0, 0), Vector2(526, 34), 16, banner).add_theme_color_override("font_color", Color.WHITE)
+
+    # ── Deck info ─────────────────────────────────────────────────────────────
+    var y := 286
+    label(slot_name, Vector2(12, y), Vector2(356, 22), 16, parent)
+    y += 26
+    var val_color := Color(0.32, 0.82, 0.46) if valid else Color(0.90, 0.32, 0.32)
+    var vl := label(("\u2713  " if valid else "\u2717  ") + val_text, Vector2(12, y), Vector2(514, 20), 12, parent)
+    vl.add_theme_color_override("font_color", val_color)
+    y += 24
+    var stats := _bp_stats_from_ids(ids)
+    var st := "%d/40 cards  \u2022  AVG %.1f  \u2022  %d followers  \u2022  %d skills" % [
+        ids.size(), float(stats.get("average", 0.0)),
+        int(stats.get("followers", 0)), int(stats.get("skills", 0))]
+    var sl := label(st, Vector2(12, y), Vector2(514, 18), 10, parent)
+    sl.add_theme_color_override("font_color", Color(0.70, 0.82, 1.0))
+    y += 24
+
+    # ── Custom deck actions ───────────────────────────────────────────────────
+    if is_custom:
+        y += 4
+        var ax := 12
+        var ew := 120
+        var edit_b := button("\u270F EDIT", Vector2(ax, y), Vector2(ew, 30), _bp_open_deck_builder_edit, parent)
+        edit_b.add_theme_font_size_override("font_size", ui_font_size(11))
+        edit_b.add_theme_stylebox_override("normal", style(Color(0.18, 0.28, 0.44), 7))
+
+        var dup_b := button("\u2295 COPY", Vector2(ax + ew + 6, y), Vector2(ew, 30), _bp_duplicate_slot, parent)
+        dup_b.add_theme_font_size_override("font_size", ui_font_size(11))
+        dup_b.add_theme_stylebox_override("normal", style(Color(0.18, 0.28, 0.44), 7))
+        if deck_slots.size() >= MAX_DECK_SLOTS:
+            dup_b.disabled = true
+
+        var ren_b := button("\u270E RENAME", Vector2(ax + (ew + 6) * 2, y), Vector2(ew, 30), _bp_rename_overlay, parent)
+        ren_b.add_theme_font_size_override("font_size", ui_font_size(11))
+        ren_b.add_theme_stylebox_override("normal", style(Color(0.18, 0.28, 0.44), 7))
+
+        var del_b := button("\u2717 DELETE", Vector2(ax + (ew + 6) * 3, y), Vector2(ew, 30), _bp_confirm_delete, parent)
+        del_b.add_theme_font_size_override("font_size", ui_font_size(11))
+        del_b.add_theme_stylebox_override("normal", style(Color(0.38, 0.14, 0.14), 7))
+        y += 38
+
+    # ── Battle buttons ────────────────────────────────────────────────────────
+    y += 6
+    var bb := button("\u2694  BEGIN BATTLE", Vector2(12, y), Vector2(518, 52), func(): _bp_start_battle(false), parent)
+    bb.add_theme_font_size_override("font_size", ui_font_size(20))
+    if valid:
+        bb.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 13))
+        bb.add_theme_color_override("font_color", Color(0.04, 0.06, 0.10))
+    else:
+        bb.add_theme_stylebox_override("normal", style(Color(0.24, 0.17, 0.10), 13))
+        bb.add_theme_color_override("font_color", Color(0.55, 0.46, 0.36))
+        bb.disabled = true
+    y += 58
+
+    var pb2 := button("PRACTICE  \u2022  long timer  \u2022  no rewards", Vector2(12, y), Vector2(518, 34), func(): _bp_start_battle(true), parent)
+    pb2.add_theme_font_size_override("font_size", ui_font_size(11))
+    pb2.add_theme_stylebox_override("normal", style(Color(0.20, 0.38, 0.26), 11))
+    if not valid: pb2.disabled = true
+    y += 40
+
+    # ── Opponent section ──────────────────────────────────────────────────────
+    var sep := ColorRect.new()
+    sep.color = Color(0.18, 0.28, 0.42)
+    sep.position = Vector2(12, y); sep.size = Vector2(518, 2)
+    sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(sep)
+    y += 10
+
+    centered_label("OPPONENT", Vector2(12, y), Vector2(518, 20), 12, parent).add_theme_color_override("font_color", Color(0.65, 0.78, 0.95))
+    y += 26
+
+    # 2x2 class grid (each button 193px wide, 40px tall, 8px horizontal gap)
+    for i in range(CLASSES.size()):
+        var opp_cls: String = str(CLASSES[i])
+        var col := i % 2; var row := i / 2
+        var ob := Panel.new()
+        ob.position = Vector2(12 + col * 201, y + row * 44)
+        ob.size = Vector2(193, 38)
+        var obbg := class_color(opp_cls).darkened(0.28) if opp_cls == battle_opponent_class else Color(0.07, 0.11, 0.18)
+        ob.add_theme_stylebox_override("panel", style(obbg, 8))
+        parent.add_child(ob)
+        var olbl := centered_label(opp_cls.to_upper(), Vector2(4, 0), Vector2(185, 38), 12, ob)
+        olbl.add_theme_color_override("font_color", class_color(opp_cls).lightened(0.32) if opp_cls == battle_opponent_class else Color.WHITE)
+        var otap := Button.new(); otap.flat = true
+        otap.focus_mode = Control.FOCUS_NONE; otap.position = Vector2.ZERO
+        otap.size = ob.size
+        otap.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        var copp := opp_cls
+        otap.pressed.connect(func(): battle_opponent_class = copp; show_match_deck_selection())
+        ob.add_child(otap)
+
+    # Mini opponent portrait on the right
+    var opp_port_x := 12 + 2 * 201
+    var opp_port := Panel.new()
+    opp_port.position = Vector2(opp_port_x, y); opp_port.size = Vector2(102, 88)
+    opp_port.clip_contents = true
+    opp_port.add_theme_stylebox_override("panel", style(class_color(battle_opponent_class).darkened(0.40), 8))
+    parent.add_child(opp_port)
+    var opp_art := TextureRect.new()
+    opp_art.texture = class_leader_texture(battle_opponent_class)
+    opp_art.position = Vector2(0, 0); opp_art.size = Vector2(102, 88)
+    opp_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    opp_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    opp_art.clip_contents = true; opp_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    opp_port.add_child(opp_art)
+
 
 func _show_battle_deck_preview(class_name_value: String, mode_value: String, opponent_preview: bool) -> void:
     if opponent_preview:
