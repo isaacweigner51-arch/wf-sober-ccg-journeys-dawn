@@ -4443,11 +4443,17 @@ func _bp_build_opp_zone(parent: Control, opp_class: String, opp_col: Color) -> v
         otap.pressed.connect(func(): battle_opponent_class = c_opp; show_match_deck_selection())
 
     by += 82
-    # Opponent deck info
+    # Opponent deck info + preview button
     var opp_s := _battle_preview_stats(opp_class, "prebuilt")
     var oi := label("Prebuilt Deck  \u2022  40 cards  \u2022  AVG %.1f" % float(opp_s.get("average", 0.0)),
-        Vector2(PX, by), Vector2(PW, 14), 9, parent)
+        Vector2(PX, by), Vector2(PW - 110, 14), 9, parent)
     oi.add_theme_color_override("font_color", Color(0.55, 0.65, 0.88))
+    var c_cls: String = opp_class
+    var prev_b := button("\ud83d\udd0d  VIEW DECK", Vector2(PX + PW - 106, by - 4), Vector2(106, 24),
+        func(): _show_battle_deck_preview(c_cls, "prebuilt", true), parent)
+    prev_b.add_theme_font_size_override("font_size", ui_font_size(10))
+    prev_b.add_theme_stylebox_override("normal", style(Color(0.10, 0.18, 0.30), 6))
+    prev_b.add_theme_stylebox_override("hover",  style(Color(0.18, 0.30, 0.50), 6))
 
 
 func _show_battle_deck_preview(class_name_value: String, mode_value: String, opponent_preview: bool) -> void:

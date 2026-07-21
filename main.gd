@@ -1803,8 +1803,11 @@ func build_ui() -> void:
 
     enemy_hand_area = Control.new(); enemy_hand_area.position = Vector2(355, 34); enemy_hand_area.size = Vector2(570, 70); add_child(enemy_hand_area)
     enemy_board_area = Control.new(); enemy_board_area.position = Vector2(245, 82); enemy_board_area.size = Vector2(790, 165); enemy_board_area.z_index = 60; enemy_board_area.clip_contents = false; add_child(enemy_board_area)
-    enemy_amulet_area = Control.new(); enemy_amulet_area.position = Vector2(365, 246); enemy_amulet_area.size = Vector2(550, 54); enemy_amulet_area.z_index = 30; add_child(enemy_amulet_area)
-    player_amulet_area = Control.new(); player_amulet_area.position = Vector2(365, 308); player_amulet_area.size = Vector2(550, 54); player_amulet_area.z_index = 30; add_child(player_amulet_area)
+    # Amulet rows sit flush against the inside edge of each board so they
+    # never occupy the open battlefield center.  Empty slots are hidden so
+    # "RECOVERY SKILL" placeholders never clutter the screen.
+    enemy_amulet_area = Control.new(); enemy_amulet_area.position = Vector2(245, 240); enemy_amulet_area.size = Vector2(790, 54); enemy_amulet_area.z_index = 65; enemy_amulet_area.clip_contents = false; add_child(enemy_amulet_area)
+    player_amulet_area = Control.new(); player_amulet_area.position = Vector2(245, 365); player_amulet_area.size = Vector2(790, 54); player_amulet_area.z_index = 65; player_amulet_area.clip_contents = false; add_child(player_amulet_area)
     player_board_area = Control.new(); player_board_area.position = Vector2(245, 365); player_board_area.size = Vector2(790, 165); player_board_area.z_index = 60; player_board_area.clip_contents = false; add_child(player_board_area)
     # Keep the hand in a dedicated bottom tray so it never covers the battlefield.
     player_hand_area = Control.new(); player_hand_area.position = Vector2(150, 600); player_hand_area.size = Vector2(880, 115); player_hand_area.clip_contents = false; player_hand_area.z_index = 120; add_child(player_hand_area)
@@ -7114,13 +7117,8 @@ func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
             b.disabled = true
             holder.add_child(b)
         else:
-            var st_empty := StyleBoxFlat.new()
-            st_empty.bg_color = Color(0.035, 0.045, 0.06, 0.55)
-            st_empty.border_color = Color(0.4, 0.46, 0.52, 0.35)
-            st_empty.set_border_width_all(1)
-            st_empty.set_corner_radius_all(10)
-            holder.add_theme_stylebox_override("panel", st_empty)
-            var l := Label.new(); l.text = "RECOVERY SKILL"; l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); l.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; l.vertical_alignment=VERTICAL_ALIGNMENT_CENTER; l.add_theme_font_size_override("font_size",ui_font(10)); l.modulate=Color(0.55,0.62,0.68,0.55); holder.add_child(l)
+            # Empty slot — hide entirely so the battlefield center stays clean.
+            holder.visible = false
 
 func clear_children(node: Node) -> void:
     for child in node.get_children():
