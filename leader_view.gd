@@ -70,23 +70,15 @@ var _head_blink_tex: Texture2D = null
 # ── File helpers (bypass .import requirement on desktop) ─────────────────────
 
 func _file_exists_res(path: String) -> bool:
-	if ResourceLoader.exists(path):
-		return true
-	var abs := ProjectSettings.globalize_path(path)
-	return FileAccess.file_exists(abs)
+	# Only trust ResourceLoader — it requires a proper .import sidecar.
+	# Raw FileAccess would find unimported PNGs whose layers have no shared
+	# canvas alignment (AI-generated independently), causing misaligned compositing.
+	return ResourceLoader.exists(path)
 
 func _load_texture_res(path: String) -> Texture2D:
-	# Prefer ResourceLoader (works in any environment including Android export).
-	if ResourceLoader.exists(path):
-		return ResourceLoader.load(path) as Texture2D
-	# Fallback: load raw PNG from disk — works on desktop without .import sidecars.
-	var abs := ProjectSettings.globalize_path(path)
-	if not FileAccess.file_exists(abs):
+	if not ResourceLoader.exists(path):
 		return null
-	var img := Image.new()
-	if img.load(abs) != OK:
-		return null
-	return ImageTexture.create_from_image(img)
+	return ResourceLoader.load(path) as Texture2D
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -244,67 +236,10 @@ func get_state() -> State:
 # ── Animation implementations ─────────────────────────────────────────────────
 
 func _play_idle() -> void:
-	var aura_bg := get_node_or_null("AuraBg") as ColorRect
-
-	if has_layered_art:
-		# ── BODY: subtle chest breathing (1.8% scale, 3.5 s) ──────────────────
-		# Values are in the portrait's display space (e.g. 392 px wide),
-		# so a 10 px offset is clearly visible without looking jittery.
-		if _layer_body:
-			var body_t := create_tween().set_loops()
-			body_t.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			body_t.tween_property(_layer_body, "scale", Vector2(1.018, 1.022), 3.5)
-			body_t.tween_property(_layer_body, "scale", Vector2.ONE,            3.5)
-
-		# ── HEAD: lateral idle drift (±10 px, 2.4 s) ─────────────────────────
-		if _layer_head:
-			_idle_tween = create_tween().set_loops()
-			_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			_idle_tween.tween_property(_layer_head, "position:x", -10.0, 2.4)
-			_idle_tween.tween_property(_layer_head, "position:x",   8.0, 2.4)
-
-		# ── HAIR: wider sway, offset phase (±16 px, 2.7 s) ───────────────────
-		if _layer_hair:
-			var ht := create_tween().set_loops()
-			ht.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			ht.tween_property(_layer_hair, "position:x", -16.0, 2.7)
-			ht.tween_property(_layer_hair, "position:x",  14.0, 2.7)
-
-		# ── BLINK: texture-swap every 3–5.5 s ────────────────────────────────
-		if _layer_head and _head_blink_tex:
-			_schedule_blink()
-
-		# ── AURA OVERLAY: fade in then pulse ──────────────────────────────────
-		if _layer_aura:
-			var at := create_tween().set_loops()
-			at.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			at.tween_property(_layer_aura, "modulate:a", 0.60, 1.8)
-			at.tween_property(_layer_aura, "modulate:a", 0.18, 1.8)
-
-		# ── AURA BG: class-colour pulse ───────────────────────────────────────
-		if aura_bg:
-			var bt := create_tween().set_loops()
-			bt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			bt.tween_property(aura_bg, "color:a", 0.20, 2.2)
-			bt.tween_property(aura_bg, "color:a", 0.04, 2.2)
-	else:
-		# ── Flat art: visible breathing + slight vertical drift ───────────────
-		if aura_bg:
-			var bt := create_tween().set_loops()
-			bt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			bt.tween_property(aura_bg, "color:a", 0.22, 2.2)
-			bt.tween_property(aura_bg, "color:a", 0.04, 2.2)
-		if _art:
-			# Scale breathing — 2.8% so it's clearly visible at portrait size
-			_idle_tween = create_tween().set_loops()
-			_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			_idle_tween.tween_property(_art, "scale",      Vector2(1.028, 1.028), 3.2)
-			_idle_tween.tween_property(_art, "scale",      Vector2.ONE,            3.2)
-			# Slight upward drift on the breathing inhale
-			var dt := create_tween().set_loops()
-			dt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			dt.tween_property(_art, "position:y",  -5.0, 3.2)
-			dt.tween_property(_art, "position:y",   0.0, 3.2)
+	# ANIMATION DISABLED — rendering verification mode.
+	# All layers and flat art render statically so portrait framing can be
+	# confirmed correct before any motion is re-added.
+	pass
 
 func _schedule_blink() -> void:
 	if _layer_head == null or _head_blink_tex == null or _current_state != State.IDLE:
