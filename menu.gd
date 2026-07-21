@@ -766,6 +766,10 @@ var contact_message_input: TextEdit
 var contact_status: Label
 var last_seen_whats_new_version := ""
 var whats_new_checked_this_session := false
+# Upload safety gate — set to true only after a successful cloud profile fetch
+# and apply. Any path that leaves this false will block all save uploads so an
+# empty/default local save can never overwrite real cloud data.
+var _cloud_safe_to_upload := false
 const SUPPORT_EMAIL := "walkingfreeagain@gmail.com"
 
 func ensure_home_music() -> void:
@@ -876,6 +880,7 @@ func show_launch_screen() -> void:
 
     button("SIGN IN", Vector2(80, 275), Vector2(220, 50), func():
         print("LOGIN UI ── SIGN IN pressed  email_len=%d  pass_len=%d" % [launch_email.text.length(), launch_password.text.length()])
+        _cloud_safe_to_upload = false  # Lock upload gate until cloud profile confirmed applied
         launch_status.text = "Signing in..."
         launch_status.add_theme_color_override("font_color", Color(0.94, 0.95, 1.0))
         NetworkManager.sign_in_with_email(launch_email.text, launch_password.text)
@@ -894,10 +899,13 @@ func show_launch_screen() -> void:
     launch_status = centered_label("", Vector2(55, 388), Vector2(510, 28), 14, panel)
 
 func _on_launch_auth_result(success: bool, message: String) -> void:
+    print("LOGIN RESULT ── success=%s  message='%s'  user_id=%s  role=%s  cloud_safe=%s" % [
+        str(success), message, NetworkManager.user_id, NetworkManager.account_role, str(_cloud_safe_to_upload)])
     if is_instance_valid(launch_status):
         launch_status.text = message
         launch_status.add_theme_color_override("font_color", Color(0.55, 1.0, 0.70) if success else Color(1.0, 0.55, 0.55))
     if not success:
+        print("LOGIN RESULT ── FAILED — staying on launch screen, upload gate remains locked")
         return
     if NetworkManager.account_role == "owner":
         message += " Developer access enabled."
@@ -905,10 +913,11 @@ func _on_launch_auth_result(success: bool, message: String) -> void:
         message += " Tester account ready."
     if is_instance_valid(launch_status):
         launch_status.text = message
+    print("LOGIN RESULT ── SUCCESS — gold=%d vials=%d packs=%d cards=%d  cloud_safe=%s" % [
+        gold_balance, dust_balance, pack_inventory, collection_owned.size(), str(_cloud_safe_to_upload)])
     launch_screen_active = false
     await get_tree().create_timer(0.35).timeout
-    # Daily rewards are automatic after a successful sign-in/session restore.
-    # Players never need to visit a separate daily-reward menu.
+    print("LOGIN RESULT ── HOME SCREEN OPENED")
     if can_claim_daily_reward():
         auto_claim_daily_reward_after_login()
     else:
@@ -1046,7 +1055,13 @@ func save_profile() -> void:
 
 func _queue_cloud_upload() -> void:
     if NetworkManager.user_id.is_empty():
+        push_warning("CLOUD UPLOAD ── BLOCKED: not authenticated")
         return
+    if not _cloud_safe_to_upload:
+        push_error("CLOUD UPLOAD ── BLOCKED: cloud profile was not safely fetched and applied — refusing to overwrite cloud data with local state")
+        return
+    print("CLOUD UPLOAD ── uploading for user_id=%s  gold=%d vials=%d packs=%d cards=%d" % [
+        NetworkManager.user_id, gold_balance, dust_balance, pack_inventory, collection_owned.size()])
     await NetworkManager.upload_save_data(_serialize_profile_for_cloud())
 
 func _serialize_profile_for_cloud() -> Dictionary:
@@ -1174,48 +1189,83 @@ func _apply_cloud_profile(data: Dictionary) -> bool:
     print("CLOUD MERGE: merged save data successfully (progress-safe)")
     return true
 
-func _on_cloud_save_loaded(data: Dictionary) -> void:
-    # ── Log local save state before any merge ─────────────────────────────────
-    print("CLOUD SYNC ── local  : gold=%d vials=%d packs=%d cards=%d trials=%d challenge=%d academy=%s" % [
+func _on_cloud_save_loaded(data: Dictionary, fetch_ok: bool) -> void:
+    # ── Snapshot local state before any merge ─────────────────────────────────
+    print("CLOUD SYNC ── LOCAL BEFORE MERGE : gold=%d vials=%d packs=%d cards=%d trials=%d challenge=%d academy=%s" % [
         gold_balance, dust_balance, pack_inventory, collection_owned.size(),
-        trials_cleared.size(), recovery_challenge_progress.size(), academy_complete])
-    print("CLOUD SYNC ── remote : %s" % ("EMPTY (no cloud save found)" if data.is_empty()
-        else "%d sections" % data.size()))
+        trials_cleared.size(), recovery_challenge_progress.size(), str(academy_complete)])
+    print("CLOUD SYNC ── FETCH RESULT       : fetch_ok=%s  sections=%d  recovery_vials_granted=%d" % [
+        str(fetch_ok), data.size(), NetworkManager.fetched_recovery_vials])
+
+    # ── Guard: never upload when the network fetch itself failed ──────────────
+    if not fetch_ok:
+        _cloud_safe_to_upload = false
+        push_error("CLOUD SYNC ── FETCH FAILED — upload gate locked. Cloud data is unknown; local save will NOT be uploaded.")
+        if is_instance_valid(launch_status):
+            launch_status.text = "Cloud save could not be loaded. Progress preserved — try restarting."
+            launch_status.add_theme_color_override("font_color", Color(1.0, 0.65, 0.35))
+        return
 
     if data.is_empty():
-        # No remote save was found. Before uploading local data, check that
-        # there is something worth uploading — a completely fresh install has
-        # gold=0, cards=0, etc. and uploading that would overwrite real progress
-        # on the server if the save_data fetch failed silently.
+        # Fetch succeeded but no save_data exists yet (new account or genuinely
+        # null). Only upload local data if there is real progress worth keeping.
         var local_has_progress := (gold_balance > 0 or dust_balance > 0
             or pack_inventory > 1 or collection_owned.size() > 0
             or academy_complete or trials_cleared.size() > 0)
         if not NetworkManager.user_id.is_empty() and local_has_progress:
+            print("CLOUD SYNC ── ACTION : first sync — local has progress, uploading to Supabase")
+            _cloud_safe_to_upload = true
             _queue_cloud_upload.call_deferred()
-            print("CLOUD SYNC ── action : local has progress — uploading to Supabase (first sync)")
         elif not NetworkManager.user_id.is_empty():
-            print("CLOUD SYNC ── action : local save is empty — NOT uploading (avoids overwriting real server data)")
+            print("CLOUD SYNC ── ACTION : local save is empty — NOT uploading (protects any future cloud data)")
         else:
-            print("CLOUD SYNC ── action : guest session — skipping upload")
+            print("CLOUD SYNC ── ACTION : guest session — skipping upload")
+        # Apply any admin-granted recovery_vials even on an empty save
+        _apply_granted_vials()
         return
 
-    # Remote save found — merge with local, local wins on all progress fields.
-    print("CLOUD SYNC ── action : applying cloud save (local wins on progress)")
+    # ── Remote save found — merge, cloud data is king for rewards ─────────────
+    print("CLOUD SYNC ── ACTION : applying cloud save (%d sections, local wins on progress)" % data.size())
     var merge_ok := _apply_cloud_profile(data)
     if not merge_ok:
-        push_error("CLOUD SYNC: merge failed — upload ABORTED to protect cloud data")
-        print("CLOUD SYNC ── UPLOAD BLOCKED: merge error, cloud data preserved unchanged")
+        _cloud_safe_to_upload = false
+        push_error("CLOUD SYNC ── MERGE FAILED — upload gate locked. Cloud data preserved unchanged.")
+        if is_instance_valid(launch_status):
+            launch_status.text = "Cloud save could not be applied safely. Progress preserved — try restarting."
+            launch_status.add_theme_color_override("font_color", Color(1.0, 0.65, 0.35))
         return
-    load_profile() # Re-read merged result from disk into memory.
-    print("CLOUD SYNC ── after  : gold=%d vials=%d packs=%d cards=%d trials=%d" % [
-        gold_balance, dust_balance, pack_inventory, collection_owned.size(),
-        trials_cleared.size()])
+
+    load_profile()  # Re-read merged result from disk into memory.
+    print("CLOUD SYNC ── AFTER MERGE : gold=%d vials=%d packs=%d cards=%d trials=%d" % [
+        gold_balance, dust_balance, pack_inventory, collection_owned.size(), trials_cleared.size()])
+
+    # Apply any admin-granted recovery_vials on top of the merged state.
+    _apply_granted_vials()
+
+    _cloud_safe_to_upload = true
     _queue_cloud_upload.call_deferred()
-    print("CLOUD SYNC ── re-uploading merged state to Supabase")
-    # Refresh the home screen if it is already visible (e.g. a viewport-size
-    # change fired show_home() before this callback completed).
+    print("CLOUD SYNC ── re-uploading merged + reward-applied state to Supabase")
+
+    # Refresh the home screen only if we are no longer on the launch screen
+    # (e.g. a viewport-size change fired show_home() before this callback ran).
     if not launch_screen_active:
         show_home()
+
+## Apply recovery_vials granted by admins via the Supabase player_profiles row.
+## Called after every cloud profile apply. Skips gracefully if already applied.
+func _apply_granted_vials() -> void:
+    var granted := NetworkManager.fetched_recovery_vials
+    if granted <= 0:
+        return
+    print("CLOUD SYNC ── PENDING REWARD : recovery_vials=%d  current_vials=%d" % [granted, dust_balance])
+    # Add the granted amount and clear it on the server so it is only applied once.
+    dust_balance += granted
+    NetworkManager.fetched_recovery_vials = 0  # Prevent double-apply this session
+    save_profile()  # Persists locally and triggers upload (which is now safe).
+    # Zero out the column so the next login doesn't re-apply the same grant.
+    if not NetworkManager.user_id.is_empty() and not NetworkManager.access_token.is_empty():
+        NetworkManager.clear_recovery_vials.call_deferred()
+    print("CLOUD SYNC ── REWARD APPLIED : new vials=%d" % dust_balance)
 
 func clear_screen() -> void:
     for child in get_children(): child.queue_free()

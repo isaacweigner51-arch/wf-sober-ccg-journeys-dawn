@@ -10,7 +10,9 @@ signal game_message(payload: Dictionary)
 signal network_error(message: String)
 signal account_authenticated(success: bool, message: String)
 signal account_role_loaded(role: String, profile: Dictionary)
-signal cloud_save_loaded(data: Dictionary)
+# fetch_ok is false when the HTTP request itself failed (network error, RLS
+# denial, etc.) so the caller can distinguish "no cloud save" from "fetch failed".
+signal cloud_save_loaded(data: Dictionary, fetch_ok: bool)
 
 const SUPABASE_URL := "https://zlsbznebcmprfxngyogg.supabase.co"
 const SUPABASE_KEY := "sb_publishable_U8LP7Qgg-2nZIfeb7CTp3g_YLQaOXAx"
@@ -26,6 +28,11 @@ var access_token := ""
 var refresh_token := ""
 var account_role := "player"
 var account_profile: Dictionary = {}
+# Set to true only when the player_profiles GET succeeds (HTTP 2xx, row found).
+# False means the network failed — callers must NOT upload over unknown cloud state.
+var cloud_fetch_succeeded := false
+# Vials (dust) granted via the Supabase recovery_vials column; applied after login.
+var fetched_recovery_vials: int = 0
 const SESSION_PATH := "user://supabase_session.json"
 var player_class := "Hope"
 var player_deck_mode := "custom"
@@ -157,24 +164,27 @@ func validate_saved_session() -> void:
 func _load_account_profile() -> void:
     account_role = "player"
     account_profile = {}
+    cloud_fetch_succeeded = false
+    fetched_recovery_vials = 0
     if user_id.is_empty() or access_token.is_empty():
-        push_warning("CLOUD: no user_id/token — skipping profile load")
+        push_warning("CLOUD FETCH ── no user_id/token — skipping profile load")
         account_role_loaded.emit(account_role, account_profile)
-        cloud_save_loaded.emit({})
+        cloud_save_loaded.emit({}, false)
         return
 
     # ── 1. Fetch existing profile row ─────────────────────────────────────────
-    print("CLOUD FETCH ── GET player_profiles for user_id=%s" % user_id)
+    print("CLOUD FETCH ── START  user_id=%s" % user_id)
     var path := "/rest/v1/player_profiles?select=user_id,display_name,app_role,recovery_vials,save_data&user_id=eq.%s&limit=1" % user_id.uri_encode()
     var result := await _request(HTTPClient.METHOD_GET, path, null, true)
     print("CLOUD FETCH ── HTTP %d  ok=%s  data_type=%d  body_len=%d" % [
-        result.status, result.ok, typeof(result.data), result.text.length()])
-    # Print enough of the raw body to see save_data type (but not the whole 4 KB).
+        result.status, str(result.ok), typeof(result.data), result.text.length()])
     if not result.text.is_empty():
         print("CLOUD FETCH ── body (first 600): %s" % result.text.left(600))
 
+    var row_loaded := false
     if not result.ok:
-        push_error("CLOUD FETCH ── GET player_profiles failed (HTTP %d): %s" % [result.status, result.text])
+        push_error("CLOUD FETCH ── GET player_profiles FAILED (HTTP %d): %s" % [result.status, result.text])
+        # fetch_ok stays false — caller must not upload over unknown cloud state
     elif result.data is Array:
         if result.data.is_empty():
             # ── 2. No row yet — UPSERT a new profile (idempotent) ────────────
@@ -183,15 +193,19 @@ func _load_account_profile() -> void:
                 {"user_id": user_id, "display_name": "", "app_role": "player", "recovery_vials": 0},
                 true, "resolution=merge-duplicates,return=minimal")
             if not ins.ok:
-                push_error("CLOUD FETCH ── INSERT player_profiles failed (HTTP %d): %s — check RLS policies" % [ins.status, ins.text])
+                push_error("CLOUD FETCH ── INSERT player_profiles FAILED (HTTP %d): %s" % [ins.status, ins.text])
             else:
                 print("CLOUD FETCH ── profile row created OK")
+                cloud_fetch_succeeded = true  # New row, no data — safe to upload first sync
         elif result.data[0] is Dictionary:
             account_profile = Dictionary(result.data[0])
             account_role = str(account_profile.get("app_role", "player")).to_lower()
+            fetched_recovery_vials = int(account_profile.get("recovery_vials", 0))
             var raw_sd: Variant = account_profile.get("save_data")
-            print("CLOUD FETCH ── profile row loaded  role=%s  save_data type=%d  has_key=%s" % [
-                account_role, typeof(raw_sd), account_profile.has("save_data")])
+            print("CLOUD FETCH ── row loaded  role=%s  recovery_vials=%d  save_data type=%d  has_key=%s" % [
+                account_role, fetched_recovery_vials, typeof(raw_sd), str(account_profile.has("save_data"))])
+            row_loaded = true
+            cloud_fetch_succeeded = true
         else:
             push_error("CLOUD FETCH ── result.data[0] is not a Dictionary (type=%d)" % typeof(result.data[0]))
     else:
@@ -203,31 +217,32 @@ func _load_account_profile() -> void:
         get_node("/root/AccessManager").apply_authenticated_role(account_role, access_token, user_id)
 
     # ── 3. Extract save_data — handle Dictionary, JSON-String, and null ────────
-    # PostgREST returns JSONB columns as parsed objects. If the column type is
-    # TEXT or if there is a double-encode issue, it arrives as a String instead.
-    # We accept both forms here so neither silently loses the player's progress.
     var cloud_data: Dictionary = {}
-    var raw_save: Variant = account_profile.get("save_data")
-    if raw_save is Dictionary:
-        cloud_data = raw_save
-        print("CLOUD FETCH ── save_data loaded (Dictionary, %d sections)" % cloud_data.size())
-    elif raw_save is String and not (raw_save as String).is_empty():
-        var parsed: Variant = JSON.parse_string(raw_save)
-        if parsed is Dictionary:
-            cloud_data = parsed
-            print("CLOUD FETCH ── save_data decoded from JSON String (%d sections)" % cloud_data.size())
+    if row_loaded:
+        var raw_save: Variant = account_profile.get("save_data")
+        if raw_save is Dictionary:
+            cloud_data = raw_save
+            print("CLOUD FETCH ── save_data is Dictionary (%d sections)" % cloud_data.size())
+        elif raw_save is String and not (raw_save as String).is_empty():
+            var parsed: Variant = JSON.parse_string(raw_save)
+            if parsed is Dictionary:
+                cloud_data = parsed
+                print("CLOUD FETCH ── save_data decoded from JSON String (%d sections)" % cloud_data.size())
+            else:
+                push_error("CLOUD FETCH ── save_data is String but not valid JSON — raw (first 200): %s" % (raw_save as String).left(200))
+                cloud_fetch_succeeded = false  # Treat corrupt save_data as fetch failure
+        elif raw_save != null:
+            push_error("CLOUD FETCH ── save_data unexpected type=%d — treating as fetch failure" % typeof(raw_save))
+            cloud_fetch_succeeded = false
         else:
-            push_error("CLOUD FETCH ── save_data is String but not valid JSON (first 120): %s" % (raw_save as String).left(120))
-    elif raw_save != null:
-        push_error("CLOUD FETCH ── save_data has unexpected type=%d value=%s" % [typeof(raw_save), str(raw_save).left(120)])
-    else:
-        print("CLOUD FETCH ── save_data is null/missing — no cloud save to apply")
+            print("CLOUD FETCH ── save_data is null — player has no cloud save yet")
 
     if cloud_data.is_empty():
-        print("CLOUD FETCH ── emitting EMPTY cloud data (local save will be uploaded as first sync)")
+        print("CLOUD FETCH ── emitting EMPTY data  fetch_ok=%s" % str(cloud_fetch_succeeded))
     else:
-        print("CLOUD FETCH ── emitting cloud data (%d sections) — will merge into local save" % cloud_data.size())
-    cloud_save_loaded.emit(cloud_data)
+        print("CLOUD FETCH ── emitting cloud data (%d sections)  fetch_ok=%s  recovery_vials=%d" % [
+            cloud_data.size(), str(cloud_fetch_succeeded), fetched_recovery_vials])
+    cloud_save_loaded.emit(cloud_data, cloud_fetch_succeeded)
 
 func upload_save_data(data: Dictionary) -> void:
     if user_id.is_empty() or access_token.is_empty():
@@ -257,6 +272,20 @@ func clear_saved_session() -> void:
 func sign_out_account() -> void:
     clear_saved_session()
     account_authenticated.emit(false, "Signed out.")
+
+## Zero out the recovery_vials column after the client has applied the grant.
+## Called deferred so it does not block the login frame.
+func clear_recovery_vials() -> void:
+    if user_id.is_empty() or access_token.is_empty():
+        return
+    print("CLOUD ── clearing recovery_vials for user_id=%s" % user_id)
+    var result := await _request(HTTPClient.METHOD_PATCH,
+        "/rest/v1/player_profiles?user_id=eq.%s" % user_id.uri_encode(),
+        {"recovery_vials": 0}, true, "return=minimal")
+    if not result.ok:
+        push_warning("CLOUD ── clear_recovery_vials PATCH failed (HTTP %d): %s" % [result.status, result.text])
+    else:
+        print("CLOUD ── recovery_vials cleared OK")
 
 func _save_session() -> void:
     var file := FileAccess.open(SESSION_PATH, FileAccess.WRITE)
@@ -381,8 +410,10 @@ func _request(method: int, path: String, body: Variant = null, authenticated := 
     print("HTTPRequest completed: godot_result=", godot_result, " (", godot_result_name, ")  http_status=", status, "  body_len=", text.length())
     if godot_result != 0:
         print("HTTPRequest NON-SUCCESS: ", godot_result_name, " — body: ", text.left(300))
-        if status == 0:
-            account_authenticated.emit(false, "Network error: %s" % godot_result_name)
+        # Do NOT emit account_authenticated here — _request() is called for profile
+        # fetches, uploads, polls, and other non-auth operations. Emitting an auth
+        # failure signal from those would interfere with the login flow and cause
+        # double-signal bugs (auth success emitted after a spurious failure).
 
     var parsed: Variant = null
     if not text.is_empty():

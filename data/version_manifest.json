@@ -59,6 +59,19 @@
   "whats_new": [
     {
       "version": "0.9.1",
+      "title": "Cloud Save Safety Overhaul",
+      "items": [
+        "Upload gate: local saves can NEVER overwrite cloud data until the cloud profile is confirmed fetched and applied",
+        "Failed network fetch now locks the upload gate \u2014 no upload happens over unknown cloud state",
+        "Removed spurious account_authenticated(false) emission from general HTTP requests (fixes login-loop bug)",
+        "recovery_vials column now read and applied as dust after every login, then cleared on server",
+        "Full login-flow logging: every stage from button press to HOME SCREEN OPENED now prints with values",
+        "Corrupt or null save_data treated as fetch failure \u2014 upload blocked until resolved",
+        "First-sync logic preserved: new accounts still upload local progress correctly"
+      ]
+    },
+    {
+      "version": "0.9.1",
       "title": "Deck Builder Redesign",
       "items": [
         "Full three-column layout: Filters | Collection | Deck Panel",
