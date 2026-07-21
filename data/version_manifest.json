@@ -13,6 +13,9 @@
     {
       "category": "What's New in 0.9.3 (hotfix)",
       "items": [
+        "Guardian Angel now works: the first allied follower destroyed each battle is saved at 1 Defense instead of dying.",
+        "Standard evolution animations overhauled: full-bleed card art backdrop, white flash on impact, three staggered expanding rings, and a title that smashes in from scale.",
+        "Epic evolution animations overhauled: purple-tinted full-bleed backdrop, spinning beam crown, large art medallion slides in from the right, colored flash and four ring burst.",
         "Leader portraits fixed in Battle Prep — full painting now shown, not a zoomed close-up of scales/feathers.",
         "Leader portrait now visible in the active battle screen (was blank/missing).",
         "Amulets on the field now show their effect when you hover over them (tooltip was silently broken)."

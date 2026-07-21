@@ -2611,6 +2611,8 @@ func play_standard_evolution_animation(index: int, cost: int, player_side: bool)
     var card_view: CardView = find_card_view_for_board_index(area, index)
     if card_view == null:
         return
+    var board_std: Array = player_board if player_side else enemy_board
+    var follower_std: Dictionary = board_std[index]
 
     busy = true
     play_sfx("evolve_cinematic")
@@ -2618,52 +2620,96 @@ func play_standard_evolution_animation(index: int, cost: int, player_side: bool)
     var original_position: Vector2 = card_view.position
     var original_scale: Vector2 = card_view.scale
     var screen_center: Vector2 = Vector2(640.0, 360.0)
-    var centered_position: Vector2 = screen_center - card_view.size * 0.5
-    centered_position -= area.global_position
+    var centered_position: Vector2 = screen_center - card_view.size * 0.5 - area.global_position
+
+    var evo_col := Color(0.28, 0.82, 1.0) if cost < 3 else (Color(0.95, 0.72, 0.20) if cost == 3 else Color(0.85, 0.42, 1.0))
+
+    # Full-bleed backdrop of the card's own art — cinematic even at standard tier
+    var backdrop := TextureRect.new()
+    backdrop.texture = CardArt.resolve(follower_std)
+    backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    backdrop.modulate = Color(1.0, 1.0, 1.0, 0.0)
+    backdrop.z_index = 1085
+    add_child(backdrop)
 
     var dimmer := ColorRect.new()
     dimmer.color = Color(0.01, 0.02, 0.05, 0.0)
     dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    dimmer.z_index = 1100
+    dimmer.z_index = 1095
     add_child(dimmer)
 
-    var ring := ColorRect.new()
-    ring.position = screen_center - Vector2(115, 115)
-    ring.size = Vector2(230, 230)
-    ring.color = Color(0.28, 0.82, 1.0, 0.0) if cost < 3 else (Color(0.95, 0.72, 0.20, 0.0) if cost == 3 else Color(0.85, 0.42, 1.0, 0.0))
-    ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    ring.z_index = 1150
-    add_child(ring)
-
+    # Title — starts huge, smashes down to reading size
     var title := Label.new()
     title.text = "ASCEND" if cost < 3 else ("AWAKEN" if cost == 3 else "TRANSCEND")
     title.position = Vector2(390, 90)
     title.size = Vector2(500, 70)
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     title.add_theme_font_size_override("font_size", ui_font(46 if cost < 3 else (54 if cost == 3 else 48)))
-    title.add_theme_color_override("font_color", Color(0.55, 0.92, 1.0) if cost < 3 else (Color(1.0, 0.82, 0.28) if cost == 3 else Color(0.92, 0.62, 1.0)))
+    title.add_theme_color_override("font_color", evo_col)
     title.add_theme_color_override("font_shadow_color", Color.BLACK)
-    title.add_theme_constant_override("shadow_offset_x", 4)
-    title.add_theme_constant_override("shadow_offset_y", 4)
+    title.add_theme_constant_override("shadow_offset_x", 5)
+    title.add_theme_constant_override("shadow_offset_y", 5)
+    title.pivot_offset = Vector2(250, 35)
+    title.scale = Vector2(2.8, 2.8)
     title.modulate.a = 0.0
     title.z_index = 1300
     add_child(title)
 
+    # Phase 1 — backdrop + dimmer fade in, card slides to centre
     var rise := create_tween().set_parallel(true)
     rise.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    rise.tween_property(dimmer, "color:a", 0.78, 0.18)
-    rise.tween_property(card_view, "position", centered_position, 0.32)
-    rise.tween_property(card_view, "scale", Vector2(1.75, 1.75), 0.32)
-    rise.tween_property(card_view, "rotation", -0.035, 0.16)
-    rise.tween_property(title, "modulate:a", 1.0, 0.20)
-    rise.tween_property(ring, "color:a", 0.20, 0.22)
+    rise.tween_property(dimmer,   "color:a",              0.82,             0.22)
+    rise.tween_property(backdrop, "modulate:a",           0.22,             0.30)
+    rise.tween_property(card_view, "position",            centered_position, 0.34)
+    rise.tween_property(card_view, "scale",    Vector2(1.80, 1.80),         0.34)
     await rise.finished
 
-    var pulse := create_tween().set_loops(2)
-    pulse.tween_property(card_view, "scale", Vector2(1.92, 1.92), 0.10)
-    pulse.tween_property(card_view, "scale", Vector2(1.75, 1.75), 0.10)
+    # Phase 2 — white flash, title smash-in, three staggered expanding rings
+    var flash := ColorRect.new()
+    flash.color = Color(1.0, 1.0, 1.0, 0.0)
+    flash.z_index = 1450
+    flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    add_child(flash)
+    var ft := create_tween()
+    ft.tween_property(flash, "color:a", 0.90, 0.07)
+    ft.tween_property(flash, "color:a", 0.0,  0.22)
+    ft.finished.connect(flash.queue_free)
+
+    for ri in range(3):
+        var rsz := float(180 + ri * 90)
+        var er := ColorRect.new()
+        er.size = Vector2(rsz, rsz)
+        er.color = Color(evo_col.r, evo_col.g, evo_col.b, 0.55 - ri * 0.12)
+        er.position = screen_center - Vector2(rsz * 0.5, rsz * 0.5)
+        er.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        er.z_index = 1150
+        add_child(er)
+        var rt := create_tween().set_parallel(true)
+        rt.tween_property(er, "scale",     Vector2(2.2, 2.2), 0.42).set_delay(ri * 0.07)
+        rt.tween_property(er, "color:a",   0.0,               0.36).set_delay(ri * 0.07)
+        rt.finished.connect(er.queue_free)
+
+    # Title smashes in
+    var tt := create_tween().set_parallel(true)
+    tt.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tt.tween_property(title, "scale",      Vector2(1.0, 1.0), 0.24)
+    tt.tween_property(title, "modulate:a", 1.0,               0.18)
+    await tt.finished
+
+    # Card pulses three times
+    var pulse := create_tween().set_loops(3)
+    pulse.tween_property(card_view, "scale", Vector2(2.0, 2.0), 0.09)
+    pulse.tween_property(card_view, "scale", Vector2(1.80, 1.80), 0.07)
     await pulse.finished
+
+    spawn_sparkle_burst(screen_center, 18 if CardView.graphics_quality >= 1 else 6,
+        [evo_col, Color.WHITE, evo_col.lightened(0.4)], self, 95.0)
+    _spawn_impact_ring(screen_center, evo_col, mini(cost + 2, 5))
 
     var stat_text := Label.new()
     stat_text.text = "+1 ATK" if cost == 1 else ("+1 ATK  +2 DEF" if cost == 2 else ("+3 ATK  +3 DEF\nSPECIAL ABILITY" if cost == 3 else "+4 ATK  +4 DEF\nSPECIAL ABILITY"))
@@ -2671,7 +2717,7 @@ func play_standard_evolution_animation(index: int, cost: int, player_side: bool)
     stat_text.size = Vector2(500, 80)
     stat_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     stat_text.add_theme_font_size_override("font_size", ui_font(30 if cost < 3 else 34))
-    stat_text.add_theme_color_override("font_color", Color(0.70, 0.95, 1.0) if cost < 3 else (Color(1.0, 0.86, 0.35) if cost == 3 else Color(0.93, 0.68, 1.0)))
+    stat_text.add_theme_color_override("font_color", evo_col.lightened(0.3))
     stat_text.add_theme_color_override("font_shadow_color", Color.BLACK)
     stat_text.add_theme_constant_override("shadow_offset_x", 3)
     stat_text.add_theme_constant_override("shadow_offset_y", 3)
@@ -2679,31 +2725,24 @@ func play_standard_evolution_animation(index: int, cost: int, player_side: bool)
     stat_text.z_index = 1300
     add_child(stat_text)
 
-    var reveal := create_tween().set_parallel(true)
+    var reveal := create_tween()
     reveal.tween_property(stat_text, "modulate:a", 1.0, 0.18)
-    reveal.tween_property(ring, "scale", Vector2(1.35, 1.35), 0.30)
-    reveal.tween_property(ring, "color:a", 0.0, 0.30)
     await reveal.finished
-    var _evo_col_std := Color(0.28, 0.82, 1.0) if cost < 3 else (Color(0.95, 0.72, 0.20) if cost == 3 else Color(0.85, 0.42, 1.0))
-    spawn_sparkle_burst(screen_center, 10 if CardView.graphics_quality >= 1 else 4, [_evo_col_std, Color.WHITE], self, 82.0)
-    _spawn_impact_ring(screen_center, _evo_col_std, mini(cost + 1, 5))
-    await get_tree().create_timer(0.22).timeout
+    await get_tree().create_timer(0.28).timeout
 
     var return_tween := create_tween().set_parallel(true)
     return_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-    return_tween.tween_property(card_view, "position", original_position, 0.26)
-    return_tween.tween_property(card_view, "scale", original_scale, 0.26)
-    return_tween.tween_property(card_view, "rotation", 0.0, 0.20)
-    return_tween.tween_property(dimmer, "color:a", 0.0, 0.22)
-    return_tween.tween_property(title, "modulate:a", 0.0, 0.18)
-    return_tween.tween_property(stat_text, "modulate:a", 0.0, 0.18)
+    return_tween.tween_property(card_view, "position",   original_position, 0.26)
+    return_tween.tween_property(card_view, "scale",      original_scale,    0.26)
+    return_tween.tween_property(dimmer,    "color:a",    0.0,               0.22)
+    return_tween.tween_property(backdrop,  "modulate:a", 0.0,               0.20)
+    return_tween.tween_property(title,     "modulate:a", 0.0,               0.18)
+    return_tween.tween_property(stat_text, "modulate:a", 0.0,               0.18)
     await return_tween.finished
 
     card_view.z_index = 0
-    dimmer.queue_free()
-    ring.queue_free()
-    title.queue_free()
-    stat_text.queue_free()
+    for n in [dimmer, backdrop, title, stat_text]:
+        if is_instance_valid(n): n.queue_free()
     busy = false
 
 func play_epic_evolution_animation(index: int, cost: int, player_side: bool) -> void:
@@ -2724,96 +2763,157 @@ func play_epic_evolution_animation(index: int, cost: int, player_side: bool) -> 
     var screen_center := Vector2(640.0, 360.0)
     var centered_position: Vector2 = screen_center - card_view.size * 0.5 - area.global_position
 
+    # Full-bleed backdrop — card art fills the screen, tinted purple, semi-transparent
+    var backdrop := TextureRect.new()
+    backdrop.texture = CardArt.resolve(follower)
+    backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    backdrop.modulate = Color(0.72, 0.45, 1.0, 0.0)
+    backdrop.z_index = 1082
+    add_child(backdrop)
+
     var dimmer := ColorRect.new()
-    dimmer.color = Color(0.02, 0.01, 0.05, 0.0)
+    dimmer.color = Color(0.02, 0.01, 0.06, 0.0)
     dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    dimmer.z_index = 1100
+    dimmer.z_index = 1092
     add_child(dimmer)
 
-    var ring := ColorRect.new()
-    ring.position = screen_center - Vector2(130, 130)
-    ring.size = Vector2(260, 260)
-    ring.color = Color(0.72, 0.30, 1.0, 0.0)
-    ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    ring.z_index = 1150
-    add_child(ring)
+    # Spinning beam crown behind the card
+    var beam_root := Control.new()
+    beam_root.position = screen_center
+    beam_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    beam_root.z_index = 1115
+    beam_root.modulate.a = 0.0
+    add_child(beam_root)
+    for i in range(12):
+        var beam := ColorRect.new()
+        beam.color = Color(0.80, 0.42, 1.0, 0.60)
+        beam.size = Vector2(4, 220)
+        beam.position = Vector2(-2, -110)
+        beam.pivot_offset = Vector2(2, 110)
+        beam.rotation = TAU * float(i) / 12.0
+        beam.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        beam_root.add_child(beam)
+    var spin := create_tween().set_loops().bind_node(beam_root)
+    spin.tween_property(beam_root, "rotation", TAU, 5.0).set_trans(Tween.TRANS_LINEAR)
 
-    var medallion := build_art_medallion(CardArt.resolve(follower), screen_center + Vector2(160, -40), Vector2(140, 196), Color(0.78, 0.38, 1.0))
-    medallion.scale = Vector2(0.4, 0.4)
+    # Large art medallion on the right — starts off-screen, slides in
+    var medallion := build_art_medallion(CardArt.resolve(follower),
+        screen_center + Vector2(340, -60), Vector2(200, 280), Color(0.82, 0.48, 1.0), 18)
+    medallion.modulate.a = 0.0
+    medallion.scale = Vector2(0.5, 0.5)
     add_child(medallion)
 
     var title := Label.new()
     title.text = "EPIC EVOLUTION"
-    title.position = Vector2(340, 88)
-    title.size = Vector2(600, 66)
+    title.position = Vector2(290, 82)
+    title.size = Vector2(700, 70)
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", ui_font(48))
-    title.add_theme_color_override("font_color", Color(0.86, 0.62, 1.0))
-    title.add_theme_color_override("font_shadow_color", Color.BLACK)
-    title.add_theme_constant_override("shadow_offset_x", 4)
-    title.add_theme_constant_override("shadow_offset_y", 4)
+    title.add_theme_font_size_override("font_size", ui_font(52))
+    title.add_theme_color_override("font_color", Color(0.90, 0.65, 1.0))
+    title.add_theme_color_override("font_shadow_color", Color(0.3, 0.0, 0.6, 0.9))
+    title.add_theme_constant_override("shadow_offset_x", 5)
+    title.add_theme_constant_override("shadow_offset_y", 5)
+    title.pivot_offset = Vector2(350, 35)
+    title.scale = Vector2(2.5, 2.5)
     title.modulate.a = 0.0
     title.z_index = 1300
     add_child(title)
 
+    # Phase 1 — everything rises simultaneously
     var rise := create_tween().set_parallel(true)
     rise.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    rise.tween_property(dimmer, "color:a", 0.82, 0.20)
-    rise.tween_property(card_view, "position", centered_position, 0.34)
-    rise.tween_property(card_view, "scale", Vector2(1.8, 1.8), 0.34)
-    rise.tween_property(title, "modulate:a", 1.0, 0.22)
-    rise.tween_property(ring, "color:a", 0.24, 0.24)
-    rise.tween_property(medallion, "modulate:a", 1.0, 0.30).set_delay(0.10)
-    rise.tween_property(medallion, "scale", Vector2(1.0, 1.0), 0.30).set_delay(0.10)
+    rise.tween_property(dimmer,    "color:a",              0.86,            0.22)
+    rise.tween_property(backdrop,  "modulate:a",           0.28,            0.35)
+    rise.tween_property(beam_root, "modulate:a",           0.80,            0.40)
+    rise.tween_property(card_view, "position",             centered_position, 0.36)
+    rise.tween_property(card_view, "scale",    Vector2(1.85, 1.85),         0.36)
+    rise.tween_property(medallion, "position", screen_center + Vector2(150, -60), 0.40).set_delay(0.10)
+    rise.tween_property(medallion, "modulate:a", 1.0,                       0.32).set_delay(0.10)
+    rise.tween_property(medallion, "scale",    Vector2(1.0, 1.0),           0.32).set_delay(0.10)
     await rise.finished
 
-    var pulse := create_tween().set_loops(2)
-    pulse.tween_property(card_view, "scale", Vector2(1.98, 1.98), 0.10)
-    pulse.tween_property(card_view, "scale", Vector2(1.8, 1.8), 0.10)
+    # Phase 2 — flash, title smash, staggered rings
+    var flash := ColorRect.new()
+    flash.color = Color(0.85, 0.60, 1.0, 0.0)
+    flash.z_index = 1450
+    flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    add_child(flash)
+    var ft := create_tween()
+    ft.tween_property(flash, "color:a", 0.80, 0.07)
+    ft.tween_property(flash, "color:a", 0.0,  0.22)
+    ft.finished.connect(flash.queue_free)
+
+    for ri in range(4):
+        var rsz := float(160 + ri * 80)
+        var er := ColorRect.new()
+        er.size = Vector2(rsz, rsz)
+        er.color = Color(0.78, 0.38, 1.0, 0.60 - ri * 0.10)
+        er.position = screen_center - Vector2(rsz * 0.5, rsz * 0.5)
+        er.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        er.z_index = 1150
+        add_child(er)
+        var rt := create_tween().set_parallel(true)
+        rt.tween_property(er, "scale",   Vector2(2.4, 2.4), 0.48).set_delay(ri * 0.06)
+        rt.tween_property(er, "color:a", 0.0,               0.40).set_delay(ri * 0.06)
+        rt.finished.connect(er.queue_free)
+
+    var tt := create_tween().set_parallel(true)
+    tt.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tt.tween_property(title, "scale",      Vector2(1.0, 1.0), 0.26)
+    tt.tween_property(title, "modulate:a", 1.0,               0.20)
+    await tt.finished
+
+    var pulse := create_tween().set_loops(3)
+    pulse.tween_property(card_view, "scale", Vector2(2.05, 2.05), 0.09)
+    pulse.tween_property(card_view, "scale", Vector2(1.85, 1.85), 0.08)
     await pulse.finished
-    spawn_sparkle_burst(screen_center, 16, [Color(0.86, 0.62, 1.0), Color(1.0, 1.0, 1.0), Color(0.62, 0.82, 1.0)], self)
-    _spawn_impact_ring(screen_center, Color(0.78, 0.48, 1.0), 4)
+
+    spawn_sparkle_burst(screen_center, 22 if CardView.graphics_quality >= 1 else 8,
+        [Color(0.90, 0.65, 1.0), Color(1.0, 1.0, 1.0), Color(0.62, 0.82, 1.0)], self, 105.0)
+    _spawn_impact_ring(screen_center, Color(0.82, 0.48, 1.0), 5)
 
     var attack_gain: int = 1 if cost < 3 else (3 if cost == 3 else 4)
     var defense_gain: int = 0 if cost == 1 else (2 if cost == 2 else (3 if cost == 3 else 4))
     var stat_text := Label.new()
     stat_text.text = "+%d ATK  +%d DEF" % [attack_gain, defense_gain]
-    stat_text.position = Vector2(340, 568)
-    stat_text.size = Vector2(600, 64)
+    stat_text.position = Vector2(290, 570)
+    stat_text.size = Vector2(700, 68)
     stat_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    stat_text.add_theme_font_size_override("font_size", ui_font(32))
-    stat_text.add_theme_color_override("font_color", Color(0.90, 0.72, 1.0))
-    stat_text.add_theme_color_override("font_shadow_color", Color.BLACK)
+    stat_text.add_theme_font_size_override("font_size", ui_font(34))
+    stat_text.add_theme_color_override("font_color", Color(0.92, 0.75, 1.0))
+    stat_text.add_theme_color_override("font_shadow_color", Color(0.3, 0.0, 0.6, 0.9))
     stat_text.add_theme_constant_override("shadow_offset_x", 3)
     stat_text.add_theme_constant_override("shadow_offset_y", 3)
     stat_text.modulate.a = 0.0
     stat_text.z_index = 1300
     add_child(stat_text)
 
-    var reveal := create_tween().set_parallel(true)
+    var reveal := create_tween()
     reveal.tween_property(stat_text, "modulate:a", 1.0, 0.18)
-    reveal.tween_property(ring, "scale", Vector2(1.4, 1.4), 0.32)
-    reveal.tween_property(ring, "color:a", 0.0, 0.32)
     await reveal.finished
-    await get_tree().create_timer(0.26).timeout
+    await get_tree().create_timer(0.30).timeout
 
+    spin.kill()
     var return_tween := create_tween().set_parallel(true)
     return_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-    return_tween.tween_property(card_view, "position", original_position, 0.28)
-    return_tween.tween_property(card_view, "scale", original_scale, 0.28)
-    return_tween.tween_property(dimmer, "color:a", 0.0, 0.24)
-    return_tween.tween_property(title, "modulate:a", 0.0, 0.20)
-    return_tween.tween_property(stat_text, "modulate:a", 0.0, 0.20)
-    return_tween.tween_property(medallion, "modulate:a", 0.0, 0.20)
+    return_tween.tween_property(card_view, "position",   original_position, 0.28)
+    return_tween.tween_property(card_view, "scale",      original_scale,    0.28)
+    return_tween.tween_property(dimmer,    "color:a",    0.0,               0.24)
+    return_tween.tween_property(backdrop,  "modulate:a", 0.0,               0.22)
+    return_tween.tween_property(beam_root, "modulate:a", 0.0,               0.22)
+    return_tween.tween_property(medallion, "modulate:a", 0.0,               0.22)
+    return_tween.tween_property(title,     "modulate:a", 0.0,               0.20)
+    return_tween.tween_property(stat_text, "modulate:a", 0.0,               0.20)
     await return_tween.finished
 
     card_view.z_index = 0
-    dimmer.queue_free()
-    ring.queue_free()
-    medallion.queue_free()
-    title.queue_free()
-    stat_text.queue_free()
+    for n in [dimmer, backdrop, beam_root, medallion, title, stat_text]:
+        if is_instance_valid(n): n.queue_free()
     busy = false
 
 func play_legendary_evolution_animation(index: int, cost: int, player_side: bool) -> void:
@@ -5771,6 +5871,23 @@ func destroy_unit(board: Array, index: int, player_side: bool, specifically_targ
         var protected_area: Control = player_board_area if player_side else enemy_board_area
         await show_vfx("SPONSOR SAVES SPONSEE", protected_area.global_position + Vector2(210 + index * 85, 45), Color(1.0, 0.86, 0.38))
         return
+    # Guardian Angel (guard_protect) — the first OTHER allied follower destroyed
+    # each game is saved at 1 defense. The Guardian cannot save itself.
+    if not bool(dead.get("is_amulet", false)):
+        for gi in range(board.size()):
+            if gi == index:
+                continue  # Guardian Angel cannot save itself
+            var guardian: Dictionary = board[gi]
+            if str(guardian.get("ability", "")) == "guard_protect" and not bool(guardian.get("guardian_used", false)):
+                board[gi]["guardian_used"] = true
+                dead["health"] = 1
+                dead["max_health"] = maxi(int(dead.get("max_health", 1)), 1)
+                board[index] = dead
+                var ga_area: Control = player_board_area if player_side else enemy_board_area
+                show_vfx("GUARDIAN ANGEL SAVES ALLY!", ga_area.global_position + Vector2(90 + index * 145, 20), Color(0.55, 0.90, 1.0))
+                await get_tree().create_timer(0.45).timeout
+                refresh_ui()
+                return
     if bool(dead.get("is_sponsee", false)):
         var path := selected_class if player_side else enemy_class
         var heal_amount := 5 if path == "Hope" else (3 if path == "Serenity" else (2 if path == "Courage" else 1))
