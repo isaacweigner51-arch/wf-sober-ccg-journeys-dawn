@@ -237,10 +237,15 @@ func _play_idle() -> void:
 func _schedule_blink() -> void:
 	if _layer_head == null or _head_blink_tex == null or _current_state != State.IDLE:
 		return
+	# Node may not be in the tree yet (setup() called before add_child); wait for it.
+	if not is_inside_tree():
+		await tree_entered
+	if _layer_head == null or _current_state != State.IDLE:
+		return
 	await get_tree().create_timer(randf_range(3.0, 5.5)).timeout
 	if _current_state != State.IDLE or _layer_head == null:
 		return
-	# Snap to blink frame, wait one frame, snap back
+	# Snap to blink frame, hold briefly, snap back
 	_layer_head.texture = _head_blink_tex
 	await get_tree().create_timer(0.10).timeout
 	if _layer_head and _head_open_tex:
