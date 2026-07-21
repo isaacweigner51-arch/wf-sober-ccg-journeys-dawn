@@ -70,7 +70,10 @@ func setup(class_name_str: String, size_vec: Vector2) -> void:
 	has_layered_art = ResourceLoader.exists(body_path)
 
 	_setup_nodes(size_vec)
-	set_state(State.IDLE)
+	# Defer idle start so this always runs after add_child() places us in the tree.
+	# Calling set_state → _play_idle → _schedule_blink while detached makes
+	# get_tree() / create_timer() crash.
+	call_deferred("set_state", State.IDLE)
 
 func _setup_nodes(sz: Vector2) -> void:
 	for ch in get_children():
