@@ -152,9 +152,13 @@ func _setup_nodes(sz: Vector2) -> void:
 		_art.clip_contents = false
 		_art.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 		_art.texture          = _resolve_flat_texture()
-		_art.position         = Vector2.ZERO
-		_art.custom_minimum_size = sz
-		_art.size             = sz
+		# Add 12px extra height so the ±5px breathing tween never reveals a
+		# blank strip at the bottom of the clipped frame.  Position starts at
+		# y=-6 (vertically centred in the extra buffer) so the art stays flush
+		# against the top of the viewport at rest.
+		_art.position         = Vector2(0.0, -6.0)
+		_art.custom_minimum_size = Vector2(sz.x, sz.y + 12)
+		_art.size             = Vector2(sz.x, sz.y + 12)
 		_art.pivot_offset     = sz * 0.5
 		add_child(_art)
 

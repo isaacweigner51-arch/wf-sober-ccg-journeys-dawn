@@ -1733,30 +1733,24 @@ func show_home() -> void:
         var cc := class_color(c)
         var is_active := (c == active_class)
 
-        # Outer card — clickable, clipped so portrait doesn't overflow
-        var card := Button.new()
-        card.position = Vector2(12 + i * 249, 10)
-        card.size = Vector2(236, 88)
-        card.clip_contents = true
+        # Card container — Panel for visual + clipping, transparent Button
+        # overlay on top for click handling. Using Panel keeps clip_contents
+        # rectangular so portrait art doesn't bleed past the border edges.
+        var card_panel := Panel.new()
+        card_panel.position = Vector2(12 + i * 249, 10)
+        card_panel.size = Vector2(236, 88)
+        card_panel.clip_contents = true
         var card_bg := StyleBoxFlat.new()
-        card_bg.bg_color = cc.darkened(0.60) if is_active else Color(0.02, 0.03, 0.06)
+        card_bg.bg_color = cc.darkened(0.55) if is_active else Color(0.02, 0.03, 0.07)
         card_bg.border_color = cc
         card_bg.set_border_width_all(4 if is_active else 1)
-        card_bg.set_corner_radius_all(12)
-        card_bg.shadow_color = Color(cc, 0.55 if is_active else 0.0)
-        card_bg.shadow_size = 14 if is_active else 0
-        card.add_theme_stylebox_override("normal",  card_bg)
-        card.add_theme_stylebox_override("hover",   card_bg)
-        card.add_theme_stylebox_override("pressed", card_bg)
-        card.pressed.connect(func():
-            selected_class = c
-            selected_deck_class = c
-            save_profile()
-            show_home()
-        )
-        main.add_child(card)
+        card_bg.set_corner_radius_all(0)
+        card_bg.shadow_color = Color(cc, 0.50 if is_active else 0.0)
+        card_bg.shadow_size  = 12 if is_active else 0
+        card_panel.add_theme_stylebox_override("panel", card_bg)
+        main.add_child(card_panel)
 
-        # Leader portrait thumbnail — top portion of the art fills the card
+        # Portrait thumbnail fills top 66px of the card
         var thumb := TextureRect.new()
         thumb.texture = current_leader_texture(c)
         thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -1764,18 +1758,17 @@ func show_home() -> void:
         thumb.position = Vector2(0, 0)
         thumb.size = Vector2(236, 66)
         thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        thumb.clip_contents = true
-        card.add_child(thumb)
+        card_panel.add_child(thumb)
 
         # Bottom nameplate strip
         var nameplate := ColorRect.new()
-        nameplate.color = cc.darkened(0.45) if is_active else Color(0.04, 0.06, 0.12, 0.96)
+        nameplate.color = cc.darkened(0.42) if is_active else Color(0.04, 0.06, 0.12, 0.96)
         nameplate.position = Vector2(0, 66); nameplate.size = Vector2(236, 22)
         nameplate.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        card.add_child(nameplate)
+        card_panel.add_child(nameplate)
 
-        var name_lbl := centered_label(c.to_upper(), Vector2(0, 66), Vector2(236, 22), 13, card)
-        name_lbl.add_theme_color_override("font_color", cc if is_active else Color(0.88, 0.90, 0.98))
+        var name_lbl := centered_label(c.to_upper(), Vector2(0, 66), Vector2(236, 22), 13, card_panel)
+        name_lbl.add_theme_color_override("font_color", cc.lightened(0.3) if is_active else Color(0.88, 0.90, 0.98))
         name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
         # Active indicator line along the top
@@ -1783,7 +1776,22 @@ func show_home() -> void:
             var ind := ColorRect.new(); ind.color = cc
             ind.position = Vector2.ZERO; ind.size = Vector2(236, 4)
             ind.mouse_filter = Control.MOUSE_FILTER_IGNORE
-            card.add_child(ind)
+            card_panel.add_child(ind)
+
+        # Transparent full-card Button on top for input — styled invisible
+        var card := Button.new()
+        card.position = Vector2.ZERO; card.size = Vector2(236, 88)
+        var invisible := StyleBoxEmpty.new()
+        card.add_theme_stylebox_override("normal",  invisible)
+        card.add_theme_stylebox_override("hover",   invisible)
+        card.add_theme_stylebox_override("pressed", invisible)
+        card.pressed.connect(func():
+            selected_class = c
+            selected_deck_class = c
+            save_profile()
+            show_home()
+        )
+        card_panel.add_child(card)
 
     # Hero showcase — full portrait fill with dramatic glow border.
     var showcase := Panel.new()
@@ -1919,7 +1927,7 @@ func show_home() -> void:
     var reflection := label("Progress begins with one honest choice. Keep moving forward.", Vector2(20, 196), Vector2(362, 72), 14, right)
     reflection.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     reflection.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    var enter := button("⚔  ENTER BATTLE", Vector2(20, 316), Vector2(362, 72), start_battle, right)
+    var enter := button("ENTER BATTLE", Vector2(20, 316), Vector2(362, 72), start_battle, right)
     enter.add_theme_font_size_override("font_size", ui_font_size(24))
     enter.add_theme_stylebox_override("normal",  solid_style(GOLD_COLOR, 14))
     enter.add_theme_stylebox_override("hover",   solid_style(GOLD_COLOR.lightened(0.2), 14))
