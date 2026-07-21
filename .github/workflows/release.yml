@@ -1,0 +1,54 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    name: Export Windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Install Godot 4.4.1
+        run: |
+          wget -q "https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo mv /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 /usr/local/bin/godot4
+          sudo chmod +x /usr/local/bin/godot4
+
+      - name: Install export templates
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates/4.4.1.stable
+          wget -q "https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz" -O /tmp/templates.tpz
+          cd /tmp && unzip -q templates.tpz
+          cp /tmp/templates/windows_release_x86_64.exe ~/.local/share/godot/export_templates/4.4.1.stable/
+          cp /tmp/templates/windows_debug_x86_64.exe   ~/.local/share/godot/export_templates/4.4.1.stable/
+
+      - name: Read version
+        id: version
+        run: |
+          VER=$(python3 -c "import json; print(json.load(open('data/version_manifest.json'))['version'])")
+          echo "version=$VER" >> $GITHUB_OUTPUT
+
+      - name: Export Windows
+        run: |
+          mkdir -p build
+          godot4 --headless --path . --export-release "Windows Desktop" build/WalkingFreeCCG-v${{ steps.version.outputs.version }}.exe 2>&1
+
+      - name: Zip Windows build
+        run: |
+          cd build
+          zip WalkingFreeCCG-v${{ steps.version.outputs.version }}-Windows.zip \
+              WalkingFreeCCG-v${{ steps.version.outputs.version }}.exe \
+              WalkingFreeCCG-v${{ steps.version.outputs.version }}.pck
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/WalkingFreeCCG-v${{ steps.version.outputs.version }}-Windows.zip
+          fail_on_unmatched_files: true
