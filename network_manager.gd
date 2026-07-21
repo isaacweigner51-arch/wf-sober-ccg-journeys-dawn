@@ -33,6 +33,8 @@ var account_profile: Dictionary = {}
 var cloud_fetch_succeeded := false
 # Vials (dust) granted via the Supabase recovery_vials column; applied after login.
 var fetched_recovery_vials: int = 0
+# Packs granted via the Supabase pending_packs column; applied after login, cleared once.
+var fetched_pending_packs: int = 0
 const SESSION_PATH := "user://supabase_session.json"
 var player_class := "Hope"
 var player_deck_mode := "custom"
@@ -166,6 +168,7 @@ func _load_account_profile() -> void:
     account_profile = {}
     cloud_fetch_succeeded = false
     fetched_recovery_vials = 0
+    fetched_pending_packs = 0
     if user_id.is_empty() or access_token.is_empty():
         push_warning("CLOUD FETCH ── no user_id/token — skipping profile load")
         account_role_loaded.emit(account_role, account_profile)
@@ -174,7 +177,7 @@ func _load_account_profile() -> void:
 
     # ── 1. Fetch existing profile row ─────────────────────────────────────────
     print("CLOUD FETCH ── START  user_id=%s" % user_id)
-    var path := "/rest/v1/player_profiles?select=user_id,display_name,app_role,recovery_vials,save_data&user_id=eq.%s&limit=1" % user_id.uri_encode()
+    var path := "/rest/v1/player_profiles?select=user_id,display_name,app_role,recovery_vials,pending_packs,save_data&user_id=eq.%s&limit=1" % user_id.uri_encode()
     var result := await _request(HTTPClient.METHOD_GET, path, null, true)
     print("CLOUD FETCH ── HTTP %d  ok=%s  data_type=%d  body_len=%d" % [
         result.status, str(result.ok), typeof(result.data), result.text.length()])
@@ -201,9 +204,10 @@ func _load_account_profile() -> void:
             account_profile = Dictionary(result.data[0])
             account_role = str(account_profile.get("app_role", "player")).to_lower()
             fetched_recovery_vials = int(account_profile.get("recovery_vials", 0))
+            fetched_pending_packs  = int(account_profile.get("pending_packs",  0))
             var raw_sd: Variant = account_profile.get("save_data")
-            print("CLOUD FETCH ── row loaded  role=%s  recovery_vials=%d  save_data type=%d  has_key=%s" % [
-                account_role, fetched_recovery_vials, typeof(raw_sd), str(account_profile.has("save_data"))])
+            print("CLOUD FETCH ── row loaded  role=%s  recovery_vials=%d  pending_packs=%d  save_data type=%d  has_key=%s" % [
+                account_role, fetched_recovery_vials, fetched_pending_packs, typeof(raw_sd), str(account_profile.has("save_data"))])
             row_loaded = true
             cloud_fetch_succeeded = true
         else:
@@ -286,6 +290,20 @@ func clear_recovery_vials() -> void:
         push_warning("CLOUD ── clear_recovery_vials PATCH failed (HTTP %d): %s" % [result.status, result.text])
     else:
         print("CLOUD ── recovery_vials cleared OK")
+
+## Zero out the pending_packs column after the client has applied the grant.
+## Called deferred so it does not block the login frame.
+func clear_pending_packs() -> void:
+    if user_id.is_empty() or access_token.is_empty():
+        return
+    print("CLOUD ── clearing pending_packs for user_id=%s" % user_id)
+    var result := await _request(HTTPClient.METHOD_PATCH,
+        "/rest/v1/player_profiles?user_id=eq.%s" % user_id.uri_encode(),
+        {"pending_packs": 0}, true, "return=minimal")
+    if not result.ok:
+        push_warning("CLOUD ── clear_pending_packs PATCH failed (HTTP %d): %s" % [result.status, result.text])
+    else:
+        print("CLOUD ── pending_packs cleared OK")
 
 func _save_session() -> void:
     var file := FileAccess.open(SESSION_PATH, FileAccess.WRITE)

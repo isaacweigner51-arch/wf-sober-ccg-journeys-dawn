@@ -1108,6 +1108,8 @@ func load_profile() -> void:
             academy_complete = true
             academy_reward_claimed = true
         migrate_sponsor_out_of_prebuilt_deck()
+    print("LOAD_PROFILE ── DISK READ : gold=%d  vials=%d  packs=%d  cards=%d" % [
+        gold_balance, dust_balance, pack_inventory, collection_owned.size()])
 
 func migrate_sponsor_out_of_prebuilt_deck() -> void:
     # v0.6.3 migration: Sponsor used to be inserted into every starter deck.
@@ -1194,6 +1196,8 @@ func _queue_cloud_upload() -> void:
         push_error("CLOUD UPLOAD ── BLOCKED: cloud profile was not safely fetched and applied — refusing to overwrite cloud data with local state")
         return
     var outgoing := _serialize_profile_for_cloud()
+    var _out_packs: int = int(((outgoing.get("economy", {}) as Dictionary).get("packs", -1)))
+    print("CLOUD UPLOAD ── OUTGOING PACKS = %d  (in-memory pack_inventory=%d)" % [_out_packs, pack_inventory])
     if not _upload_integrity_ok(outgoing):
         push_error("CLOUD UPLOAD ── BLOCKED: integrity check failed — outgoing save would regress cloud progress")
         return
@@ -1478,8 +1482,9 @@ func _on_cloud_save_loaded(data: Dictionary, fetch_ok: bool) -> void:
     print("CLOUD SYNC ── LOCAL BEFORE MERGE : gold=%d vials=%d packs=%d cards=%d trials=%d challenge=%d academy=%s" % [
         gold_balance, dust_balance, pack_inventory, collection_owned.size(),
         trials_cleared.size(), recovery_challenge_progress.size(), str(academy_complete)])
-    print("CLOUD SYNC ── FETCH RESULT       : fetch_ok=%s  sections=%d  recovery_vials_granted=%d" % [
-        str(fetch_ok), data.size(), NetworkManager.fetched_recovery_vials])
+    var _db_packs: int = ((data.get("economy", {}) as Dictionary).get("packs", -1)) if data is Dictionary else -1
+    print("CLOUD SYNC ── FETCH RESULT       : fetch_ok=%s  sections=%d  db_packs=%d  recovery_vials=%d  pending_packs=%d" % [
+        str(fetch_ok), data.size(), _db_packs, NetworkManager.fetched_recovery_vials, NetworkManager.fetched_pending_packs])
 
     # ── Guard: never upload when the network fetch itself failed ──────────────
     if not fetch_ok:
@@ -1504,8 +1509,13 @@ func _on_cloud_save_loaded(data: Dictionary, fetch_ok: bool) -> void:
             print("CLOUD SYNC ── ACTION : local save is empty — NOT uploading (protects any future cloud data)")
         else:
             print("CLOUD SYNC ── ACTION : guest session — skipping upload")
-        # Apply any admin-granted recovery_vials even on an empty save
-        _apply_granted_vials()
+        # Apply any admin-granted column rewards even on a fresh/empty save.
+        # If rewards were granted, we know the server state is empty — safe to upload.
+        var had_grants := NetworkManager.fetched_recovery_vials > 0 or NetworkManager.fetched_pending_packs > 0
+        if had_grants and not NetworkManager.user_id.is_empty():
+            _cloud_safe_to_upload = true
+            print("CLOUD SYNC ── UPLOAD GATE unlocked by pending column rewards on empty save")
+        _apply_pending_column_rewards()
         return
 
     # ── Remote save found — store snapshot for integrity checks, then merge ─────
@@ -1523,11 +1533,14 @@ func _on_cloud_save_loaded(data: Dictionary, fetch_ok: bool) -> void:
     load_profile()  # Re-read merged result from disk into memory.
     print("CLOUD SYNC ── AFTER MERGE : gold=%d vials=%d packs=%d cards=%d trials=%d" % [
         gold_balance, dust_balance, pack_inventory, collection_owned.size(), trials_cleared.size()])
+    print("CLOUD SYNC ── IN-MEMORY packs after merge = %d" % pack_inventory)
 
-    # Apply any admin-granted recovery_vials on top of the merged state.
-    _apply_granted_vials()
-
+    # Unlock upload gate BEFORE applying rewards so the save inside
+    # _apply_pending_column_rewards() can upload with the correct pack count.
     _cloud_safe_to_upload = true
+    # Apply any admin-granted column rewards on top of the merged state.
+    _apply_pending_column_rewards()
+
     _queue_cloud_upload.call_deferred()
     print("CLOUD SYNC ── re-uploading merged + reward-applied state to Supabase")
 
@@ -1536,21 +1549,39 @@ func _on_cloud_save_loaded(data: Dictionary, fetch_ok: bool) -> void:
     if not launch_screen_active:
         show_home()
 
-## Apply recovery_vials granted by admins via the Supabase player_profiles row.
-## Called after every cloud profile apply. Skips gracefully if already applied.
-func _apply_granted_vials() -> void:
-    var granted := NetworkManager.fetched_recovery_vials
-    if granted <= 0:
+## Apply admin-granted column rewards (recovery_vials + pending_packs) from the
+## Supabase player_profiles row. Called after every cloud profile apply/merge.
+## Each field is zeroed on the server immediately after being applied so it is
+## claimed exactly once, even if the client crashes before a full cloud upload.
+func _apply_pending_column_rewards() -> void:
+    var granted_vials := NetworkManager.fetched_recovery_vials
+    var granted_packs := NetworkManager.fetched_pending_packs
+    if granted_vials <= 0 and granted_packs <= 0:
         return
-    print("CLOUD SYNC ── PENDING REWARD : recovery_vials=%d  current_vials=%d" % [granted, dust_balance])
-    # Add the granted amount and clear it on the server so it is only applied once.
-    dust_balance += granted
-    NetworkManager.fetched_recovery_vials = 0  # Prevent double-apply this session
-    save_profile()  # Persists locally and triggers upload (which is now safe).
-    # Zero out the column so the next login doesn't re-apply the same grant.
+
+    print("CLOUD SYNC ── PENDING COLUMN REWARDS : vials=%d  packs=%d  current_vials=%d  current_packs=%d" % [
+        granted_vials, granted_packs, dust_balance, pack_inventory])
+
+    # Apply in-memory
+    if granted_vials > 0:
+        dust_balance  += granted_vials
+        NetworkManager.fetched_recovery_vials = 0  # Prevent double-apply this session
+    if granted_packs > 0:
+        pack_inventory += granted_packs
+        NetworkManager.fetched_pending_packs  = 0  # Prevent double-apply this session
+
+    print("CLOUD SYNC ── IN-MEMORY AFTER REWARD : vials=%d  packs=%d" % [dust_balance, pack_inventory])
+
+    # Persist locally and upload (upload gate must be true before this call).
+    save_profile()
+    print("CLOUD SYNC ── REWARD APPLIED AND SAVED : vials=%d  packs=%d" % [dust_balance, pack_inventory])
+
+    # Zero the columns on the server so the next login doesn't re-apply.
     if not NetworkManager.user_id.is_empty() and not NetworkManager.access_token.is_empty():
-        NetworkManager.clear_recovery_vials.call_deferred()
-    print("CLOUD SYNC ── REWARD APPLIED : new vials=%d" % dust_balance)
+        if granted_vials > 0:
+            NetworkManager.clear_recovery_vials.call_deferred()
+        if granted_packs > 0:
+            NetworkManager.clear_pending_packs.call_deferred()
 
 func clear_screen() -> void:
     for child in get_children(): child.queue_free()
@@ -1676,6 +1707,7 @@ func show_home() -> void:
     top.add_child(avatar)
     label("WALKING FREE CCG", Vector2(70, 8), Vector2(330, 28), 21, top).add_theme_color_override("font_color", GOLD_COLOR)
     label("Journey's Dawn  •  " + active_class + " Leader", Vector2(70, 35), Vector2(390, 21), 13, top)
+    print("SHOW_HOME ── DISPLAYED : gold=%d  vials=%d  packs=%d" % [gold_balance, dust_balance, pack_inventory])
     var wallet := label("GOLD %d     VIALS %d     PACKS %d" % [gold_balance, dust_balance, pack_inventory], Vector2(750, 17), Vector2(375, 30), 16, top)
     wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     button("SUPPORT", Vector2(500, 10), Vector2(110, 44), show_contact_support, top)
