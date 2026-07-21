@@ -7113,8 +7113,21 @@ func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
             tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
             holder.add_child(tag)
 
-            var b := Button.new(); b.flat = true; b.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); b.focus_mode = Control.FOCUS_NONE; b.tooltip_text = str(amulets[slot].get("display_text", ""))
-            b.disabled = true
+            # Invisible hover target — lets mouse enter so tooltip fires.
+            # Must NOT be disabled (disabled nodes eat no mouse events in Godot 4).
+            var b := Button.new()
+            b.flat = true
+            b.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+            b.focus_mode = Control.FOCUS_NONE
+            b.mouse_filter = Control.MOUSE_FILTER_PASS
+            b.tooltip_text = str(amulets[slot].get("display_text", ""))
+            # Make the button visually invisible but still hoverable
+            var empty_style := StyleBoxEmpty.new()
+            b.add_theme_stylebox_override("normal",   empty_style)
+            b.add_theme_stylebox_override("hover",    empty_style)
+            b.add_theme_stylebox_override("pressed",  empty_style)
+            b.add_theme_stylebox_override("disabled", empty_style)
+            b.add_theme_stylebox_override("focus",    empty_style)
             holder.add_child(b)
         else:
             # Empty slot — hide entirely so the battlefield center stays clean.

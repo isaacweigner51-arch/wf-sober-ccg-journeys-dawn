@@ -93,9 +93,12 @@ func setup(class_name_str: String, size_vec: Vector2) -> void:
 	size = size_vec
 	clip_contents = true
 
-	# Auto-detect layered art (handles missing .import sidecars on desktop)
-	var body_path := "res://assets/leaders/%s_body.png" % class_name_str.to_lower()
-	has_layered_art = _file_exists_res(body_path)
+	# Layered art disabled — individual layer PNGs (body/head/hair) fill the
+	# entire 1024×1024 canvas with close-up crops, so stacking them in a
+	# clipped frame shows only an extreme zoomed-in region of scales/feathers.
+	# Use the flat composite portrait (with focal-shift) everywhere until the
+	# layer files are redrawn as full-canvas transparent overlays.
+	has_layered_art = false
 
 	_setup_nodes(size_vec)
 
