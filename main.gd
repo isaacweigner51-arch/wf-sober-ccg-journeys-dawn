@@ -455,7 +455,7 @@ func build_class_cards(faction_name: String) -> Array:
             card("Relentless Drive",6,6,4,faction_name,"Epic","charge_storm",0,"Charge. Storm. Cuts through every follower on the field.","flame","jd-132"),
             card("Battle Hardened",5,5,5,faction_name,"Epic","buff_all",1,"On Play: Give all allied followers +1/+1.","flame","jd-133"),
             card("Rally the Free",8,5,7,faction_name,"Platinum","rally_the_free",0,"SIGNATURE PLATINUM — Evolve for free. Give every Courage follower remaining in your deck +2/+2. The first Courage follower you play each turn gains Rush.","star"),
-            card("Phoenix Rising",1,1,1,faction_name,"Legendary","phoenix_rising",0,"Destroyed: returns at the start of your next turn at +1/+1 (1/1 → 10/10). At 10/10, permanently falls. Does not return if banished or transformed.","star","jd-125")]
+            card("Phoenix Rising",1,1,1,faction_name,"Legendary","phoenix_rising",0,"Last Words: rises immediately at +1/+1. Evolves on the 3rd, 6th, and 9th rise (+2/+2). 9th rise: 3 damage to all. Falls forever after 9 lives.","star","jd-125")]
     if faction_name == "Purpose":
         return [
             card("First Step",1,1,2,faction_name,"Bronze","first_step",0,"Arrival: Draw a card. If you have fewer maximum PP than your opponent, gain 1 temporary PP this turn.","road"),
@@ -4621,8 +4621,23 @@ func start_player_turn() -> void:
         if follower_count(player_board) < MAX_BOARD:
             var phoenix := _make_phoenix_card(t)
             player_board.append(phoenix)
-            refresh_ui(true, player_board.size() - 1, true)
-            await show_vfx("PHOENIX RISES! %d/%d" % [t, t], area_center(true), Color(1.0, 0.72, 0.30))
+            var ph_idx_p := player_board.size() - 1
+            refresh_ui(true, ph_idx_p, true)
+            await show_vfx("LAST WORDS RESOLVED: RISES %d/%d" % [t, t], area_center(true), Color(1.0, 0.72, 0.30))
+            # Milestone evolutions also apply on board-full delayed returns
+            if t in [4, 7, 10]:
+                phoenix["attack"]     = int(phoenix.get("attack",     0)) + 2
+                phoenix["health"]     = int(phoenix.get("health",     0)) + 2
+                phoenix["max_health"] = int(phoenix.get("max_health", 0)) + 2
+                phoenix["evolved"]          = true
+                phoenix["can_attack"]        = true
+                phoenix["evolved_this_turn"] = true
+                player_board[ph_idx_p] = phoenix
+                await play_evolution_animation(ph_idx_p, 3, true)
+                await show_vfx("REBIRTH ASCENSION +2/+2", area_center(true), Color(1.0, 0.65, 0.20))
+            if t == 10:
+                await show_vfx("PYROCLASM — 3 DAMAGE TO ALL!", area_center(true), Color(1.0, 0.28, 0.08))
+                await _phoenix_board_aoe(3)
         else:
             await show_vfx("PHOENIX CANNOT RETURN — BOARD FULL", area_center(true), Color(1.0, 0.25, 0.18))
     if not (turn_number == 1 and player_goes_first):
@@ -4640,13 +4655,34 @@ func sponsor_in_play(board: Array) -> bool:
 
 func _make_phoenix_card(tier: int) -> Dictionary:
     var phoenix := card("Phoenix Rising", 1, tier, tier, "Courage", "Legendary", "phoenix_rising", 0,
-        "Destroyed: returns at the start of your next turn at +1/+1 (1/1 → 10/10). At 10/10, permanently falls.",
+        "Last Words: rises immediately at +1/+1. Evolves on the 3rd, 6th, and 9th rise (+2/+2). 9th rise: 3 damage to all. Falls forever after 9 lives.",
         "star", "jd-125")
     phoenix["phoenix_tier"] = tier
-    phoenix["max_health"] = tier
-    phoenix["can_attack"] = false
+    phoenix["max_health"]   = tier
+    phoenix["can_attack"]   = false
     phoenix["summoned_turn"] = turn_number
     return phoenix
+
+## Deals flat AOE damage to every non-amulet follower on both boards, then
+## cascades deaths. Called by the Phoenix Rising 9th-return Last Words.
+func _phoenix_board_aoe(damage: int) -> void:
+    for unit in player_board:
+        if not bool(unit.get("is_amulet", false)):
+            unit["health"] = int(unit.get("health", 0)) - damage
+    for unit in enemy_board:
+        if not bool(unit.get("is_amulet", false)):
+            unit["health"] = int(unit.get("health", 0)) - damage
+    refresh_ui()
+    await get_tree().create_timer(0.30).timeout
+    # High → low index so removals don't shift earlier positions
+    for i in range(player_board.size() - 1, -1, -1):
+        if not bool(player_board[i].get("is_amulet", false)) and int(player_board[i].get("health", 1)) <= 0:
+            await destroy_unit(player_board, i, true)
+    for i in range(enemy_board.size() - 1, -1, -1):
+        if not bool(enemy_board[i].get("is_amulet", false)) and int(enemy_board[i].get("health", 1)) <= 0:
+            await destroy_unit(enemy_board, i, false)
+    check_winner()
+    refresh_ui()
 
 func create_sponsee(player_side: bool) -> void:
     var board: Array = player_board if player_side else enemy_board
@@ -4912,8 +4948,22 @@ func enemy_turn() -> void:
             var phoenix := _make_phoenix_card(t)
             phoenix["can_attack"] = false
             enemy_board.append(phoenix)
+            var ph_idx_e := enemy_board.size() - 1
             refresh_ui(true, -1, false)
-            await show_vfx("PHOENIX RISES! %d/%d" % [t, t], area_center(false), Color(1.0, 0.72, 0.30))
+            await show_vfx("LAST WORDS RESOLVED: RISES %d/%d" % [t, t], area_center(false), Color(1.0, 0.72, 0.30))
+            if t in [4, 7, 10]:
+                phoenix["attack"]     = int(phoenix.get("attack",     0)) + 2
+                phoenix["health"]     = int(phoenix.get("health",     0)) + 2
+                phoenix["max_health"] = int(phoenix.get("max_health", 0)) + 2
+                phoenix["evolved"]          = true
+                phoenix["can_attack"]        = false
+                phoenix["evolved_this_turn"] = true
+                enemy_board[ph_idx_e] = phoenix
+                await play_evolution_animation(ph_idx_e, 3, false)
+                await show_vfx("REBIRTH ASCENSION +2/+2", area_center(false), Color(1.0, 0.65, 0.20))
+            if t == 10:
+                await show_vfx("PYROCLASM — 3 DAMAGE TO ALL!", area_center(false), Color(1.0, 0.28, 0.08))
+                await _phoenix_board_aoe(3)
         else:
             await show_vfx("PHOENIX CANNOT RETURN — BOARD FULL", area_center(false), Color(1.0, 0.25, 0.18))
     enemy_max_mana = min(MAX_MANA, enemy_max_mana + 1); enemy_mana = enemy_max_mana
@@ -5945,13 +5995,47 @@ func destroy_unit(board: Array, index: int, player_side: bool, specifically_targ
         training_on_follower_lost(player_side)
         board.remove_at(index)
         if tier >= 10:
+            # After the 9th return the phoenix falls forever on next death.
             var rz: Array = player_relapse if player_side else enemy_relapse
             rz.append(dead.duplicate(true))
-            await show_vfx("NOTHING CAN BREAK MY RESOLVE!", area_center(player_side), Color(1.0, 0.82, 0.34))
+            await show_vfx("PHOENIX FALLS — NINE LIVES SPENT", area_center(player_side), Color(1.0, 0.82, 0.34))
         else:
-            if player_side: phoenix_pending_player = true; phoenix_tier_player = tier + 1
-            else: phoenix_pending_enemy = true; phoenix_tier_enemy = tier + 1
-            await show_vfx("GETS BACK UP!", area_center(player_side), Color(1.0, 0.65, 0.25))
+            # ── LAST WORDS: immediate return ─────────────────────────────────
+            var new_tier := tier + 1
+            # 3rd return=tier 4, 6th=tier 7, 9th=tier 10 (ascension milestones)
+            var is_milestone := new_tier in [4, 7, 10]
+            if follower_count(board) < MAX_BOARD:
+                var phoenix := _make_phoenix_card(new_tier)
+                board.append(phoenix)
+                var ph_idx := board.size() - 1
+                var rise_col := Color(1.0, 0.40, 0.12) if new_tier == 10 else \
+                                (Color(1.0, 0.62, 0.18) if is_milestone else Color(1.0, 0.72, 0.30))
+                var rise_msg := "LAST WORDS: FINAL ASCENSION  %d/%d" % [new_tier, new_tier] if new_tier == 10 else \
+                                ("LAST WORDS: ASCENDS  %d/%d" % [new_tier, new_tier] if is_milestone else \
+                                 "LAST WORDS: RISES  %d/%d" % [new_tier, new_tier])
+                refresh_ui(true, ph_idx, true)
+                await show_vfx(rise_msg, area_center(player_side), rise_col)
+                # Auto-evolve on 3rd / 6th / 9th return (+2/+2)
+                if is_milestone:
+                    phoenix["attack"]     = int(phoenix.get("attack",     0)) + 2
+                    phoenix["health"]     = int(phoenix.get("health",     0)) + 2
+                    phoenix["max_health"] = int(phoenix.get("max_health", 0)) + 2
+                    phoenix["evolved"]          = true
+                    phoenix["can_attack"]        = true
+                    phoenix["evolved_this_turn"] = true
+                    board[ph_idx] = phoenix
+                    await play_evolution_animation(ph_idx, 3, player_side)
+                    await show_vfx("REBIRTH ASCENSION +2/+2", area_center(player_side), Color(1.0, 0.65, 0.20))
+                # 9th return: 3 damage AOE to every follower on the board
+                if new_tier == 10:
+                    await show_vfx("PYROCLASM — 3 DAMAGE TO ALL!", area_center(player_side), Color(1.0, 0.28, 0.08))
+                    await _phoenix_board_aoe(3)
+            else:
+                # Board full — defer to start of next turn as a fallback
+                if player_side: phoenix_pending_player = true; phoenix_tier_player = new_tier
+                else:           phoenix_pending_enemy  = true; phoenix_tier_enemy  = new_tier
+                await show_vfx("LAST WORDS: RISES NEXT TURN  %d/%d" % [new_tier, new_tier],
+                               area_center(player_side), Color(1.0, 0.65, 0.25))
         refresh_ui()
         return
     var area := player_board_area if player_side else enemy_board_area
