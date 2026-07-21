@@ -24,7 +24,7 @@ func _load_profile_cfg_for_partial_write() -> ConfigFile:
         return null
     return cfg
 const APP_VERSION := "0.5.7"
-const BUILD_NAME := "v0.8.4 • AUDIO & CARD ART RECOVERY"
+const BUILD_NAME := "v0.9.3 • BATTLE PREP OVERHAUL"
 const CLASSES := ["Hope", "Courage", "Serenity", "Purpose"]
 const RARITIES := ["Bronze", "Silver", "Gold", "Epic", "Legendary", "Signature Platinum"]
 # Total interactive Academy tutorial lessons. Kept as one const instead of a
