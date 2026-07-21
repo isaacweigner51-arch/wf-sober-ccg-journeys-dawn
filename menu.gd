@@ -866,57 +866,156 @@ func show_launch_screen() -> void:
     ensure_home_music()
     launch_screen_active = true
     clear_screen()
-    add_background(0.58)
+    add_background(0.96)
 
-    var title := centered_label("WF SOBER CCG", Vector2(240, 54), Vector2(800, 62), 42, root_layer)
-    title.add_theme_color_override("font_color", GOLD_COLOR)
-    centered_label("JOURNEYS DAWN", Vector2(340, 115), Vector2(600, 42), 25, root_layer)
-    centered_label("Loading your recovery journey...", Vector2(390, 158), Vector2(500, 30), 16, root_layer).modulate = Color(0.72, 0.82, 0.92)
+    # ── Left half: 2×2 leader portrait mosaic ─────────────────────────────────
+    var leaders_data := [
+        {"name": "Hope",     "color": Color(0.25, 0.55, 1.00)},
+        {"name": "Courage",  "color": Color(0.95, 0.40, 0.18)},
+        {"name": "Serenity", "color": Color(0.28, 0.75, 0.55)},
+        {"name": "Purpose",  "color": Color(0.72, 0.38, 0.90)},
+    ]
+    var grid_w := 310.0; var grid_h := 360.0
+    var grid_origins := [Vector2(0,0), Vector2(grid_w,0), Vector2(0,grid_h), Vector2(grid_w,grid_h)]
+    for i in range(4):
+        var ld: Dictionary = leaders_data[i]
+        var lname: String = str(ld.get("name",""))
+        var lcol: Color  = ld.get("color", GOLD_COLOR)
 
-    var panel := Panel.new()
-    panel.position = Vector2(330, 210)
-    panel.size = Vector2(620, 430)
-    panel.add_theme_stylebox_override("panel", style(GOLD_COLOR, 20))
-    root_layer.add_child(panel)
+        var frame := Panel.new()
+        frame.position = grid_origins[i]
+        frame.size = Vector2(grid_w, grid_h)
+        frame.clip_contents = true
+        frame.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+        root_layer.add_child(frame)
 
-    centered_label("PLAYER ACCOUNT", Vector2(40, 22), Vector2(540, 44), 26, panel).add_theme_color_override("font_color", GOLD_COLOR)
-    centered_label("Sign in to keep your collection and Vials tied to your account, or continue as a guest for testing.", Vector2(70, 72), Vector2(480, 58), 15, panel)
+        var portrait := TextureRect.new()
+        portrait.texture = current_leader_texture(lname)
+        portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        frame.add_child(portrait)
 
+        # Bottom scrim so class name is readable
+        var scrim := ColorRect.new()
+        scrim.color = Color(0.01, 0.02, 0.04, 0.72)
+        scrim.position = Vector2(0, grid_h * 0.62)
+        scrim.size = Vector2(grid_w, grid_h * 0.38)
+        scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        frame.add_child(scrim)
+
+        var name_lbl := centered_label(lname.to_upper(), Vector2(0, grid_h - 40), Vector2(grid_w, 32), 17, frame)
+        name_lbl.add_theme_color_override("font_color", lcol)
+
+        # Class-coloured accent bar along the top
+        var top_bar := ColorRect.new(); top_bar.color = lcol
+        top_bar.position = Vector2.ZERO; top_bar.size = Vector2(grid_w, 4)
+        top_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE; frame.add_child(top_bar)
+
+        # Thin border on inner edges (right edge for left column, bottom edge for top row)
+        var inner_v := ColorRect.new(); inner_v.color = Color(lcol, 0.6)
+        inner_v.position = Vector2(grid_w - 2, 0); inner_v.size = Vector2(2, grid_h)
+        inner_v.mouse_filter = Control.MOUSE_FILTER_IGNORE; frame.add_child(inner_v)
+        var inner_h := ColorRect.new(); inner_h.color = Color(lcol, 0.6)
+        inner_h.position = Vector2(0, grid_h - 2); inner_h.size = Vector2(grid_w, 2)
+        inner_h.mouse_filter = Control.MOUSE_FILTER_IGNORE; frame.add_child(inner_h)
+
+    # Vertical gold divider between mosaic and login panel
+    var divider := ColorRect.new()
+    divider.position = Vector2(620, 0); divider.size = Vector2(3, 720)
+    divider.color = GOLD_COLOR; divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    root_layer.add_child(divider)
+
+    # ── Right half: login form ─────────────────────────────────────────────────
+    var right := Panel.new()
+    right.position = Vector2(623, 0); right.size = Vector2(657, 720)
+    var rg_style := StyleBoxFlat.new()
+    rg_style.bg_color = Color(0.022, 0.032, 0.060, 0.99)
+    right.add_theme_stylebox_override("panel", rg_style)
+    root_layer.add_child(right)
+
+    # Game branding
+    var title_lbl := centered_label("WALKING FREE CCG", Vector2(20, 70), Vector2(617, 54), 34, right)
+    title_lbl.add_theme_color_override("font_color", GOLD_COLOR)
+    var sub_lbl := centered_label("JOURNEY'S DAWN", Vector2(20, 126), Vector2(617, 32), 20, right)
+    sub_lbl.add_theme_color_override("font_color", Color(0.76, 0.83, 0.96))
+
+    # Gold separator
+    var hsep := ColorRect.new(); hsep.position = Vector2(80, 170); hsep.size = Vector2(497, 2)
+    hsep.color = Color(GOLD_COLOR, 0.45); hsep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    right.add_child(hsep)
+
+    centered_label("Sign in to save your collection and progress.", Vector2(60, 182), Vector2(537, 26), 13, right).modulate = Color(0.62, 0.70, 0.85)
+
+    # Input field shared style
+    var field_norm := StyleBoxFlat.new()
+    field_norm.bg_color = Color(0.055, 0.08, 0.15)
+    field_norm.border_color = Color(0.30, 0.40, 0.62)
+    field_norm.set_border_width_all(2); field_norm.set_corner_radius_all(10)
+    field_norm.content_margin_left = 16; field_norm.content_margin_right = 10
+
+    var field_focus := StyleBoxFlat.new()
+    field_focus.bg_color = Color(0.06, 0.09, 0.18)
+    field_focus.border_color = GOLD_COLOR
+    field_focus.set_border_width_all(2); field_focus.set_corner_radius_all(10)
+    field_focus.content_margin_left = 16; field_focus.content_margin_right = 10
+
+    # Email
+    label("EMAIL", Vector2(80, 228), Vector2(200, 20), 11, right).add_theme_color_override("font_color", Color(0.58, 0.68, 0.86))
     launch_email = LineEdit.new()
-    launch_email.position = Vector2(80, 145)
-    launch_email.size = Vector2(460, 48)
-    launch_email.placeholder_text = "Email address"
+    launch_email.position = Vector2(80, 250); launch_email.size = Vector2(497, 52)
+    launch_email.placeholder_text = "your@email.com"
     launch_email.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_EMAIL_ADDRESS
-    launch_email.add_theme_font_size_override("font_size", 17)
-    panel.add_child(launch_email)
+    launch_email.add_theme_font_size_override("font_size", 18)
+    launch_email.add_theme_stylebox_override("normal", field_norm)
+    launch_email.add_theme_stylebox_override("focus",  field_focus)
+    right.add_child(launch_email)
 
+    # Password
+    label("PASSWORD", Vector2(80, 316), Vector2(200, 20), 11, right).add_theme_color_override("font_color", Color(0.58, 0.68, 0.86))
     launch_password = LineEdit.new()
-    launch_password.position = Vector2(80, 205)
-    launch_password.size = Vector2(460, 48)
-    launch_password.placeholder_text = "Password (6+ characters)"
+    launch_password.position = Vector2(80, 338); launch_password.size = Vector2(497, 52)
+    launch_password.placeholder_text = "••••••••"
     launch_password.secret = true
-    launch_password.add_theme_font_size_override("font_size", 17)
-    panel.add_child(launch_password)
+    launch_password.add_theme_font_size_override("font_size", 18)
+    launch_password.add_theme_stylebox_override("normal", field_norm)
+    launch_password.add_theme_stylebox_override("focus",  field_focus)
+    right.add_child(launch_password)
 
-    button("SIGN IN", Vector2(80, 275), Vector2(220, 50), func():
-        print("LOGIN UI ── SIGN IN pressed  email_len=%d  pass_len=%d" % [launch_email.text.length(), launch_password.text.length()])
-        _cloud_safe_to_upload = false  # Lock upload gate until cloud profile confirmed applied
+    # Primary SIGN IN
+    var si_style := solid_style(GOLD_COLOR, 12)
+    var si_hover  := solid_style(GOLD_COLOR.lightened(0.18), 12)
+    var sign_in := button("SIGN IN", Vector2(80, 414), Vector2(497, 58), func():
+        _cloud_safe_to_upload = false
         launch_status.text = "Signing in..."
         launch_status.add_theme_color_override("font_color", Color(0.94, 0.95, 1.0))
         NetworkManager.sign_in_with_email(launch_email.text, launch_password.text)
-    , panel)
-    button("CREATE ACCOUNT", Vector2(320, 275), Vector2(220, 50), func():
-        print("LOGIN UI ── CREATE ACCOUNT pressed  email_len=%d  pass_len=%d" % [launch_email.text.length(), launch_password.text.length()])
+    , right)
+    sign_in.add_theme_font_size_override("font_size", ui_font_size(21))
+    sign_in.add_theme_stylebox_override("normal",  si_style)
+    sign_in.add_theme_stylebox_override("hover",   si_hover)
+    sign_in.add_theme_stylebox_override("pressed", si_style)
+    sign_in.add_theme_color_override("font_color",       Color(0.06, 0.04, 0.01))
+    sign_in.add_theme_color_override("font_hover_color", Color(0.06, 0.04, 0.01))
+
+    # Secondary row
+    button("CREATE ACCOUNT", Vector2(80, 486), Vector2(238, 50), func():
         launch_status.text = "Creating account..."
         launch_status.add_theme_color_override("font_color", Color(0.94, 0.95, 1.0))
         NetworkManager.create_account_with_email(launch_email.text, launch_password.text)
-    , panel)
-    button("CONTINUE AS GUEST", Vector2(180, 338), Vector2(260, 46), func():
+    , right)
+    button("CONTINUE AS GUEST", Vector2(339, 486), Vector2(238, 50), func():
         launch_status.text = "Starting guest session..."
         NetworkManager.continue_as_guest()
-    , panel)
+    , right)
 
-    launch_status = centered_label("", Vector2(55, 388), Vector2(510, 28), 14, panel)
+    launch_status = centered_label("", Vector2(60, 552), Vector2(537, 28), 14, right)
+
+    # Bottom quote + build label
+    var quote := centered_label("\"One day at a time.\"", Vector2(60, 630), Vector2(537, 32), 19, right)
+    quote.add_theme_color_override("font_color", Color(GOLD_COLOR, 0.52))
+    centered_label(BUILD_NAME, Vector2(60, 672), Vector2(537, 22), 11, right).modulate = Color(0.38, 0.46, 0.60)
 
 func _on_launch_auth_result(success: bool, message: String) -> void:
     print("LOGIN RESULT ── success=%s  message='%s'  user_id=%s  role=%s  cloud_safe=%s" % [
