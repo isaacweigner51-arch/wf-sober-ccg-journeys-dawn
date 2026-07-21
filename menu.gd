@@ -4087,7 +4087,7 @@ func show_match_deck_selection() -> void:
         battle_select_class = selected_class if selected_class != "" else "Hope"
     if battle_opponent_class == "":
         battle_opponent_class = "Courage"
-    if battle_select_mode == "meta" and not AccessManager.role_at_least(AccessManager.ROLE_OWNER):
+    if battle_select_mode in ["meta", "final_boss"] and not AccessManager.role_at_least(AccessManager.ROLE_OWNER):
         battle_select_mode = "custom"
     battle_opponent_mode = "prebuilt"
     if battle_select_mode == "custom" and last_battle_deck_idx < 0 and deck_slots.size() > 0:
@@ -4197,8 +4197,8 @@ func _bp_select_prebuilt(cls: String) -> void:
 
 ## Launch the battle (or practice mode) using the selected deck.
 func _bp_start_battle(practice: bool) -> void:
-    # Owner-mode guard: meta debug deck is owner-only; final_boss is open to all
-    if battle_select_mode == "meta" and not AccessManager.role_at_least(AccessManager.ROLE_OWNER):
+    # Owner-mode guard: meta and final_boss are developer-only
+    if battle_select_mode in ["meta", "final_boss"] and not AccessManager.role_at_least(AccessManager.ROLE_OWNER):
         return
     var sel_class := _bp_get_selected_class()
     battle_select_class = sel_class
@@ -4388,6 +4388,51 @@ func _bp_build_deck_list(parent: Panel) -> void:
     vbox.add_theme_constant_override("separation", 5)
     scroll.add_child(vbox)
 
+    # ─────── OWNER / DEVELOPER sections — shown first so no scrolling needed ──
+    if AccessManager.role_at_least(AccessManager.ROLE_OWNER):
+        _bp_section_hdr("OWNER  •  FINAL BOSS DECK", vbox, Color(1.0, 0.72, 0.20))
+
+        var is_fb_sel: bool = (battle_select_mode == "final_boss")
+        var fb := Panel.new()
+        fb.custom_minimum_size = Vector2(292, 44)
+        fb.add_theme_stylebox_override("panel", style(
+            Color(0.52, 0.08, 0.08) if is_fb_sel else Color(0.12, 0.05, 0.05), 8))
+        vbox.add_child(fb)
+
+        label("The Sponsor — Final Boss", Vector2(11, 6), Vector2(270, 18), 13, fb)
+        var fb_sub := label("ALL CLASSES  •  DEVELOPER ONLY", Vector2(11, 25), Vector2(270, 13), 9, fb)
+        fb_sub.add_theme_color_override("font_color", Color(1.0, 0.72, 0.20))
+
+        _bp_sel_ring(fb, is_fb_sel)
+
+        var fbtap := _bp_tap(fb.custom_minimum_size, fb)
+        fbtap.pressed.connect(func(): _bp_select_mode("final_boss", selected_class if selected_class != "" else "Purpose"))
+
+        _bp_section_hdr("OWNER  •  DEV META DECKS", vbox, Color(1.0, 0.72, 0.20))
+
+        for cls in CLASSES:
+            var is_meta_sel: bool = (battle_select_mode == "meta" and battle_select_class == cls)
+            var mb := Panel.new()
+            mb.custom_minimum_size = Vector2(292, 44)
+            mb.add_theme_stylebox_override("panel", style(
+                class_color(cls).darkened(0.35) if is_meta_sel else Color(0.12, 0.09, 0.04), 8))
+            vbox.add_child(mb)
+
+            var mbbar := ColorRect.new()
+            mbbar.color = class_color(cls); mbbar.position = Vector2(0, 0)
+            mbbar.size = Vector2(4, 44); mbbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            mb.add_child(mbbar)
+
+            label(cls + " — Dev Meta", Vector2(11, 6), Vector2(210, 18), 12, mb)
+            var m_sub := label("DEVELOPER ONLY", Vector2(11, 25), Vector2(210, 13), 9, mb)
+            m_sub.add_theme_color_override("font_color", Color(1.0, 0.72, 0.20))
+
+            _bp_sel_ring(mb, is_meta_sel)
+
+            var mtap := _bp_tap(mb.custom_minimum_size, mb)
+            var mcls: String = str(cls)
+            mtap.pressed.connect(func(): _bp_select_mode("meta", mcls))
+
     # ─────────────────────────── PLAYER: MY DECKS ────────────────────────────
     _bp_section_hdr("PLAYER  •  MY DECKS", vbox, Color(0.55, 0.72, 0.95))
 
@@ -4487,51 +4532,6 @@ func _bp_build_deck_list(parent: Panel) -> void:
             copy_lbl.add_theme_color_override("font_color", Color(0.65, 0.78, 1.0))
             copy_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-    # ─────────────────── FINAL BOSS (all players) ────────────────────────────
-    _bp_section_hdr("FINAL BOSS DECK", vbox, Color(0.90, 0.35, 0.20))
-
-    var is_fb_sel: bool = (battle_select_mode == "final_boss")
-    var fb := Panel.new()
-    fb.custom_minimum_size = Vector2(292, 44)
-    fb.add_theme_stylebox_override("panel", style(
-        Color(0.52, 0.08, 0.08) if is_fb_sel else Color(0.12, 0.05, 0.05), 8))
-    vbox.add_child(fb)
-
-    label("The Sponsor — Final Boss", Vector2(11, 6), Vector2(270, 18), 13, fb)
-    var fb_sub := label("ALL CLASSES", Vector2(11, 25), Vector2(270, 13), 9, fb)
-    fb_sub.add_theme_color_override("font_color", Color(0.90, 0.35, 0.20))
-
-    _bp_sel_ring(fb, is_fb_sel)
-
-    var fbtap := _bp_tap(fb.custom_minimum_size, fb)
-    fbtap.pressed.connect(func(): _bp_select_mode("final_boss", selected_class if selected_class != "" else "Purpose"))
-
-    # ─────────────────── OWNER / DEVELOPER ONLY sections ─────────────────────
-    if AccessManager.role_at_least(AccessManager.ROLE_OWNER):
-        _bp_section_hdr("OWNER  •  DEV META DECKS", vbox, Color(1.0, 0.72, 0.20))
-
-        for cls in CLASSES:
-            var is_meta_sel: bool = (battle_select_mode == "meta" and battle_select_class == cls)
-            var mb := Panel.new()
-            mb.custom_minimum_size = Vector2(292, 44)
-            mb.add_theme_stylebox_override("panel", style(
-                class_color(cls).darkened(0.35) if is_meta_sel else Color(0.12, 0.09, 0.04), 8))
-            vbox.add_child(mb)
-
-            var mbbar := ColorRect.new()
-            mbbar.color = class_color(cls); mbbar.position = Vector2(0, 0)
-            mbbar.size = Vector2(4, 44); mbbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-            mb.add_child(mbbar)
-
-            label(cls + " — Dev Meta", Vector2(11, 6), Vector2(210, 18), 12, mb)
-            var m_sub := label("DEVELOPER ONLY", Vector2(11, 25), Vector2(210, 13), 9, mb)
-            m_sub.add_theme_color_override("font_color", Color(1.0, 0.72, 0.20))
-
-            _bp_sel_ring(mb, is_meta_sel)
-
-            var mtap := _bp_tap(mb.custom_minimum_size, mb)
-            var mcls: String = str(cls)
-            mtap.pressed.connect(func(): _bp_select_mode("meta", mcls))
 
 
 func _bp_build_battle_stage(stage: Panel) -> void:
