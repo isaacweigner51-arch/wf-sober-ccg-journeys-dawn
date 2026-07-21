@@ -1410,142 +1410,193 @@ func play_sponsor_evolution_animation(unit: Dictionary, player_side: bool) -> vo
     var old_music_db := music_player.volume_db if is_instance_valid(music_player) else -5.0
     if is_instance_valid(music_player):
         music_player.volume_db = old_music_db - 12.0
-    play_sfx("sponsor_evolve")
 
     card_view.z_index = 1400
     var original_position := card_view.position
-    var original_scale := card_view.scale
-    var screen_center := Vector2(640.0, 360.0)
-    var centered_position := screen_center - card_view.size * 0.5 - area.global_position
+    var original_scale    := card_view.scale
+    var screen_center     := Vector2(640.0, 360.0)
+    # Card rests left-of-centre so the sponsee portrait has room on the right.
+    var card_dest := screen_center - card_view.size * 0.5 - area.global_position + Vector2(-120, 0)
 
+    # ── Dark overlay ────────────────────────────────────────────────────────
     var dimmer := ColorRect.new()
-    dimmer.color = Color(0.01, 0.015, 0.03, 0.0)
+    dimmer.color         = Color(0.01, 0.012, 0.025, 0.0)
+    dimmer.z_index       = 1200
+    dimmer.mouse_filter  = Control.MOUSE_FILTER_IGNORE
     dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    dimmer.z_index = 1200
     add_child(dimmer)
 
-    # Cinematic backdrop: the Sponsor's diner scene fades in behind the card
-    # as the evolution fires, grounding the moment in a real place and face.
+    # ── Cinematic background (Sponsor's scene) ──────────────────────────────
     var cinematic_bg := TextureRect.new()
     var _cin_tex := load("res://assets/cards/full/jd-080-cinematic.jpg") as Texture2D
-    cinematic_bg.texture = _cin_tex
-    cinematic_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    cinematic_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    cinematic_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    cinematic_bg.texture     = _cin_tex
+    cinematic_bg.z_index     = 1205
+    cinematic_bg.modulate    = Color(1.0, 1.0, 1.0, 0.0)
     cinematic_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    cinematic_bg.z_index = 1205
-    cinematic_bg.modulate = Color(1.0, 1.0, 1.0, 0.0)
+    cinematic_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    cinematic_bg.expand_mode  = TextureRect.EXPAND_IGNORE_SIZE
+    cinematic_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     add_child(cinematic_bg)
 
-    var sponsor_glow := ColorRect.new()
-    sponsor_glow.position = screen_center - Vector2(175, 175)
-    sponsor_glow.size = Vector2(350, 350)
-    sponsor_glow.color = Color(1.0, 0.72, 0.18, 0.0)
-    sponsor_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    sponsor_glow.z_index = 1220
-    add_child(sponsor_glow)
-
-    # Real illustrations for both figures instead of ASCII-art silhouettes and
-    # a blocky "WALKING FREE" wordmark: the sponsor's own card art rises
-    # center-stage, and a second portrait (the sponsee's real art, resolved
-    # the same way every other card's art is) fades in beside it once the
-    # sponsor speaks — reinforcing "you are never alone" with an actual face,
-    # not a wall of text.
-    var sponsee_preview := card("Sponsee", 2, 2, 2, "Universal", "Token", "sponsee", 0, "", "hands")
-    var sponsee_portrait := build_art_medallion(CardArt.resolve(sponsee_preview), Vector2(838, 210), Vector2(180, 250), Color(1.0, 0.86, 0.42))
-    sponsee_portrait.scale = Vector2(0.55, 0.55)
+    # ── Sponsee portrait (slides in from the right) ─────────────────────────
+    var sponsee_preview  := card("Sponsee", 2, 2, 2, "Universal", "Token", "sponsee", 0, "", "hands")
+    var sponsee_portrait := build_art_medallion(
+        CardArt.resolve(sponsee_preview), Vector2(920, 180), Vector2(220, 300),
+        Color(1.0, 0.88, 0.44))
+    sponsee_portrait.modulate = Color(1, 1, 1, 0)
+    sponsee_portrait.z_index  = 1310
     add_child(sponsee_portrait)
 
-    var connection := ColorRect.new()
-    connection.position = Vector2(690, 357)
-    connection.size = Vector2(145, 6)
-    connection.color = Color(1.0, 0.86, 0.36, 0.0)
-    connection.rotation = -0.12
-    connection.z_index = 1310
-    connection.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(connection)
-
+    # ── Quote / title text ──────────────────────────────────────────────────
     var line_label := Label.new()
-    line_label.text = "\"YOU ARE NEVER ALONE.\""
-    line_label.position = Vector2(240, 470)
-    line_label.size = Vector2(800, 56)
+    line_label.text        = "\"YOU ARE NEVER ALONE.\""
+    line_label.position    = Vector2(160, 505)
+    line_label.size        = Vector2(960, 60)
     line_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    line_label.add_theme_font_size_override("font_size", ui_font(36))
-    line_label.add_theme_color_override("font_color", Color(1.0, 0.93, 0.68))
-    line_label.add_theme_color_override("font_shadow_color", Color(0.15, 0.08, 0.0, 0.85))
+    line_label.add_theme_font_size_override("font_size", ui_font(40))
+    line_label.add_theme_color_override("font_color",        Color(1.0, 0.95, 0.72))
+    line_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.90))
     line_label.add_theme_constant_override("shadow_offset_x", 3)
-    line_label.add_theme_constant_override("shadow_offset_y", 3)
-    line_label.modulate.a = 0.0
-    line_label.z_index = 1360
+    line_label.add_theme_constant_override("shadow_offset_y", 4)
+    line_label.modulate.a  = 0.0
+    line_label.z_index     = 1380
     add_child(line_label)
 
-    var title := Label.new()
-    title.text = "GUIDANCE BECOMES FREEDOM"
-    title.position = Vector2(290, 545)
-    title.size = Vector2(700, 40)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", ui_font(22))
-    title.add_theme_color_override("font_color", Color(1.0, 0.84, 0.42))
-    title.modulate.a = 0.0
-    title.z_index = 1360
-    add_child(title)
+    var title_label := Label.new()
+    title_label.text       = "GUIDANCE BECOMES FREEDOM"
+    title_label.position   = Vector2(200, 576)
+    title_label.size       = Vector2(880, 36)
+    title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title_label.add_theme_font_size_override("font_size", ui_font(20))
+    title_label.add_theme_color_override("font_color", Color(1.0, 0.78, 0.30))
+    title_label.modulate.a = 0.0
+    title_label.z_index    = 1380
+    add_child(title_label)
 
+    # ── Phase 1 — dim + cinematic rise + card zoom ──────────────────────────
     var rise := create_tween().set_parallel(true)
-    rise.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-    rise.tween_property(dimmer, "color:a", 0.86, 0.32)
-    rise.tween_property(cinematic_bg, "modulate:a", 0.60, 0.45)
-    rise.tween_property(card_view, "position", centered_position + Vector2(-90, 0), 0.42)
-    rise.tween_property(card_view, "scale", Vector2(1.9, 1.9), 0.42)
-    rise.tween_property(sponsor_glow, "color:a", 0.24, 0.35)
+    rise.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+    rise.tween_property(dimmer,       "color:a",           0.90,             0.35)
+    rise.tween_property(cinematic_bg, "modulate:a",        0.55,             0.50)
+    rise.tween_property(card_view,    "position",          card_dest,        0.40)
+    rise.tween_property(card_view,    "scale",  Vector2(2.0, 2.0),           0.40)
     await rise.finished
 
-    await play_signature_voice("The Sponsor", player_side, false)
-    var quote_tween := create_tween().set_parallel(true)
-    quote_tween.tween_property(line_label, "modulate:a", 1.0, 0.3)
-    await quote_tween.finished
+    # ── Phase 2 — white flash + sunburst rays ──────────────────────────────
+    # White flash: full-screen, very brief — the card "transforms" in the light.
+    var flash := ColorRect.new()
+    flash.color       = Color(1.0, 1.0, 1.0, 0.0)
+    flash.z_index     = 1450
+    flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    add_child(flash)
+    var flash_t := create_tween()
+    flash_t.set_trans(Tween.TRANS_QUAD)
+    flash_t.tween_property(flash, "color:a", 0.92, 0.08)
+    flash_t.tween_property(flash, "color:a", 0.0,  0.22)
+    flash_t.finished.connect(flash.queue_free)
 
-    var connect_tween := create_tween().set_parallel(true)
-    connect_tween.tween_property(sponsee_portrait, "modulate:a", 1.0, 0.34)
-    connect_tween.tween_property(sponsee_portrait, "scale", Vector2(1.0, 1.0), 0.34)
-    connect_tween.tween_property(connection, "color:a", 0.95, 0.28)
-    connect_tween.tween_property(title, "modulate:a", 1.0, 0.28)
-    connect_tween.tween_property(sponsor_glow, "scale", Vector2(1.3, 1.3), 0.40)
-    await connect_tween.finished
-    spawn_sparkle_burst(Vector2(760, 335), 14, [Color(1.0, 0.86, 0.34), Color(1.0, 1.0, 1.0)], self, 80.0)
+    play_sfx("sponsor_evolve")
+
+    # Sunburst — 16 thin gold rays expanding from the card center.
+    # Each ray is a ColorRect whose pivot is at its own top-left, rotated
+    # so it points outward from screen_center.
+    var burst_origin := screen_center + Vector2(-120, 0)  # matches card_dest center
+    var ray_nodes: Array = []
+    for ri in range(16):
+        var ray := ColorRect.new()
+        ray.size          = Vector2(4, 260)
+        ray.color         = Color(1.0, 0.84, 0.22, 0.80)
+        ray.pivot_offset  = Vector2(2, 0)
+        ray.position      = burst_origin - Vector2(2, 0)
+        ray.rotation      = ri * TAU / 16.0
+        ray.z_index       = 1240
+        ray.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+        add_child(ray)
+        ray_nodes.append(ray)
+        var rt := create_tween().set_parallel(true)
+        rt.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+        rt.tween_property(ray, "color:a",            0.0, 0.55).set_delay(0.08)
+        rt.finished.connect(ray.queue_free)
+
+    # Concentric glow rings (3 circles made from square ColorRects with
+    # modulate — each offset so they look centred on burst_origin).
+    var ring_colors := [Color(1.0, 0.88, 0.40, 0.30),
+                        Color(1.0, 0.72, 0.18, 0.18),
+                        Color(0.90, 0.60, 0.10, 0.10)]
+    var ring_nodes: Array = []
+    for rk in range(3):
+        var sz := float(200 + rk * 130)
+        var ring := ColorRect.new()
+        ring.size         = Vector2(sz, sz)
+        ring.color        = ring_colors[rk]
+        ring.position     = burst_origin - Vector2(sz * 0.5, sz * 0.5)
+        ring.z_index      = 1215 + rk
+        ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        add_child(ring)
+        ring_nodes.append(ring)
+        # Pulse outward then fade
+        var rnt := create_tween().set_parallel(true)
+        rnt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+        rnt.tween_property(ring, "scale",      Vector2(1.6, 1.6), 0.70)
+        rnt.tween_property(ring, "color:a",    0.0,               0.60)
+        rnt.finished.connect(ring.queue_free)
+
+    spawn_sparkle_burst(burst_origin, 20,
+        [Color(1.0, 0.86, 0.34), Color(1.0, 1.0, 1.0), Color(1.0, 0.60, 0.10)], self, 110.0)
     await get_tree().create_timer(0.30).timeout
 
-    unit["attack"] = int(unit.get("attack", 0)) + 2
-    unit["health"] = int(unit.get("health", 0)) + 2
-    unit["max_health"] = int(unit.get("max_health", unit.get("health", 0))) + 2
-    unit["evolved"] = true
-    unit["can_attack"] = true
+    # ── Phase 3 — voice + quote ────────────────────────────────────────────
+    await play_signature_voice("The Sponsor", player_side, false)
+    var quote_t := create_tween()
+    quote_t.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    quote_t.tween_property(line_label, "modulate:a", 1.0, 0.35)
+    await quote_t.finished
+
+    # ── Phase 4 — sponsee portrait slides in + title + connection spark ────
+    # Slide sponsee in from the right
+    var connect_t := create_tween().set_parallel(true)
+    connect_t.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    connect_t.tween_property(sponsee_portrait, "position",    Vector2(820, 180), 0.40)
+    connect_t.tween_property(sponsee_portrait, "modulate:a",  1.0,               0.35)
+    connect_t.set_trans(Tween.TRANS_QUAD)
+    connect_t.tween_property(title_label,      "modulate:a",  1.0,               0.30)
+    await connect_t.finished
+
+    # Connection spark — runs from card to sponsee in a brief burst
+    spawn_sparkle_burst(burst_origin + Vector2(160, 0), 10,
+        [Color(1.0, 0.86, 0.34), Color(1.0, 1.0, 1.0)], self, 60.0)
+    spawn_sparkle_burst(Vector2(870, 330), 10,
+        [Color(1.0, 0.86, 0.34), Color(1.0, 1.0, 1.0)], self, 60.0)
+    await get_tree().create_timer(0.45).timeout
+
+    # ── Apply evolution stats ───────────────────────────────────────────────
+    unit["attack"]       = int(unit.get("attack", 0)) + 2
+    unit["health"]       = int(unit.get("health", 0)) + 2
+    unit["max_health"]   = int(unit.get("max_health", unit.get("health", 0))) + 2
+    unit["evolved"]      = true
+    unit["can_attack"]   = true
     unit["evolved_this_turn"] = true
     board[index] = unit
 
     await create_sponsee(player_side)
 
-    var return_tween := create_tween().set_parallel(true)
-    return_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-    return_tween.tween_property(card_view, "position", original_position, 0.30)
-    return_tween.tween_property(card_view, "scale", original_scale, 0.30)
-    return_tween.tween_property(dimmer, "color:a", 0.0, 0.28)
-    return_tween.tween_property(cinematic_bg, "modulate:a", 0.0, 0.28)
-    return_tween.tween_property(sponsor_glow, "color:a", 0.0, 0.24)
-    return_tween.tween_property(sponsee_portrait, "modulate:a", 0.0, 0.24)
-    return_tween.tween_property(connection, "modulate:a", 0.0, 0.24)
-    return_tween.tween_property(title, "modulate:a", 0.0, 0.24)
-    return_tween.tween_property(line_label, "modulate:a", 0.0, 0.24)
-    await return_tween.finished
+    # ── Phase 5 — everything fades out + card returns ──────────────────────
+    var return_t := create_tween().set_parallel(true)
+    return_t.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+    return_t.tween_property(card_view,        "position",    original_position, 0.30)
+    return_t.tween_property(card_view,        "scale",       original_scale,    0.30)
+    return_t.tween_property(dimmer,           "color:a",     0.0,               0.30)
+    return_t.tween_property(cinematic_bg,     "modulate:a",  0.0,               0.28)
+    return_t.tween_property(sponsee_portrait, "modulate:a",  0.0,               0.24)
+    return_t.tween_property(line_label,       "modulate:a",  0.0,               0.24)
+    return_t.tween_property(title_label,      "modulate:a",  0.0,               0.24)
+    await return_t.finished
 
     card_view.z_index = 0
-    dimmer.queue_free()
-    cinematic_bg.queue_free()
-    sponsor_glow.queue_free()
-    sponsee_portrait.queue_free()
-    connection.queue_free()
-    title.queue_free()
-    line_label.queue_free()
+    for n in [dimmer, cinematic_bg, sponsee_portrait, line_label, title_label]:
+        if is_instance_valid(n):
+            n.queue_free()
     if is_instance_valid(music_player):
         music_player.volume_db = old_music_db
     busy = false
@@ -6031,7 +6082,15 @@ func record_recovery_challenge_win(winning_class: String) -> Dictionary:
     var cfg := _load_shared_profile_cfg_for_partial_write()
     if cfg == null:
         return {}
+
+    # Reset progress if we've rolled into a new week.
+    var current_week := str(int(Time.get_unix_time_from_system() / 604800.0))
+    var saved_week := str(cfg.get_value("challenge", "week_key", ""))
     var progress: Dictionary = cfg.get_value("challenge", "recovery_progress", {})
+    if saved_week != current_week:
+        progress = {}
+        cfg.set_value("challenge", "week_key", current_week)
+
     var count := int(progress.get(winning_class, 0)) + 1
     var result := {}
     if count >= 3:

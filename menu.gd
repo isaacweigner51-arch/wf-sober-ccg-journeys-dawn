@@ -703,6 +703,7 @@ var collection_shiny_owned: Dictionary = {}  # card_id -> shiny copy count (draw
 var saved_deck: Array = []
 var saved_decks: Dictionary = {}
 var recovery_challenge_progress: Dictionary = {}
+var challenge_week_key: String = ""  # ISO week bucket; resets progress when the week rolls over
 # The Trials: repeatable PvE gauntlet. trials_cleared keys are "<Class>_<tier>"
 # (tier 1-3) or "Sponsor_4" for the bonus boss. Cosmetic rewards are separate
 # flags since they persist even if sponsor_defeated bookkeeping ever changes.
@@ -1084,6 +1085,13 @@ func load_profile() -> void:
         daily_reward_day = int(cfg.get_value("daily", "reward_day", 0))
         daily_last_claim_day = int(cfg.get_value("daily", "last_claim_day", -1))
         recovery_challenge_progress = cfg.get_value("challenge", "recovery_progress", {})
+        challenge_week_key = str(cfg.get_value("challenge", "week_key", ""))
+        # Reset progress if we've rolled into a new week.  This is what makes
+        # the home screen label say "this week's challenge" with actual meaning.
+        var current_week := _current_week_key()
+        if challenge_week_key != current_week:
+            recovery_challenge_progress = {}
+            challenge_week_key = current_week
         trials_cleared = cfg.get_value("trials", "cleared", {})
         sponsor_leader_unlocked = bool(cfg.get_value("trials", "sponsor_leader_unlocked", false))
         sponsor_sleeve_unlocked = bool(cfg.get_value("trials", "sponsor_sleeve_unlocked", false))
@@ -1131,6 +1139,11 @@ func migrate_sponsor_out_of_prebuilt_deck() -> void:
         if not added:
             break
 
+func _current_week_key() -> String:
+    # Returns a monotonically-increasing week bucket string.
+    # 604800 = seconds in one week.  Changes every Monday at ~00:00 UTC.
+    return str(int(Time.get_unix_time_from_system() / 604800.0))
+
 func save_profile() -> void:
     var cfg := ConfigFile.new()
     cfg.set_value("economy", "gold", gold_balance)
@@ -1152,6 +1165,7 @@ func save_profile() -> void:
     cfg.set_value("daily", "reward_day", daily_reward_day)
     cfg.set_value("daily", "last_claim_day", daily_last_claim_day)
     cfg.set_value("challenge", "recovery_progress", recovery_challenge_progress)
+    cfg.set_value("challenge", "week_key", challenge_week_key)
     cfg.set_value("trials", "cleared", trials_cleared)
     cfg.set_value("trials", "sponsor_leader_unlocked", sponsor_leader_unlocked)
     cfg.set_value("trials", "sponsor_sleeve_unlocked", sponsor_sleeve_unlocked)
@@ -1268,7 +1282,7 @@ func _serialize_profile_for_cloud() -> Dictionary:
         },
         "academy": {"complete": academy_complete, "step": academy_step, "reward_claimed": academy_reward_claimed},
         "daily": {"reward_day": daily_reward_day, "last_claim_day": daily_last_claim_day},
-        "challenge": {"recovery_progress": recovery_challenge_progress},
+        "challenge": {"recovery_progress": recovery_challenge_progress, "week_key": challenge_week_key},
         "trials": {
             "cleared": trials_cleared,
             "sponsor_leader_unlocked": sponsor_leader_unlocked,
@@ -1328,6 +1342,18 @@ func _apply_cloud_profile(data: Dictionary) -> bool:
                (section == "economy" and key in ["gold", "dust", "packs"]) or \
                (section == "packs" and key in ["platinum_pity", "legendary_pity", "opened"]):
                 cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
+                continue
+
+            # ── challenge.week_key: cloud wins (take the more recent week) ────────
+            if section == "challenge" and key == "week_key":
+                var local_wk := str(local_val if local_val != null else "")
+                var cloud_wk := str(cloud_val if cloud_val != null else "")
+                # Both are stringified unix-week integers; higher number = later week.
+                var merged_wk := cloud_wk if int(cloud_wk) >= int(local_wk) else local_wk
+                cfg.set_value(section, key, merged_wk)
+                # If cloud says a later week, reset local progress too.
+                if merged_wk != local_wk:
+                    cfg.set_value("challenge", "recovery_progress", {})
                 continue
 
             # ── challenge.recovery_progress: {class: int}, max per key ────────
