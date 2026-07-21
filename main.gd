@@ -34,6 +34,7 @@ var turn_number := 0
 var game_over := false
 var busy := false
 var _active_amulet_tooltip: Control = null   # tap-to-reveal tooltip on field amulets
+var _near_win_barked := false                # fire near_win bark only once per match
 var selected_attacker := -1
 var selected_evolution_cost: int = 0
 var attack_drag_line: Line2D = null
@@ -1212,32 +1213,64 @@ func attack_impact_sound(attacker_index: int, target_index: int, player_side: bo
 # running low on health, winning, or losing), not just in a rulebook.
 const BATTLE_BARKS := {
     "Hope": {
-        "play": ["Every card here is a reason to keep going.", "Small moves add up. Watch."],
-        "attack": ["Hope doesn't hit soft.", "I'm not backing down from this."],
-        "low_health": ["I've been lower than this and still stood up.", "This isn't the end of my story."],
-        "victory": ["We made it through. Together.", "That's what hope looks like."],
-        "defeat": ["This isn't over. Hope doesn't quit.", "I'll be back on my feet tomorrow."],
+        "play":          ["Every card here is a reason to keep going.", "Small moves add up. Watch."],
+        "attack":        ["Hope doesn't hit soft.", "I'm not backing down from this."],
+        "low_health":    ["I've been lower than this and still stood up.", "This isn't the end of my story."],
+        "victory":       ["We made it through. Together.", "That's what hope looks like."],
+        "defeat":        ["This isn't over. Hope doesn't quit.", "I'll be back on my feet tomorrow."],
+        # ── New ──
+        "damage":        ["Ouch. But I'm still here.", "That one landed. Keep going."],
+        "near_win":      ["We're almost through this.", "The light is right there. Hold on."],
+        "emote_hello":   ["Hey. Glad you're here.", "Hello, friend. Let's make this count."],
+        "emote_thanks":  ["Thank you. Really.", "That means something."],
+        "emote_nice":    ["That was a good one.", "Well played. Genuinely."],
+        "emote_taunt":   ["Is that all? I was hoping for more.", "Come on. Show me what you've got."],
+        "emote_thinking":["Give me a second. I've got this.", "Just thinking it through."],
     },
     "Courage": {
-        "play": ["Stepping up. Watch this.", "Fear doesn't get a vote here."],
-        "attack": ["Stand my ground? Not today.", "That's what courage looks like."],
-        "low_health": ["I've faced worse than this.", "Hurt, not broken."],
-        "victory": ["Courage carried the day.", "Told you I wouldn't back down."],
-        "defeat": ["I'll take the hit. I won't take the excuse.", "Down, not out."],
+        "play":          ["Stepping up. Watch this.", "Fear doesn't get a vote here."],
+        "attack":        ["Stand my ground? Not today.", "That's what courage looks like."],
+        "low_health":    ["I've faced worse than this.", "Hurt, not broken."],
+        "victory":       ["Courage carried the day.", "Told you I wouldn't back down."],
+        "defeat":        ["I'll take the hit. I won't take the excuse.", "Down, not out."],
+        # ── New ──
+        "damage":        ["Gah! You'll pay for that.", "Hit me again. See what happens."],
+        "near_win":      ["I can smell the finish line.", "Almost done. Don't blink."],
+        "emote_hello":   ["Let's go. I don't back down.", "Ready? Because I am."],
+        "emote_thanks":  ["Appreciated. Now let's fight.", "Ha. Thanks."],
+        "emote_nice":    ["Now that's a move.", "Respect. Solid play."],
+        "emote_taunt":   ["That's your strategy? Really?", "Push harder. You're holding back."],
+        "emote_thinking":["Hmm. Give me a second.", "Running it through my head."],
     },
     "Serenity": {
-        "play": ["Patience. Let it land.", "Steady hands win this."],
-        "attack": ["Calm doesn't mean passive.", "Quiet, then decisive."],
-        "low_health": ["I'm still breathing. I'm still here.", "Stillness isn't weakness."],
-        "victory": ["Peace, earned the hard way.", "That's the power of staying steady."],
-        "defeat": ["I'll sit with this and come back stronger.", "Not every round is won. That's fine."],
+        "play":          ["Patience. Let it land.", "Steady hands win this."],
+        "attack":        ["Calm doesn't mean passive.", "Quiet, then decisive."],
+        "low_health":    ["I'm still breathing. I'm still here.", "Stillness isn't weakness."],
+        "victory":       ["Peace, earned the hard way.", "That's the power of staying steady."],
+        "defeat":        ["I'll sit with this and come back stronger.", "Not every round is won. That's fine."],
+        # ── New ──
+        "damage":        ["Pain teaches. I'm listening.", "That hurt. I'll be fine."],
+        "near_win":      ["The end is close. Stay centered.", "Almost there. Breathe."],
+        "emote_hello":   ["Hello. May this be a worthy match.", "Greetings. Let's begin with respect."],
+        "emote_thanks":  ["Your kindness is noted.", "Thank you. Truly."],
+        "emote_nice":    ["A thoughtful move. Well done.", "That was precise. I respect it."],
+        "emote_taunt":   ["You're still holding back. I can tell.", "There's more in you. Find it."],
+        "emote_thinking":["Let the mind settle.", "Patience. I'll see it clearly."],
     },
     "Purpose": {
-        "play": ["Every move has a reason behind it.", "Building toward something. Watch."],
-        "attack": ["This is what I'm fighting for.", "Purpose doesn't flinch."],
-        "low_health": ["I know why I'm still standing.", "Too much left to build to quit now."],
-        "victory": ["That's what purpose gets you.", "Built this win, one step at a time."],
-        "defeat": ["This sets back the plan. Not the purpose.", "I'll rebuild from here."],
+        "play":          ["Every move has a reason behind it.", "Building toward something. Watch."],
+        "attack":        ["This is what I'm fighting for.", "Purpose doesn't flinch."],
+        "low_health":    ["I know why I'm still standing.", "Too much left to build to quit now."],
+        "victory":       ["That's what purpose gets you.", "Built this win, one step at a time."],
+        "defeat":        ["This sets back the plan. Not the purpose.", "I'll rebuild from here."],
+        # ── New ──
+        "damage":        ["An unexpected variable.", "Noted. Adjusting."],
+        "near_win":      ["Objective nearly complete.", "The outcome is decided. Almost."],
+        "emote_hello":   ["Every move has a reason. Let's begin.", "I won't waste a single turn."],
+        "emote_thanks":  ["Noted. Thank you.", "I'll remember that."],
+        "emote_nice":    ["Efficient. Well executed.", "Precision. I respect that."],
+        "emote_taunt":   ["Your plan has flaws. I see them.", "I'm already three moves ahead."],
+        "emote_thinking":["Processing.", "Running the numbers."],
     },
 }
 
@@ -1674,6 +1707,9 @@ func update_dynamic_music() -> void:
     set_battle_music(desired)
 
 func leader_feedback(leader: Control, damage: int, healing: bool = false) -> void:
+    # Auto-react bark: player leader takes a hit
+    if not healing and is_instance_valid(player_leader) and leader == player_leader:
+        play_battle_bark(player_leader, selected_class, "damage", true, true)
     play_sfx("heal" if healing else ("hit_heavy" if damage >= 4 else "hit_light"))
     var start := leader.position
     var tween := create_tween()
@@ -1935,6 +1971,7 @@ func build_ui() -> void:
 
     overlay = ColorRect.new(); overlay.color = Color(0, 0, 0, 0.68); overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); overlay.visible = false; overlay.mouse_filter = Control.MOUSE_FILTER_STOP; add_child(overlay)
     apply_mobile_touch_targets()
+    build_emote_buttons()
 
 func apply_mobile_touch_targets() -> void:
     if not is_mobile_device():
@@ -4223,6 +4260,7 @@ func start_game() -> void:
     refresh_leader_hp_badge_colors()
     signature_voice_played.clear()
     last_bark_at = -999.0
+    _near_win_barked = false
     player_low_health_barked = false
     enemy_low_health_barked = false
     player_walking_free_active = false
@@ -5945,6 +5983,10 @@ func first_guard_index(board: Array) -> int:
 func check_winner() -> void:
     if game_over:
         return
+    # Near-win bark fires once when the opponent drops to 5 HP or below
+    if enemy_health > 0 and enemy_health <= 5 and not _near_win_barked:
+        _near_win_barked = true
+        play_battle_bark(player_leader, selected_class, "near_win", true, true)
     if enemy_health <= 0:
         enemy_health = 0
         game_over = true
@@ -7314,6 +7356,58 @@ func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
         else:
             # Empty slot — hide entirely so the battlefield center stays clean.
             holder.visible = false
+
+## Five emote buttons in a horizontal strip below the PP panel (player side only).
+## Labels: HI / THX / GG / !! / ... — each fires the matching bark category.
+func build_emote_buttons() -> void:
+    var emotes := [
+        {"label": "HI",  "cat": "emote_hello"},
+        {"label": "THX", "cat": "emote_thanks"},
+        {"label": "GG",  "cat": "emote_nice"},
+        {"label": "!!",  "cat": "emote_taunt"},
+        {"label": "...", "cat": "emote_thinking"},
+    ]
+    var strip := Panel.new()
+    strip.position = Vector2(1028, 654)
+    strip.size     = Vector2(242, 36)
+    strip.z_index  = 250
+    var ss := StyleBoxFlat.new()
+    ss.bg_color = Color(0.04, 0.06, 0.11, 0.85)
+    ss.border_color = Color(0.35, 0.55, 0.82, 0.70)
+    ss.set_border_width_all(1)
+    ss.set_corner_radius_all(10)
+    strip.add_theme_stylebox_override("panel", ss)
+    add_child(strip)
+
+    var btn_w := 44.0
+    var btn_h := 26.0
+    var pad_x := 5.0
+    var pad_y := 5.0
+    for i in range(emotes.size()):
+        var edata: Dictionary = emotes[i]
+        var btn := Button.new()
+        btn.text = str(edata["label"])
+        btn.position = Vector2(pad_x + i * (btn_w + 4.0), pad_y)
+        btn.size = Vector2(btn_w, btn_h)
+        btn.z_index = 251
+        btn.add_theme_font_size_override("font_size", ui_font(11))
+        var bs := StyleBoxFlat.new()
+        bs.bg_color = Color(0.08, 0.14, 0.26, 0.95)
+        bs.border_color = Color(0.40, 0.62, 0.90, 0.80)
+        bs.set_border_width_all(1)
+        bs.set_corner_radius_all(7)
+        var bs_hover := bs.duplicate() as StyleBoxFlat
+        bs_hover.bg_color = Color(0.14, 0.24, 0.42)
+        var bs_pressed := bs.duplicate() as StyleBoxFlat
+        bs_pressed.bg_color = Color(0.22, 0.38, 0.68)
+        btn.add_theme_stylebox_override("normal",  bs)
+        btn.add_theme_stylebox_override("hover",   bs_hover)
+        btn.add_theme_stylebox_override("pressed", bs_pressed)
+        btn.add_theme_color_override("font_color", Color(0.82, 0.92, 1.0))
+        var cat: String = str(edata["cat"])
+        btn.pressed.connect(func():
+            play_battle_bark(player_leader, selected_class, cat, true, true))
+        strip.add_child(btn)
 
 func _show_amulet_tooltip(anchor: Control, amulet_name: String, effect: String, accent: Color) -> void:
     # Dismiss any previous tooltip immediately; second tap on same amulet dismisses.
