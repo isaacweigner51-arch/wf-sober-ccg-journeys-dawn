@@ -1725,87 +1725,150 @@ func show_home() -> void:
     main.add_theme_stylebox_override("panel", style(Color(0.06, 0.09, 0.17), 16))
     root_layer.add_child(main)
 
-    centered_label("CHOOSE YOUR LEADER", Vector2(20, 10), Vector2(976, 34), 22, main).add_theme_color_override("font_color", GOLD_COLOR)
+    # Leader portrait selector cards — shows each class's actual face so
+    # the player picks by recognising the character, not just reading a word.
     var order := ["Hope", "Purpose", "Serenity", "Courage"]
     for i in range(order.size()):
         var c: String = order[i]
-        var tab := Button.new()
-        tab.position = Vector2(24 + i * 241, 50)
-        tab.size = Vector2(224, 48)
-        tab.text = c.to_upper()
-        tab.add_theme_font_size_override("font_size", ui_font_size(15))
-        var tab_style := style(class_color(c), 10)
-        tab_style.bg_color = Color(0.025, 0.04, 0.075, 0.96)
-        tab_style.set_border_width_all(4 if c == active_class else 2)
-        tab.add_theme_stylebox_override("normal", tab_style)
-        tab.add_theme_stylebox_override("hover", tab_style)
-        tab.add_theme_stylebox_override("pressed", tab_style)
-        tab.add_theme_color_override("font_color", Color(0.96, 0.97, 1.0))
-        tab.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
-        tab.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 1.0))
-        tab.pressed.connect(func():
+        var cc := class_color(c)
+        var is_active := (c == active_class)
+
+        # Outer card — clickable, clipped so portrait doesn't overflow
+        var card := Button.new()
+        card.position = Vector2(12 + i * 249, 10)
+        card.size = Vector2(236, 88)
+        card.clip_contents = true
+        var card_bg := StyleBoxFlat.new()
+        card_bg.bg_color = cc.darkened(0.60) if is_active else Color(0.02, 0.03, 0.06)
+        card_bg.border_color = cc
+        card_bg.set_border_width_all(4 if is_active else 1)
+        card_bg.set_corner_radius_all(12)
+        card_bg.shadow_color = Color(cc, 0.55 if is_active else 0.0)
+        card_bg.shadow_size = 14 if is_active else 0
+        card.add_theme_stylebox_override("normal",  card_bg)
+        card.add_theme_stylebox_override("hover",   card_bg)
+        card.add_theme_stylebox_override("pressed", card_bg)
+        card.pressed.connect(func():
             selected_class = c
             selected_deck_class = c
             save_profile()
             show_home()
         )
-        main.add_child(tab)
+        main.add_child(card)
 
-    # Frameless hero showcase. The leader is presented as character art, not as a card.
+        # Leader portrait thumbnail — top portion of the art fills the card
+        var thumb := TextureRect.new()
+        thumb.texture = current_leader_texture(c)
+        thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        thumb.position = Vector2(0, 0)
+        thumb.size = Vector2(236, 66)
+        thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        thumb.clip_contents = true
+        card.add_child(thumb)
+
+        # Bottom nameplate strip
+        var nameplate := ColorRect.new()
+        nameplate.color = cc.darkened(0.45) if is_active else Color(0.04, 0.06, 0.12, 0.96)
+        nameplate.position = Vector2(0, 66); nameplate.size = Vector2(236, 22)
+        nameplate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        card.add_child(nameplate)
+
+        var name_lbl := centered_label(c.to_upper(), Vector2(0, 66), Vector2(236, 22), 13, card)
+        name_lbl.add_theme_color_override("font_color", cc if is_active else Color(0.88, 0.90, 0.98))
+        name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+        # Active indicator line along the top
+        if is_active:
+            var ind := ColorRect.new(); ind.color = cc
+            ind.position = Vector2.ZERO; ind.size = Vector2(236, 4)
+            ind.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            card.add_child(ind)
+
+    # Hero showcase — full portrait fill with dramatic glow border.
     var showcase := Panel.new()
-    showcase.position = Vector2(24, 114)
-    showcase.size = Vector2(548, 430)
+    showcase.position = Vector2(24, 108)
+    showcase.size = Vector2(548, 494)
     var showcase_style := StyleBoxFlat.new()
-    showcase_style.bg_color = Color(0.015, 0.025, 0.05, 0.60)
+    showcase_style.bg_color = Color(0.008, 0.012, 0.025)
     showcase_style.border_color = class_color(active_class)
-    showcase_style.set_border_width_all(2)
+    showcase_style.set_border_width_all(5)
     showcase_style.set_corner_radius_all(18)
-    showcase_style.shadow_color = Color(class_color(active_class), 0.28)
-    showcase_style.shadow_size = 10
+    showcase_style.shadow_color = Color(class_color(active_class), 0.65)
+    showcase_style.shadow_size = 28
     showcase.add_theme_stylebox_override("panel", showcase_style)
     main.add_child(showcase)
-
-    # Dedicated clipped viewport for the leader art. This prevents the texture from
-    # drawing below or outside the showcase on different display scales.
     showcase.clip_contents = true
 
+    # Inner glow lines — 2 thin accent rects along top and left inside edge
+    var glow_top := ColorRect.new(); glow_top.color = Color(class_color(active_class), 0.55)
+    glow_top.position = Vector2(5, 5); glow_top.size = Vector2(538, 2)
+    glow_top.mouse_filter = Control.MOUSE_FILTER_IGNORE; showcase.add_child(glow_top)
+    var glow_left := ColorRect.new(); glow_left.color = Color(class_color(active_class), 0.35)
+    glow_left.position = Vector2(5, 5); glow_left.size = Vector2(2, 484)
+    glow_left.mouse_filter = Control.MOUSE_FILTER_IGNORE; showcase.add_child(glow_left)
+
     var art_frame := Panel.new()
-    art_frame.position = Vector2(8, 8)
-    art_frame.size = Vector2(532, 344)
+    art_frame.position = Vector2(6, 6)
+    art_frame.size = Vector2(536, 482)
     art_frame.clip_contents = true
-    var art_frame_style := StyleBoxFlat.new()
-    art_frame_style.bg_color = Color(0.008, 0.014, 0.028, 1.0)
-    art_frame_style.set_corner_radius_all(14)
-    art_frame.add_theme_stylebox_override("panel", art_frame_style)
+    art_frame.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
     showcase.add_child(art_frame)
 
     var art := TextureRect.new()
     art.texture = current_leader_texture(active_class)
-    # Shift the portrait horizontally so each leader's face centres in the frame.
-    # Because art_frame has clip_contents=true, a negative position moves the
-    # art left; expanding the width keeps the COVERED texture filling the frame.
     var _focal_x := float(LEADER_FOCAL_PX.get(active_class.to_lower(), 0))
     art.position = Vector2(_focal_x, 0.0)
     art.size = Vector2(art_frame.size.x + absf(_focal_x), art_frame.size.y)
     art.custom_minimum_size = Vector2.ZERO
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    # COVERED, not CENTERED: this frame (532x344) is much wider than the
-    # square 512x512 source art. CENTERED left large empty bars down both
-    # sides; COVERED fills the whole frame with the portrait.
     art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     art.clip_contents = true
     art_frame.add_child(art)
 
-    # ── Animated showcase enhancements ──────────────────────────────────────
-    # Subtle portrait breathing — makes the home screen feel alive without
-    # the full layered-art system.
+    # Portrait breathing animation
     var art_tween := create_tween().set_loops()
     art_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-    art_tween.tween_property(art, "position:y", -6.0, 2.6)
-    art_tween.tween_property(art, "position:y",  0.0, 2.6)
+    art_tween.tween_property(art, "position:y", -8.0, 3.0)
+    art_tween.tween_property(art, "position:y",  0.0, 3.0)
 
-    # Class-coloured glow overlay pulses on top of the portrait.
+    # Deep bottom scrim so the class nameplate is readable over any portrait
+    var scrim := ColorRect.new()
+    scrim.color = Color(0.0, 0.0, 0.0, 0.0)
+    scrim.position = Vector2(0, art_frame.size.y * 0.55)
+    scrim.size = Vector2(art_frame.size.x, art_frame.size.y * 0.45)
+    scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    art_frame.add_child(scrim)
+    # Fade scrim in via tween so it feels atmospheric rather than hard-cut
+    var scrim_t := create_tween()
+    scrim_t.tween_property(scrim, "color:a", 0.78, 0.6)
+
+    # Large class nameplate overlaid at the bottom of the portrait
+    var nameplate_bg := ColorRect.new()
+    nameplate_bg.color = Color(class_color(active_class), 0.18)
+    nameplate_bg.position = Vector2(0, art_frame.size.y - 72)
+    nameplate_bg.size = Vector2(art_frame.size.x, 72)
+    nameplate_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    art_frame.add_child(nameplate_bg)
+
+    # Bright class-color line above the nameplate
+    var nameplate_line := ColorRect.new()
+    nameplate_line.color = class_color(active_class)
+    nameplate_line.position = Vector2(0, art_frame.size.y - 74)
+    nameplate_line.size = Vector2(art_frame.size.x, 3)
+    nameplate_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    art_frame.add_child(nameplate_line)
+
+    var np_name := label(active_class.to_upper(), Vector2(20, art_frame.size.y - 68), Vector2(320, 44), 36, art_frame)
+    np_name.add_theme_color_override("font_color", class_color(active_class).lightened(0.3))
+    np_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+    var np_desc := label(class_description(active_class), Vector2(20, art_frame.size.y - 28), Vector2(440, 22), 13, art_frame)
+    np_desc.add_theme_color_override("font_color", Color(0.88, 0.91, 0.98))
+    np_desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+    # Pulsing class-color glow overlay
     var glow_overlay := ColorRect.new()
     glow_overlay.color = Color(class_color(active_class), 0.0)
     glow_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1813,49 +1876,26 @@ func show_home() -> void:
     art_frame.add_child(glow_overlay)
     var glow_tween := create_tween().set_loops()
     glow_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-    glow_tween.tween_property(glow_overlay, "color:a", 0.10, 2.0)
-    glow_tween.tween_property(glow_overlay, "color:a", 0.03, 2.0)
-
-    # Corner accent sparkles — four class-colored dots at portrait corners.
-    for corner_pos in [Vector2(4,4), Vector2(520,4), Vector2(4,330), Vector2(520,330)]:
-        var dot := ColorRect.new()
-        dot.color = class_color(active_class).lightened(0.4)
-        dot.position = corner_pos
-        dot.size = Vector2(8, 8)
-        dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        art_frame.add_child(dot)
+    glow_tween.tween_property(glow_overlay, "color:a", 0.12, 2.2)
+    glow_tween.tween_property(glow_overlay, "color:a", 0.02, 2.2)
 
     if sponsor_leader_unlocked:
         var skin_toggle := button(
             "SPONSOR SKIN: ON" if selected_leader_skin == "sponsor" else "SPONSOR SKIN: OFF",
-            Vector2(16, 16), Vector2(186, 34), toggle_sponsor_skin, showcase)
+            Vector2(16, 16), Vector2(186, 30), toggle_sponsor_skin, showcase)
         skin_toggle.add_theme_font_size_override("font_size", ui_font_size(11))
 
-    var info_strip := Panel.new()
-    info_strip.position = Vector2(8, 356)
-    info_strip.size = Vector2(532, 66)
-    var info_style := StyleBoxFlat.new()
-    info_style.bg_color = Color(0.015, 0.025, 0.05, 0.94)
-    info_style.border_color = Color(class_color(active_class), 0.85)
-    info_style.set_border_width_all(1)
-    info_style.set_corner_radius_all(12)
-    info_strip.add_theme_stylebox_override("panel", info_style)
-    showcase.add_child(info_strip)
-
-    var leader_name := label(active_class.to_upper(), Vector2(16, 7), Vector2(180, 28), 21, info_strip)
-    leader_name.add_theme_color_override("font_color", class_color(active_class))
-    var desc := label(class_description(active_class), Vector2(202, 7), Vector2(214, 48), 12, info_strip)
-    desc.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    var preview_button := button("PREVIEW", Vector2(326, 9), Vector2(94, 46), show_deck_preview, info_strip)
+    # PREVIEW / DECKS buttons now sit at the bottom of the showcase panel (below portrait)
+    var preview_button := button("PREVIEW", Vector2(40, 460), Vector2(216, 26), show_deck_preview, showcase)
     preview_button.add_theme_font_size_override("font_size", ui_font_size(13))
-    var decks_button := button("DECKS", Vector2(426, 9), Vector2(94, 46), show_deck_builder, info_strip)
-    decks_button.add_theme_font_size_override("font_size", ui_font_size(15))
+    var decks_button := button("DECKS", Vector2(292, 460), Vector2(216, 26), show_deck_builder, showcase)
+    decks_button.add_theme_font_size_override("font_size", ui_font_size(13))
 
-    # Right-side actions have their own reserved region and cannot overlap the art.
+    # Right-side actions — matches new taller showcase height
     var right := Panel.new()
-    right.position = Vector2(590, 114)
-    right.size = Vector2(402, 430)
-    right.add_theme_stylebox_override("panel", style(Color(0.08, 0.11, 0.20), 14))
+    right.position = Vector2(590, 108)
+    right.size = Vector2(402, 494)
+    right.add_theme_stylebox_override("panel", style(Color(0.06, 0.09, 0.17), 14))
     main.add_child(right)
     # Class accent header bar
     var accent_bar_r := ColorRect.new(); accent_bar_r.position = Vector2(0, 0); accent_bar_r.size = Vector2(402, 4); accent_bar_r.color = class_color(active_class); right.add_child(accent_bar_r)
@@ -1879,11 +1919,20 @@ func show_home() -> void:
     var reflection := label("Progress begins with one honest choice. Keep moving forward.", Vector2(20, 196), Vector2(362, 72), 14, right)
     reflection.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     reflection.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    var enter := button("ENTER BATTLE", Vector2(20, 300), Vector2(362, 64), start_battle, right)
-    enter.add_theme_font_size_override("font_size", ui_font_size(22))
-    enter.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 14))
-    enter.add_theme_color_override("font_color", Color(0.04, 0.06, 0.10))
-    var trials_cta := button("THE TRIALS", Vector2(20, 372), Vector2(362, 50), show_trials, right)
+    var enter := button("⚔  ENTER BATTLE", Vector2(20, 316), Vector2(362, 72), start_battle, right)
+    enter.add_theme_font_size_override("font_size", ui_font_size(24))
+    enter.add_theme_stylebox_override("normal",  solid_style(GOLD_COLOR, 14))
+    enter.add_theme_stylebox_override("hover",   solid_style(GOLD_COLOR.lightened(0.2), 14))
+    enter.add_theme_stylebox_override("pressed", solid_style(GOLD_COLOR.darkened(0.15), 14))
+    enter.add_theme_color_override("font_color",       Color(0.04, 0.03, 0.01))
+    enter.add_theme_color_override("font_hover_color", Color(0.04, 0.03, 0.01))
+    # Pulsing scale animation — draws the eye unmistakably to the main CTA
+    var btn_tween := create_tween().set_loops()
+    btn_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    btn_tween.tween_property(enter, "modulate", Color(1.15, 1.10, 0.85), 1.1)
+    btn_tween.tween_property(enter, "modulate", Color(1.0,  1.0,  1.0),  1.1)
+
+    var trials_cta := button("THE TRIALS", Vector2(20, 398), Vector2(362, 50), show_trials, right)
     trials_cta.add_theme_font_size_override("font_size", ui_font_size(18))
 
     centered_label(BUILD_NAME, Vector2(20, 566), Vector2(976, 28), 12, main).modulate = Color(0.72, 0.78, 0.86)
