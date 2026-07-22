@@ -1801,55 +1801,124 @@ func start_leader_idle(portrait: TextureRect) -> void:
     drift.tween_property(portrait, "position:x", -2.0, 2.6)
     drift.tween_property(portrait, "position:x",  0.0, 2.6)
 
-## Applies class-specific background tint and a pulsing aura border to a leader.
+## Applies class-specific atmospheric glow BEHIND the leader portrait.
+## No square border — each class gets a unique organic halo shape.
 ## Must be called AFTER update_leader_visual() so faction is known.
 func _start_leader_class_aura(leader: Button, faction_name: String) -> void:
-    var old := leader.get_node_or_null("ClassAuraBorder")
-    if is_instance_valid(old):
-        old.queue_free()
+    # Remove any old glow and border.
+    for old_name in ["ClassAuraBorder", "ClassAuraGlow"]:
+        var old := leader.get_node_or_null(old_name)
+        if is_instance_valid(old): old.queue_free()
 
     var ac := class_accent_color(faction_name)
 
-    # Class-tinted atmospheric background.
-    var aura_bg := leader.get_node_or_null("AuraBg") as ColorRect
-    if aura_bg != null:
-        aura_bg.color = Color(ac.r * 0.10, ac.g * 0.08, ac.b * 0.14, 1.0)
+    # Per-class organic aura — a tall oval glow rendered from SVG, placed BEHIND
+    # and larger than the portrait so the character appears to radiate energy
+    # from the field rather than sitting in a glowing box.
+    var glow_svg := _leader_aura_svg(faction_name)
+    var glow_img := Image.new()
+    if glow_img.load_svg_from_buffer(glow_svg.to_utf8_buffer(), 1.0) != OK:
+        return
+    var glow := TextureRect.new()
+    glow.name = "ClassAuraGlow"
+    glow.texture = ImageTexture.create_from_image(glow_img)
+    glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    glow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    # Extend 50 px beyond each edge of the 180×260 portrait.
+    glow.position = Vector2(-50, -50)
+    glow.size = Vector2(280, 360)
+    glow.z_index = -10
+    glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    leader.add_child(glow)
+    leader.move_child(glow, 0)   # put it behind all other children
 
-    # Tint the bottom scrim to match.
-    var scrim := leader.get_node_or_null("BottomScrim") as ColorRect
-    if scrim != null:
-        scrim.color = Color(ac.r * 0.06, ac.g * 0.05, ac.b * 0.10, 0.92)
-
-    # Class-coloured accent bar.
-    var accent := leader.get_node_or_null("AccentBar") as ColorRect
-    if accent != null:
-        accent.color = ac
-
-    # Glowing border panel that pulses in class colour.
-    var border := Panel.new()
-    border.name = "ClassAuraBorder"
-    border.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    border.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    border.z_index = 90
-    var bs := StyleBoxFlat.new()
-    bs.bg_color       = Color(0, 0, 0, 0)
-    bs.border_color   = Color(ac.r, ac.g, ac.b, 0.60)
-    bs.set_border_width_all(3)
-    bs.set_corner_radius_all(0)
-    bs.shadow_color   = Color(ac.r, ac.g, ac.b, 0.40)
-    bs.shadow_size    = 22
-    border.add_theme_stylebox_override("panel", bs)
-    leader.add_child(border)
-
-    # Pulse speed varies by class personality.
-    var speed: float = 1.9  # Purpose: disciplined default
-    if faction_name == "Courage":  speed = 1.0   # urgent, rapid flicker
-    elif faction_name == "Hope":   speed = 1.6   # warm, steady
-    elif faction_name == "Serenity": speed = 2.6 # slow, meditative
+    # Pulse — each class at a distinct rhythm that matches its personality.
+    var speed: float = 1.9
+    match faction_name:
+        "Courage":  speed = 0.8   # urgent, rapid flicker like flame
+        "Hope":     speed = 1.6   # warm, steady pulse
+        "Serenity": speed = 2.8   # slow, meditative breath
+        "Purpose":  speed = 1.4   # measured, deliberate
     var pulse := create_tween().set_loops().bind_node(leader)
     pulse.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-    pulse.tween_property(border, "modulate:a", 0.28, speed)
-    pulse.tween_property(border, "modulate:a", 1.00, speed)
+    pulse.tween_property(glow, "modulate:a", 0.35, speed)
+    pulse.tween_property(glow, "modulate:a", 1.00, speed)
+
+func _leader_aura_svg(faction_name: String) -> String:
+    match faction_name:
+        "Hope":
+            # Soft oval purple-gold sunrise halo — dawn breaking behind Lyra.
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280'>
+<defs>
+<radialGradient id='a' cx='50%' cy='48%' r='50%'>
+  <stop offset='0%' stop-color='#e8b4ff' stop-opacity='0.72'/>
+  <stop offset='45%' stop-color='#8b3fc8' stop-opacity='0.40'/>
+  <stop offset='100%' stop-color='#2a0050' stop-opacity='0'/>
+</radialGradient>
+<radialGradient id='b' cx='50%' cy='30%' r='38%'>
+  <stop offset='0%' stop-color='#ffe8a0' stop-opacity='0.55'/>
+  <stop offset='100%' stop-color='#ffe8a0' stop-opacity='0'/>
+</radialGradient>
+</defs>
+<ellipse cx='140' cy='134' rx='118' ry='128' fill='url(#a)'/>
+<ellipse cx='140' cy='88' rx='62' ry='55' fill='url(#b)'/>
+</svg>"""
+        "Courage":
+            # Jagged flame corona — heat and fire radiating from Kael.
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280'>
+<defs>
+<radialGradient id='a' cx='50%' cy='52%' r='50%'>
+  <stop offset='0%' stop-color='#ff9040' stop-opacity='0.80'/>
+  <stop offset='40%' stop-color='#cc2200' stop-opacity='0.45'/>
+  <stop offset='100%' stop-color='#400000' stop-opacity='0'/>
+</radialGradient>
+</defs>
+<ellipse cx='140' cy='140' rx='120' ry='124' fill='url(#a)'/>
+<polygon points='140,12 148,44 162,18 158,50 178,28 166,58 192,44 172,70 200,64 174,84 204,86 174,100 200,110 168,112 188,130 156,124 168,148 140,136 112,148 124,124 92,130 112,112 80,110 106,100 76,86 106,84 80,64 108,70 88,44 114,58 102,28 122,50 118,18 132,44 140,12'
+      fill='#ff6020' opacity='0.28'/>
+</svg>"""
+        "Serenity":
+            # Concentric teal ripple rings — water expanding from Aurelia.
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280'>
+<defs>
+<radialGradient id='a' cx='50%' cy='50%' r='50%'>
+  <stop offset='0%' stop-color='#80f0e8' stop-opacity='0.65'/>
+  <stop offset='55%' stop-color='#0088aa' stop-opacity='0.30'/>
+  <stop offset='100%' stop-color='#001828' stop-opacity='0'/>
+</radialGradient>
+</defs>
+<ellipse cx='140' cy='140' rx='122' ry='126' fill='url(#a)'/>
+<ellipse cx='140' cy='140' rx='100' ry='104' fill='none' stroke='#40d8d0' stroke-width='1.5' opacity='0.45'/>
+<ellipse cx='140' cy='140' rx='78' ry='82' fill='none' stroke='#40d8d0' stroke-width='1.2' opacity='0.35'/>
+<ellipse cx='140' cy='140' rx='56' ry='60' fill='none' stroke='#80f0e8' stroke-width='1' opacity='0.30'/>
+</svg>"""
+        "Purpose":
+            # Amber compass-star rays — geometric precision of Orin's will.
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280'>
+<defs>
+<radialGradient id='a' cx='50%' cy='50%' r='50%'>
+  <stop offset='0%' stop-color='#ffe090' stop-opacity='0.70'/>
+  <stop offset='50%' stop-color='#c07010' stop-opacity='0.35'/>
+  <stop offset='100%' stop-color='#200800' stop-opacity='0'/>
+</radialGradient>
+</defs>
+<ellipse cx='140' cy='140' rx='120' ry='120' fill='url(#a)'/>
+<g opacity='0.30' fill='#f0c040'>
+  <polygon points='140,20 146,134 140,248 134,134'/>
+  <polygon points='20,140 134,146 248,140 134,134'/>
+  <polygon points='58,58 138,136 222,222 142,144'/>
+  <polygon points='222,58 144,136 58,222 138,144'/>
+</g>
+<circle cx='140' cy='140' r='18' fill='none' stroke='#ffe090' stroke-width='2' opacity='0.55'/>
+</svg>"""
+        _:
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280'>
+<defs><radialGradient id='a' cx='50%' cy='50%' r='50%'>
+  <stop offset='0%' stop-color='#ffffff' stop-opacity='0.40'/>
+  <stop offset='100%' stop-color='#ffffff' stop-opacity='0'/>
+</radialGradient></defs>
+<ellipse cx='140' cy='140' rx='120' ry='120' fill='url(#a)'/>
+</svg>"""
 
 # Leader portraits are square, full-scene paintings with the character in the
 # top ~60% of the canvas (see menu.gd: class_leader_texture, same fix applied
@@ -1974,24 +2043,20 @@ func build_ui() -> void:
     _player_deck_count_label.z_index = 115
     add_child(_player_deck_count_label)
 
-    enemy_leader = make_leader("OPPONENT", Vector2(24, 92), false)
+    enemy_leader = make_leader("OPPONENT", Vector2(12, 62), false)
     enemy_leader.pressed.connect(func(): leader_clicked(false))
     add_child(enemy_leader)
-    player_leader = make_leader("YOU", Vector2(1062, 335), true)
+    player_leader = make_leader("YOU", Vector2(1080, 285), true)
     player_leader.pressed.connect(func(): leader_clicked(true))
     add_child(player_leader)
 
-    # Hang each HP badge off the bottom-right corner of its own leader frame.
-    # IMPORTANT: these must NOT be children of the leader Button — make_leader()
-    # sets leader.clip_contents = true so its own portrait art doesn't bleed
-    # out, and a badge offset far enough to "hang off the corner" fell mostly
-    # outside the leader's own (195x185) rect, so it was being silently
-    # clipped away entirely. Parenting to self (unclipped) with an absolute
-    # position fixes that; z_index keeps it above board art either way.
-    enemy_health_label = make_hp_label(enemy_leader.position + Vector2(118, 153), class_accent_color(enemy_class))
+    # HP badge overlaps the very bottom of the portrait — integrated rather
+    # than floating separately.  Offset (90, 248) places it just inside the
+    # bottom edge of the 260 px tall portrait.
+    enemy_health_label = make_hp_label(enemy_leader.position + Vector2(90, 248), class_accent_color(enemy_class))
     enemy_health_label.z_index = 130
     add_child(enemy_health_label)
-    player_health_label = make_hp_label(player_leader.position + Vector2(118, 153), class_accent_color(selected_class))
+    player_health_label = make_hp_label(player_leader.position + Vector2(90, 248), class_accent_color(selected_class))
     player_health_label.z_index = 130
     add_child(player_health_label)
 
@@ -2128,7 +2193,7 @@ func update_leader_visual(leader: Button, faction_name: String, player_side: boo
     # same focal offsets as Battle Prep and every other screen.
     var lv := leader.get_node_or_null("LeaderPortrait")
     if lv != null:
-        lv.setup(faction_name, Vector2(200, 200))
+        lv.setup(faction_name, Vector2(180, 260))
     var name_label := leader.get_node_or_null("NameLabel") as Label
     if name_label != null:
         name_label.text = leader_name_for(faction_name)
@@ -3391,62 +3456,47 @@ func area_center(player_side: bool) -> Vector2:
     return area.global_position + area.size * 0.5
 
 func make_leader(label_text: String, pos: Vector2, player_side: bool) -> Button:
+    # Portrait-shaped leader — taller than wide, no boxy frame, no scrim.
+    # The organic aura glow (added by _start_leader_class_aura) extends beyond
+    # the portrait edges so the character feels like they're standing on the
+    # field rather than sitting in a box.
+    const LW := 180.0; const LH := 260.0
     var leader := Button.new()
     leader.position = pos
-    leader.size = Vector2(200, 200)
+    leader.size = Vector2(LW, LH)
     leader.text = ""
-    leader.clip_contents = true
+    leader.clip_contents = false
     leader.focus_mode = Control.FOCUS_NONE
 
-    # No card-border styling — leaders feel like characters, not cards.
     var style_empty := StyleBoxEmpty.new()
     leader.add_theme_stylebox_override("normal",  style_empty)
     leader.add_theme_stylebox_override("hover",   style_empty)
     leader.add_theme_stylebox_override("pressed", style_empty)
     leader.add_theme_stylebox_override("focus",   style_empty)
 
-    # Animated leader portrait — layered art (body/head/hair/blink/aura) with
-    # idle breathing, hair sway, and blinking handled by LeaderView.
-    # Class is set by update_leader_visual() once faction_name is known.
     var lv := _LeaderView.new()
     lv.name = "LeaderPortrait"
     lv.position = Vector2.ZERO
-    lv.size = Vector2(200, 200)
+    lv.size = Vector2(LW, LH)
     lv.mouse_filter = Control.MOUSE_FILTER_IGNORE
     leader.add_child(lv)
 
-    # Gradient scrim fades the portrait into the name area.
-    var scrim := ColorRect.new()
-    scrim.name = "BottomScrim"
-    scrim.position = Vector2(0, 150)
-    scrim.size = Vector2(200, 50)
-    scrim.color = Color(0.03, 0.05, 0.10, 0.90)
-    scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    leader.add_child(scrim)
-
-    # Thin class accent line — coloured in _start_leader_class_aura().
-    var accent_bar := ColorRect.new()
-    accent_bar.name = "AccentBar"
-    accent_bar.position = Vector2(0, 164)
-    accent_bar.size = Vector2(200, 2)
-    accent_bar.color = Color(1.0, 0.80, 0.34)
-    accent_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    leader.add_child(accent_bar)
-
-    # Leader name plate.
+    # Name floats at the bottom with a strong drop shadow — no backing panel,
+    # no scrim box, no accent line.  It reads against any background because
+    # of the shadow, and doesn't create a rectangular "frame" feel.
     var name_label := Label.new()
     name_label.name = "NameLabel"
     name_label.text = label_text
-    name_label.position = Vector2(4, 167)
-    name_label.size = Vector2(192, 30)
+    name_label.position = Vector2(0, LH - 34)
+    name_label.size = Vector2(LW, 28)
     name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-    name_label.add_theme_font_size_override("font_size", ui_font(10))
-    name_label.add_theme_color_override("font_color", Color(1.0, 0.91, 0.62))
-    name_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.90))
-    name_label.add_theme_constant_override("shadow_offset_x", 1)
-    name_label.add_theme_constant_override("shadow_offset_y", 1)
+    name_label.add_theme_font_size_override("font_size", ui_font(11))
+    name_label.add_theme_color_override("font_color", Color(1.0, 0.94, 0.70))
+    name_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.96))
+    name_label.add_theme_constant_override("shadow_offset_x", 2)
+    name_label.add_theme_constant_override("shadow_offset_y", 2)
     name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     leader.add_child(name_label)
     return leader
