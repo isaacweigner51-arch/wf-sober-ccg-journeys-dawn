@@ -6170,9 +6170,10 @@ func _show_sequential_pack_reveal(pulled: Array, platinum_hit: bool,
     currency_bar()
 
     var backs: Array[Panel] = []
+    # 7 cards × 168 px + 6 × 10 px gap = 1,258 px — fits the 1,280 px viewport.
     for i in range(pulled.size()):
-        var pos := Vector2(55 + i * 244, 178)
-        var back := pack_card_back(pos, Vector2(220, 340))
+        var pos := Vector2(22 + i * 178, 192)
+        var back := pack_card_back(pos, Vector2(168, 255))
         root_layer.add_child(back)
         backs.append(back)
 
@@ -6184,13 +6185,13 @@ func _show_sequential_pack_reveal(pulled: Array, platinum_hit: bool,
         next_caption = "VIEW SUMMARY"
     else:
         next_caption = "NEXT PACK  (%d remaining)" % (total_packs - pack_num)
-    var next_btn := button(next_caption, Vector2(390, 550), Vector2(390, 55), on_next)
+    var next_btn := button(next_caption, Vector2(390, 468), Vector2(390, 55), on_next)
     next_btn.disabled = true
 
     # Skip-to-summary always available so a player opening 25 packs isn't
     # forced through every single animation if they just want the results.
     var on_skip := func(): show_bulk_pack_results(all_pulled, pack_count, plat_total)
-    button("SKIP TO SUMMARY", Vector2(793, 550), Vector2(222, 55), on_skip)
+    button("SKIP TO SUMMARY", Vector2(793, 468), Vector2(222, 55), on_skip)
 
     _enable_next_after_reveal(pulled, backs, platinum_hit, next_btn)
 

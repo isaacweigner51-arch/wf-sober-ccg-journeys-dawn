@@ -497,8 +497,7 @@ func build_class_cards(faction_name: String) -> Array:
         card("Clean Slate",7,0,0,"Hope","Epic","second_chance",0,"Spell: Transform the 3 enemy followers with the highest Attack into Newcomers (1/1). Restore 3 defense.","hands"),
         card("Healing Grace",5,4,6,"Hope","Epic","heal_draw",4,"On Play: Restore 4 defense and draw a card.","star","jd-135"),
         card("Beacon of Hope",8,5,7,"Hope","Platinum","hope_platinum",0,"SIGNATURE PLATINUM — Evolve for free. Summon two Inspired Volunteers (2/3). Each Volunteer gains +1/+1 whenever your leader is healed.","star"),
-        card("Hope Unending",7,5,8,"Hope","Legendary","heal_draw",6,"On Play: Restore 6 defense and draw a card.","star","jd-130"),
-        card("Lyra, Voice of Dawn",4,3,5,"Hope","Legendary","heal_buff_dawn",3,"On Play: Restore 3 Defense. Whenever any follower is healed or restored this match, give all allied followers +1/+0 permanently (once per turn).","star","jd-210")]
+        card("Lyra, Voice of Dawn",4,3,5,"Hope","Legendary","dawn_sequence",0,"On Play: Give your leader the Dawn Sequence (non-stackable, lasts the match). 1st restore: +1/+1 to all allies. 2nd restore: 1 damage to all enemy followers. 3rd restore: summon a Newcomer with +2/+2 and Ward.","star","jd-210")]
 
 func build_universal_cards() -> Array:
     return [
@@ -4287,6 +4286,8 @@ func start_game() -> void:
     refresh_battlefield_theme()
     refresh_leader_hp_badge_colors()
     signature_voice_played.clear()
+    _dawn_seq_player_stage = 0
+    _dawn_seq_enemy_stage  = 0
     last_bark_at = -999.0
     _near_win_barked = false
     player_low_health_barked = false
@@ -5393,16 +5394,16 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
             if ally != unit:
                 ally["health"] = int(ally["health"]) + amount; ally["max_health"] = int(ally["max_health"]) + amount; break
         await show_vfx("HELPING HAND", area_center(player_side), Color(0.55, 1.0, 0.75))
-    elif ability == "heal_buff_dawn":
-        # Lyra, Voice of Dawn: On Play restore 3 Defense. Registers a passive
-        # that gives all allies +1 Attack whenever ANY follower is healed this
-        # match (capped to once per turn via _lyra_buff_this_turn flag).
-        if player_side: player_health = min(STARTING_HEALTH, player_health + amount)
-        else: enemy_health = min(STARTING_HEALTH, enemy_health + amount)
-        leader_feedback(player_leader if player_side else enemy_leader, amount, true)
-        await show_vfx("LYRA'S DAWN", area_center(player_side), Color(1.0, 0.92, 0.55))
-        # Mark the unit as the dawn-buff anchor so _trigger_on_any_healed knows it's live.
-        unit["dawn_buff_active"] = true
+    elif ability == "dawn_sequence":
+        # Lyra, Voice of Dawn: registers the 3-stage Dawn Sequence on the leader.
+        # Non-stackable — only activates if not already running this match.
+        if player_side:
+            if _dawn_seq_player_stage == 0:
+                _dawn_seq_player_stage = 1
+        else:
+            if _dawn_seq_enemy_stage == 0:
+                _dawn_seq_enemy_stage = 1
+        await show_vfx("DAWN SEQUENCE ACTIVE", area_center(player_side), Color(1.0, 0.88, 0.45))
     elif ability == "heal_buff_comeback":
         if player_side: player_health = min(STARTING_HEALTH, player_health + amount)
         else: enemy_health = min(STARTING_HEALTH, enemy_health + amount)
@@ -5616,8 +5617,8 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
 ## Called after any heal event so passive "whenever leader healed" abilities fire.
 ## Abilities handled: renew_growth, guard_heal_buff (Dreamward Keeper), heal_grows (Inspired Volunteer),
 ## and the dawn_buff_active flag set by Lyra, Voice of Dawn (heal_buff_dawn).
-var _lyra_buff_player_turn := -1   # last turn player Lyra buff fired
-var _lyra_buff_enemy_turn  := -1   # last turn enemy  Lyra buff fired
+var _dawn_seq_player_stage := 0   # Dawn Sequence: 0=inactive 1/2/3=next stage 4=exhausted
+var _dawn_seq_enemy_stage  := 0
 
 func _trigger_on_leader_healed(player_side: bool) -> void:
     var board: Array = player_board if player_side else enemy_board
@@ -5627,27 +5628,49 @@ func _trigger_on_leader_healed(player_side: bool) -> void:
             board[i]["attack"] = int(board[i].get("attack", 0)) + 1
             board[i]["health"] = int(board[i].get("health", 0)) + 1
             board[i]["max_health"] = int(board[i].get("max_health", board[i]["health"])) + 1
-    _trigger_lyra_dawn_buff(player_side)
+    _trigger_dawn_sequence(player_side)
     refresh_ui()
 
-## Lyra, Voice of Dawn passive: whenever ANY heal occurs on your side, give all
-## allied followers +1 Attack permanently — but only once per turn.
-func _trigger_lyra_dawn_buff(player_side: bool) -> void:
-    var board: Array = player_board if player_side else enemy_board
-    var lyra_live := false
-    for unit in board:
-        if bool(unit.get("dawn_buff_active", false)):
-            lyra_live = true
-            break
-    if not lyra_live:
+## Lyra, Voice of Dawn — 3-stage Dawn Sequence fired once per leader-restore event.
+## Stage 1: +1/+1 to all allied followers.
+## Stage 2: deal 1 damage to all enemy followers.
+## Stage 3: summon a Newcomer (3/3 Ward) from the Dawn.
+## Non-stackable; exhausts after stage 3 fires.
+func _trigger_dawn_sequence(player_side: bool) -> void:
+    var stage := _dawn_seq_player_stage if player_side else _dawn_seq_enemy_stage
+    if stage == 0 or stage >= 4:
         return
-    var last_turn := _lyra_buff_player_turn if player_side else _lyra_buff_enemy_turn
-    if last_turn == turn_number:
-        return  # already fired this turn
-    if player_side: _lyra_buff_player_turn = turn_number
-    else:           _lyra_buff_enemy_turn  = turn_number
-    for unit in board:
-        unit["attack"] = int(unit.get("attack", 0)) + 1
+    var board: Array = player_board if player_side else enemy_board
+    var foes:  Array = enemy_board  if player_side else player_board
+    match stage:
+        1:
+            for unit in board:
+                if not bool(unit.get("is_amulet", false)):
+                    unit["attack"]     = int(unit.get("attack",     0)) + 1
+                    unit["health"]     = int(unit.get("health",     0)) + 1
+                    unit["max_health"] = int(unit.get("max_health", int(unit.get("health", 0)))) + 1
+            show_vfx("DAWN SURGE +1/+1", area_center(player_side), Color(1.0, 0.90, 0.45))
+        2:
+            for unit in foes:
+                if not bool(unit.get("is_amulet", false)):
+                    unit["health"] = int(unit.get("health", 0)) - 1
+            # Remove newly-dead enemy followers inline (no death effects triggered)
+            var fi := 0
+            while fi < foes.size():
+                if not bool(foes[fi].get("is_amulet", false)) and int(foes[fi].get("health", 1)) <= 0:
+                    foes.remove_at(fi)
+                else:
+                    fi += 1
+            show_vfx("DAWN RADIANCE  -1 ALL FOES", area_center(player_side), Color(1.0, 0.82, 0.30))
+        3:
+            if follower_count(board) < MAX_BOARD:
+                var nc := card("Newcomer", 0, 3, 3, "Hope", "Bronze", "ward", 0,
+                               "Ward. Born from Lyra's Dawn Sequence.", "hands", "")
+                nc["ward"] = true; nc["can_attack"] = false; nc["summoned_turn"] = turn_number
+                board.append(nc)
+            show_vfx("NEWCOMER  +2/+2  WARD", area_center(player_side), Color(0.60, 1.0, 0.75))
+    if player_side: _dawn_seq_player_stage = mini(stage + 1, 4)
+    else:           _dawn_seq_enemy_stage  = mini(stage + 1, 4)
     refresh_ui()
 
 func add_progress(player_side: bool, amount: int = 1) -> void:

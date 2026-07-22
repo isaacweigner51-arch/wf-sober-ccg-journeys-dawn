@@ -1428,17 +1428,6 @@
     "max_copies": 3
   },
   {
-    "id": "JD-130",
-    "name": "Hope Unending",
-    "class": "Hope",
-    "rarity": "Legendary",
-    "cost": 7,
-    "attack": 5,
-    "health": 8,
-    "effect": "On Play: Restore 6 defense and draw a card.",
-    "max_copies": 3
-  },
-  {
     "id": "JD-132",
     "name": "Relentless Drive",
     "class": "Courage",
@@ -2213,7 +2202,7 @@
     "attack": 3,
     "health": 5,
     "type": "Follower",
-    "description": "On Play: Restore 3 Defense. Whenever any follower is healed or restored this match, give all allied followers +1/+0 permanently (once per turn).",
+    "description": "On Play: Give your leader the Dawn Sequence for the rest of the match (non-stackable). 1st restore \u2192 +1/+1 to all allied followers. 2nd restore \u2192 deal 1 damage to all enemy followers. 3rd restore \u2192 summon a Newcomer with +2/+2 and Ward.",
     "flavor": "She carried the dawn in her eyes long before the sun remembered to rise.",
     "max_copies": 2
   },
