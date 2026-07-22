@@ -10,3 +10,5 @@ description: Rules for leader_view.gd layered art — aura must render behind th
 **Why:** Both failure modes shipped in v0.9.3 and reached the player before being caught. A quick `magick ... -composite` stack preview of aura+body+head+hair on a dark background catches both instantly.
 
 **How to apply:** Before shipping any leader art change, composite all layers with ImageMagick and view the result. Hair rebuild recipe: `base = body over head composite; hair = base alpha × vertical gradient (opaque to ~26%, faded by ~38%)`.
+
+**Rule 3 (July 2026):** Never animate body/head/hair layers with independent position/scale tweens — the neck seam shows and the character reads as "two halves of paper." All idle motion must go through ONE shared ShaderMaterial instance (breath + sway uniforms) assigned to body, head, AND hair so all pixels deform as a single surface. Blink stays a head texture swap (material-independent).
