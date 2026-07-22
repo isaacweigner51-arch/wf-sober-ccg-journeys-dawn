@@ -13,6 +13,7 @@
     {
       "category": "What's New in 0.9.3 (hotfix)",
       "items": [
+        "Every leader now has their own distinct voice — Lyra (Hope), Kael (Courage), Aurelia (Serenity), and Orin (Purpose) each speak with a unique voice across all battle lines, emotes, and intros.",
         "Leader portraits fixed — the class aura no longer renders as a glowing orb covering the character's face; it now glows behind them as a halo.",
         "Leader hair layers rebuilt from each character's own portrait so they align perfectly — no more oversized hair blobs hiding the face.",
         "All 7 cards in a pack opening now fit on screen (7th card was cut off).",
