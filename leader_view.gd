@@ -47,6 +47,31 @@ const _FOCAL_X := {
 	"purpose":  -50.0,
 }
 
+# ── Breathing shader ─────────────────────────────────────────────────────────
+# Applied to _layer_body during IDLE.  Deforms UV coordinates so the chest
+# pixels push outward and upward on the inhale rather than scaling the whole
+# rectangle — the same technique used in 2D fighting games.
+const _BREATH_SHADER_CODE := """
+shader_type canvas_item;
+uniform float breath : hint_range(0.0, 1.0) = 0.0;
+
+void fragment() {
+	vec2 uv = UV;
+
+	// Chest zone — roughly the mid-torso band (y 30%–75%)
+	float chest = smoothstep(0.25, 0.42, uv.y) * smoothstep(0.78, 0.58, uv.y);
+
+	// Shoulder spread — upper torso (y 15%–45%) expands outward from center
+	float shoulder = smoothstep(0.12, 0.30, uv.y) * smoothstep(0.50, 0.32, uv.y);
+
+	// On inhale: chest pixels shift upward, shoulders spread outward
+	uv.y -= chest    * breath * 0.026;
+	uv.x += (uv.x - 0.5) * 2.0 * shoulder * breath * 0.014;
+
+	COLOR = texture(TEXTURE, clamp(uv, vec2(0.001), vec2(0.999)));
+}
+"""
+
 # ── Private state ─────────────────────────────────────────────────────────────
 
 var _class_name_value: String = ""
@@ -262,40 +287,64 @@ func _play_idle() -> void:
 	_aux_idle_tweens.clear()
 
 	# Reset any leftover transforms from state animations before starting idle.
+	position = Vector2.ZERO          # clear whole-character sway from previous idle
 	for node in [_art, _layer_body, _layer_head, _layer_hair]:
 		if node:
-			node.scale    = Vector2.ONE
-			node.position = Vector2.ZERO
-			node.modulate = Color.WHITE
+			node.scale         = Vector2.ONE
+			node.position      = Vector2.ZERO
+			node.modulate      = Color.WHITE
+			node.rotation      = 0.0
+			node.material      = null   # clear any breath shader from a previous idle
 
 	if has_layered_art:
-		# ── Body: chest expansion from bottom — real breathing, not floating ─
-		# Pivot at bottom-center so the chest expands upward/outward naturally.
-		_layer_body.pivot_offset = Vector2(_layer_body.size.x * 0.5, _layer_body.size.y)
+		# ── Body: UV-deformation shader so the chest actually moves ───────────
+		# Scaling the rectangle looks fake because the whole image grows uniformly.
+		# This shader pushes chest pixels upward and spreads shoulders outward on
+		# the inhale — the same technique 2D fighting games use.
+		var sm := ShaderMaterial.new()
+		var sh := Shader.new()
+		sh.code = _BREATH_SHADER_CODE
+		sm.shader = sh
+		_layer_body.material = sm
+		# Tween the shader's breath uniform 0→1→0 in a loop (4.6s full cycle).
 		_idle_tween = create_tween().set_loops()
 		_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		_idle_tween.tween_property(_layer_body, "scale", Vector2(1.012, 1.018), 2.3)
-		_idle_tween.tween_property(_layer_body, "scale", Vector2(1.0,   1.0),   2.3)
+		_idle_tween.tween_method(func(v: float): sm.set_shader_parameter("breath", v),
+			0.0, 1.0, 2.3)
+		_idle_tween.tween_method(func(v: float): sm.set_shader_parameter("breath", v),
+			1.0, 0.0, 2.3)
 
-		# ── Head: tiny upward lift in sync with the chest expansion ──────────
-		# Scale from bottom-center so the head stays grounded and the crown
-		# rises slightly — looks like the neck extending with the breath.
+		# ── Whole-character sway — weight shift every ~6 s ───────────────────
+		# Very subtle left/right drift that makes the character feel alive
+		# even when standing still, like a person shifting their weight.
+		var sw := create_tween().set_loops()
+		sw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		sw.tween_property(self, "position:x",  4.0, 3.1)
+		sw.tween_property(self, "position:x", -4.0, 3.1)
+		_aux_idle_tweens.append(sw)
+
+		# ── Head: micro-lift that rides the breath (not a rigid scale) ────────
 		if _layer_head != null:
-			_layer_head.pivot_offset = Vector2(_layer_head.size.x * 0.5, _layer_head.size.y)
 			var hdt := create_tween().set_loops()
 			hdt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			hdt.tween_property(_layer_head, "scale", Vector2(1.005, 1.008), 2.3).set_delay(0.15)
-			hdt.tween_property(_layer_head, "scale", Vector2(1.0,   1.0),   2.3)
+			hdt.tween_property(_layer_head, "position:y", -5.0, 2.3).set_delay(0.2)
+			hdt.tween_property(_layer_head, "position:y",  0.0, 2.3)
 			_aux_idle_tweens.append(hdt)
 
-		# ── Hair: gentle sway, slightly out of phase ──────────────────────────
+		# ── Hair: rotation sway + slight drift so it doesn't look glued down ─
 		if _layer_hair != null:
 			_layer_hair.pivot_offset = Vector2(_layer_hair.size.x * 0.5, 0.0)
 			var ht := create_tween().set_loops()
 			ht.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			ht.tween_property(_layer_hair, "rotation_degrees",  1.4, 2.0)
-			ht.tween_property(_layer_hair, "rotation_degrees", -1.4, 2.0)
+			ht.tween_property(_layer_hair, "rotation_degrees",  2.8, 1.9)
+			ht.tween_property(_layer_hair, "rotation_degrees", -2.8, 1.9)
 			_aux_idle_tweens.append(ht)
+			# Also drift horizontally at a slightly different period for organic feel
+			var hx := create_tween().set_loops()
+			hx.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			hx.tween_property(_layer_hair, "position:x",  6.0, 2.7)
+			hx.tween_property(_layer_hair, "position:x", -6.0, 2.7)
+			_aux_idle_tweens.append(hx)
 
 		# ── Aura: slow pulse ─────────────────────────────────────────────────
 		if _layer_aura != null:
@@ -309,14 +358,20 @@ func _play_idle() -> void:
 		if _layer_head != null and _head_blink_tex != null:
 			_schedule_blink()
 	else:
-		# ── Flat composite: subtle scale breath from bottom-center ────────────
+		# ── Flat composite: shader breath on the whole portrait ───────────────
 		var target := _art
 		if target == null: return
-		target.pivot_offset = Vector2(target.size.x * 0.5, target.size.y)
+		var sm2 := ShaderMaterial.new()
+		var sh2 := Shader.new()
+		sh2.code = _BREATH_SHADER_CODE
+		sm2.shader = sh2
+		target.material = sm2
 		_idle_tween = create_tween().set_loops()
 		_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		_idle_tween.tween_property(target, "scale", Vector2(1.012, 1.016), 2.4)
-		_idle_tween.tween_property(target, "scale", Vector2(1.0,   1.0),   2.4)
+		_idle_tween.tween_method(func(v: float): sm2.set_shader_parameter("breath", v),
+			0.0, 1.0, 2.4)
+		_idle_tween.tween_method(func(v: float): sm2.set_shader_parameter("breath", v),
+			1.0, 0.0, 2.4)
 
 func _schedule_blink() -> void:
 	if _layer_head == null or _head_blink_tex == null or _current_state != State.IDLE:
