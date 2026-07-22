@@ -127,7 +127,16 @@ func _setup_nodes(sz: Vector2) -> void:
 	add_child(aura_bg)
 
 	if has_layered_art:
-		# Stack: body → head → hair → (aura)
+		# Stack: (aura) → body → head → hair
+		# The aura MUST sit BEHIND the character.  The aura art is a centered
+		# orb/ring on the canvas — drawn on top it covers the face entirely
+		# (the "glowing blob over the portrait" bug).  Behind the body it
+		# reads as a halo glowing around the silhouette instead.
+		var aura_path := "res://assets/leaders/%s_aura.png" % _class_name_value.to_lower()
+		if _file_exists_res(aura_path):
+			_layer_aura = _make_layer("aura", sz)
+			_layer_aura.modulate.a = 0.0  # fades in during IDLE
+
 		_layer_body = _make_layer("body", sz)
 		_layer_head = _make_layer("head", sz)
 		_layer_hair = _make_layer("hair", sz)
@@ -137,12 +146,6 @@ func _setup_nodes(sz: Vector2) -> void:
 		var blink_path := "res://assets/leaders/%s_head_blink.png" % _class_name_value.to_lower()
 		if _file_exists_res(blink_path):
 			_head_blink_tex = _load_texture_res(blink_path)
-
-		# Optional aura overlay
-		var aura_path := "res://assets/leaders/%s_aura.png" % _class_name_value.to_lower()
-		if _file_exists_res(aura_path):
-			_layer_aura = _make_layer("aura", sz)
-			_layer_aura.modulate.a = 0.0  # fades in during IDLE
 	else:
 		# ── Flat composite fallback ────────────────────────────────────────────
 		# The source art is a full-scene square painting; the character occupies

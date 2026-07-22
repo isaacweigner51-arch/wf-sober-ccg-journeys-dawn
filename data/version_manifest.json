@@ -13,6 +13,9 @@
     {
       "category": "What's New in 0.9.3 (hotfix)",
       "items": [
+        "Leader portraits fixed — the class aura no longer renders as a glowing orb covering the character's face; it now glows behind them as a halo.",
+        "Leader hair layers rebuilt from each character's own portrait so they align perfectly — no more oversized hair blobs hiding the face.",
+        "All 7 cards in a pack opening now fit on screen (7th card was cut off).",
         "Guardian Angel now works: the first allied follower destroyed each battle is saved at 1 Defense instead of dying.",
         "Standard evolution animations overhauled: full-bleed card art backdrop, white flash on impact, three staggered expanding rings, and a title that smashes in from scale.",
         "Epic evolution animations overhauled: purple-tinted full-bleed backdrop, spinning beam crown, large art medallion slides in from the right, colored flash and four ring burst.",
