@@ -1380,7 +1380,7 @@
     "cost": 1,
     "attack": 1,
     "health": 1,
-    "effect": "Destroyed: returns at the start of your next turn at +1/+1 (1/1 \u2192 10/10). At 10/10, permanently falls. Does not return if banished or transformed.",
+    "effect": "Last Words: rises immediately at +1/+1. Evolves on the 3rd, 6th, and 9th rise (+2/+2). 9th rise: 3 damage to all. Falls forever after 9 lives.",
     "max_copies": 3
   },
   {
@@ -2203,5 +2203,18 @@
     "type": "Follower",
     "description": "Guard. On Play: Give all friendly followers Guard until your next turn.",
     "flavor": "Calm spreads from one to many."
+  },
+  {
+    "id": "JD-210",
+    "name": "Lyra, Voice of Dawn",
+    "class": "Hope",
+    "rarity": "Legendary",
+    "cost": 4,
+    "attack": 3,
+    "health": 5,
+    "type": "Follower",
+    "description": "On Play: Restore 3 Defense. Whenever any follower is healed or restored this match, give all allied followers +1/+0 permanently (once per turn).",
+    "flavor": "She carried the dawn in her eyes long before the sun remembered to rise.",
+    "max_copies": 2
   }
 ]

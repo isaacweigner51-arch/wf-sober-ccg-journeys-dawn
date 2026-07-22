@@ -24,7 +24,9 @@
         "Leader portrait now visible in the active battle screen (was blank/missing).",
         "Amulets on the field now show their effect when you hover over them (tooltip was silently broken).",
         "Courage Dev Meta deck now includes 3 copies of Phoenix Rising.",
-        "Battle Prep 'who's facing who' stage is now centered — both leader zones are equal width (449 px each) with the VS strip dead-center."
+        "Battle Prep 'who's facing who' stage is now centered — both leader zones are equal width (449 px each) with the VS strip dead-center.",
+        "Voice overhaul: Courage is now Josh (younger energetic male), Purpose is Sam (distinctly older gravelly male), Serenity is Domi (strong assertive female) — all four leaders now sound unmistakably different from each other.",
+        "New Hope Legendary — Lyra, Voice of Dawn (4/3/5): On Play restore 3 Defense; whenever any follower is healed this match give all allies +1 Attack permanently (once per turn). Features the original Hope leader portrait."
       ]
     },
     {
