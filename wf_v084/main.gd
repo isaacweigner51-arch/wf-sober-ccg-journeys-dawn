@@ -5386,6 +5386,14 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
         else: enemy_health = min(STARTING_HEALTH, enemy_health + amount)
         draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
         await show_vfx("HEAL + DRAW", area_center(player_side), Color(0.4, 1.0, 0.65))
+    elif ability == "restore_one":
+        # Hope Unending and every 2-cost Silver with a small heal:
+        # restore exactly 1 Defense to your leader on play.
+        if player_side: player_health = min(STARTING_HEALTH, player_health + 1)
+        else: enemy_health = min(STARTING_HEALTH, enemy_health + 1)
+        leader_feedback(player_leader if player_side else enemy_leader, 1, true)
+        _trigger_on_leader_healed(player_side)
+        await show_vfx("RESTORE +1", area_center(player_side), Color(0.65, 1.0, 0.78))
     elif ability == "heal_buff":
         if player_side: player_health = min(STARTING_HEALTH, player_health + amount)
         else: enemy_health = min(STARTING_HEALTH, enemy_health + amount)

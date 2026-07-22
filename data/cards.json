@@ -847,7 +847,9 @@
     "attack": 2,
     "health": 3,
     "effect": "While linked to a Sponsor, gain +2/+2 and protection.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "restore_one",
+    "description": "On Play: Restore 1 Defense to your leader."
   },
   {
     "id": "JD-079",
@@ -891,7 +893,9 @@
     "attack": 2,
     "health": 3,
     "effect": "Inspire: When another allied follower enters play, restore 1 defense to it.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "restore_one",
+    "description": "On Play: Restore 1 Defense to your leader."
   },
   {
     "id": "JD-083",
@@ -1068,7 +1072,9 @@
     "attack": 2,
     "health": 4,
     "effect": "Protector. Enemies attacking this lose 1 Attack for that combat.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "restore_one",
+    "description": "On Play: Restore 1 Defense to your leader."
   },
   {
     "id": "JD-099",
@@ -1156,7 +1162,9 @@
     "attack": 2,
     "health": 3,
     "effect": "Arrival: Reduce the cost of the highest-cost card in your hand by 1 this turn.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "restore_one",
+    "description": "On Play: Restore 1 Defense to your leader."
   },
   {
     "id": "JD-107",
@@ -1244,7 +1252,9 @@
     "attack": 2,
     "health": 3,
     "effect": "If you control a Sponsor or Sponsee, draw a card.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "restore_one",
+    "description": "On Play: Restore 1 Defense to your leader."
   },
   {
     "id": "JD-115",
@@ -2003,15 +2013,16 @@
   },
   {
     "id": "JD-194",
-    "name": "Hold onto Hope",
+    "name": "Hope Unending",
     "class": "Hope",
     "rarity": "Silver",
-    "cost": 3,
-    "attack": 1,
-    "health": 4,
+    "cost": 2,
+    "attack": 2,
+    "health": 2,
     "type": "Follower",
-    "description": "Guard. On Play: Restore 2 Defense to your leader.",
-    "flavor": "Even when you cannot see a reason \u2014 hold on."
+    "description": "On Play: Restore 1 Defense to your leader.",
+    "flavor": "Even when you cannot see a reason \u2014 hold on.",
+    "ability": "restore_one"
   },
   {
     "id": "JD-195",
