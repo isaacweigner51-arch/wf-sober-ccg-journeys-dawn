@@ -3843,12 +3843,14 @@ func _show_battle_intro(player_class_name: String, opponent_class_name: String) 
     right_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     right_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     right_art.clip_contents = true
+    right_art.flip_h = true  # Mirror opponent so both leaders face the centre VS
     right_art.modulate = Color(1,1,1,0)
     intro.add_child(right_art)
 
-    var left_name := centered_label(player_class_name.to_upper(), Vector2(120, 575), Vector2(360, 44), 25, intro)
+    # Name labels centered directly beneath their respective portraits (portrait x + portrait w)
+    var left_name := centered_label(player_class_name.to_upper(), Vector2(155, 575), Vector2(390, 44), 25, intro)
     left_name.add_theme_color_override("font_color", class_color(player_class_name).lightened(0.25))
-    var right_name := centered_label(opponent_class_name.to_upper(), Vector2(800, 575), Vector2(360, 44), 25, intro)
+    var right_name := centered_label(opponent_class_name.to_upper(), Vector2(735, 575), Vector2(390, 44), 25, intro)
     right_name.add_theme_color_override("font_color", class_color(opponent_class_name).lightened(0.25))
     var vs := centered_label("VS", Vector2(540, 290), Vector2(200, 100), 64, intro)
     vs.add_theme_color_override("font_color", GOLD_COLOR)

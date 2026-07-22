@@ -7375,7 +7375,7 @@ func rebuild_enemy_hand() -> void:
     var spacing: float = minf(46.0, 460.0 / float(maxi(1, count)))
     var start_x: float = (enemy_hand_area.size.x - (126.0 + spacing * float(maxi(0, count - 1)))) * 0.5
     for i in range(count):
-        var view := CardView.new(); view.setup({}, i, true, true); view.scale = Vector2(0.58,0.58); view.position = Vector2(start_x + i * spacing, 0); view.rotation = deg_to_rad((i - count / 2.0) * 2.0); enemy_hand_area.add_child(view)
+        var view := CardView.new(); view.setup({}, i, true, true, enemy_class); view.scale = Vector2(0.58,0.58); view.position = Vector2(start_x + i * spacing, 0); view.rotation = deg_to_rad((i - count / 2.0) * 2.0); enemy_hand_area.add_child(view)
 
 func rebuild_board(area: Control, board: Array, player_side: bool, animate_new: bool, new_index: int) -> void:
     if not is_instance_valid(area):

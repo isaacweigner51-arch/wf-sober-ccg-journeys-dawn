@@ -14,6 +14,7 @@ var card_index := -1
 var data: Dictionary = {}
 var compact := false
 var hidden_card := false
+var sleeve_class := ""
 var base_position := Vector2.ZERO
 var selected := false
 
@@ -71,11 +72,12 @@ func is_mobile_device() -> bool:
 func card_font(value: int) -> int:
     return int(round(float(value) * (1.15 if is_mobile_device() else 1.0)))
 
-func setup(card_data: Dictionary, index: int, is_compact: bool = false, is_hidden: bool = false) -> void:
+func setup(card_data: Dictionary, index: int, is_compact: bool = false, is_hidden: bool = false, sleeve_class_name: String = "") -> void:
     data = _hydrate_card_data(card_data.duplicate(true))
     card_index = index
     compact = is_compact
     hidden_card = is_hidden
+    sleeve_class = sleeve_class_name
     focus_mode = Control.FOCUS_NONE
     flat = true
     mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -302,7 +304,11 @@ func _build() -> void:
     art_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     art_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
     if hidden_card:
-        art_rect.texture = _svg_texture(_card_back_svg())
+        if sleeve_class != "":
+            var sleeve_path := "res://assets/leaders/%s.png" % sleeve_class.to_lower()
+            art_rect.texture = load(sleeve_path)
+        else:
+            art_rect.texture = _svg_texture(_card_back_svg())
     else:
         art_rect.texture = _art_texture()
     art_clip.add_child(art_rect)
@@ -370,7 +376,7 @@ func _build() -> void:
     name_label = Label.new()
     name_label.position = Vector2(8, 4)
     name_label.size = Vector2(custom_minimum_size.x - 16, 24)
-    name_label.text = "WALKING FREE" if hidden_card else str(data.get("name", "Card"))
+    name_label.text = (sleeve_class.to_upper() if sleeve_class != "" else "WALKING FREE") if hidden_card else str(data.get("name", "Card"))
     name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     name_label.add_theme_font_size_override("font_size", card_font(13 if not compact else 11))
     name_label.add_theme_color_override("font_color", Color(0.97, 0.95, 0.86))
