@@ -289,9 +289,16 @@ func _build() -> void:
     frame.add_child(ready_glow)
 
     # Clip container — art drift/float stays strictly inside the card's art window.
+    # Battlefield: art fills the entire card face (name bar only stays).
+    # Other modes: original compact art window with room for ability text.
+    var _bf: bool  = (display_mode == DisplayMode.BATTLEFIELD) and not hidden_card
+    var art_top: float = 24.0 if not compact else 20.0
+    var art_x: float   = 0.0  if _bf else 8.0
+    var art_w: float   = custom_minimum_size.x if _bf else (custom_minimum_size.x - 16.0)
+    var art_h: float   = (custom_minimum_size.y - art_top - 38.0) if _bf else (82.0 if not compact else 64.0)
     art_clip = Panel.new()
-    art_clip.position = Vector2(8, 27 if not compact else 22)
-    art_clip.size = Vector2(custom_minimum_size.x - 16, 82 if not compact else 64)
+    art_clip.position = Vector2(art_x, art_top)
+    art_clip.size = Vector2(art_w, art_h)
     art_clip.clip_contents = true
     art_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
     art_clip.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
@@ -410,48 +417,93 @@ func _build() -> void:
     frame.add_child(cost_label)
 
     if not hidden_card:
-        stats_label = Label.new()
-        stats_label.position = Vector2(7, custom_minimum_size.y - 34)
-        stats_label.size = Vector2(custom_minimum_size.x - 14, 28)
-        stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-        stats_label.add_theme_color_override("font_color", Color.WHITE)
-        stats_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        if bool(data.get("is_amulet", false)):
-            stats_label.text = "AMULET"
-            stats_label.add_theme_font_size_override("font_size", card_font(15 if not compact else 13))
-            stats_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.34))
+        if _bf and not bool(data.get("is_amulet", false)):
+            # ── Battlefield: full-art card — dark footer, corner stat panels ──
+            var footer := ColorRect.new()
+            footer.position = Vector2(0, custom_minimum_size.y - 38)
+            footer.size = Vector2(custom_minimum_size.x, 38)
+            footer.color = Color(0.0, 0.0, 0.0, 0.74)
+            footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            frame.add_child(footer)
+
+            # Attack — bottom left
+            var atk_bg := StyleBoxFlat.new()
+            atk_bg.bg_color = Color(0.55, 0.18, 0.06, 0.92)
+            atk_bg.border_color = Color(1.0, 0.68, 0.32); atk_bg.set_border_width_all(2); atk_bg.set_corner_radius_all(6)
+            var atk_pan := Panel.new()
+            atk_pan.position = Vector2(2, custom_minimum_size.y - 36)
+            atk_pan.size = Vector2(54, 34); atk_pan.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            atk_pan.add_theme_stylebox_override("panel", atk_bg); frame.add_child(atk_pan)
+            stats_label = Label.new()
+            stats_label.text = "⚔ %d" % int(data.get("attack", 0))
+            stats_label.position = Vector2(0, 4); stats_label.size = Vector2(54, 26)
+            stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            stats_label.add_theme_font_size_override("font_size", card_font(16))
+            stats_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.62))
+            stats_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            atk_pan.add_child(stats_label)
+
+            # Health — bottom right
+            var hp_bg := StyleBoxFlat.new()
+            hp_bg.bg_color = Color(0.50, 0.07, 0.10, 0.92)
+            hp_bg.border_color = Color(1.0, 0.42, 0.42); hp_bg.set_border_width_all(2); hp_bg.set_corner_radius_all(6)
+            var hp_pan := Panel.new()
+            hp_pan.position = Vector2(custom_minimum_size.x - 56, custom_minimum_size.y - 36)
+            hp_pan.size = Vector2(54, 34); hp_pan.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            hp_pan.add_theme_stylebox_override("panel", hp_bg); frame.add_child(hp_pan)
+            var hp_lbl := Label.new()
+            hp_lbl.text = "♥ %d" % int(data.get("health", 0))
+            hp_lbl.position = Vector2(0, 4); hp_lbl.size = Vector2(54, 26)
+            hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            hp_lbl.add_theme_font_size_override("font_size", card_font(16))
+            hp_lbl.add_theme_color_override("font_color", Color(1.0, 0.60, 0.62))
+            hp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            hp_pan.add_child(hp_lbl)
+
         else:
-            stats_label.text = "%d     %d" % [int(data.get("attack", 0)), int(data.get("health", 0))]
-            stats_label.add_theme_font_size_override("font_size", card_font(19 if not compact else 17))
-        frame.add_child(stats_label)
+            # ── Non-battlefield / amulet: original compact layout ────────────
+            stats_label = Label.new()
+            stats_label.position = Vector2(7, custom_minimum_size.y - 34)
+            stats_label.size = Vector2(custom_minimum_size.x - 14, 28)
+            stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            stats_label.add_theme_color_override("font_color", Color.WHITE)
+            stats_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            if bool(data.get("is_amulet", false)):
+                stats_label.text = "AMULET"
+                stats_label.add_theme_font_size_override("font_size", card_font(15 if not compact else 13))
+                stats_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.34))
+            else:
+                stats_label.text = "%d     %d" % [int(data.get("attack", 0)), int(data.get("health", 0))]
+                stats_label.add_theme_font_size_override("font_size", card_font(19 if not compact else 17))
+            frame.add_child(stats_label)
 
-        if not bool(data.get("is_amulet", false)):
-            var sword := Label.new()
-            sword.text = "⚔"
-            sword.position = Vector2(17, custom_minimum_size.y - 35)
-            sword.add_theme_font_size_override("font_size", card_font(18))
-            sword.mouse_filter = Control.MOUSE_FILTER_IGNORE
-            frame.add_child(sword)
+            if not bool(data.get("is_amulet", false)):
+                var sword := Label.new()
+                sword.text = "⚔"
+                sword.position = Vector2(17, custom_minimum_size.y - 35)
+                sword.add_theme_font_size_override("font_size", card_font(18))
+                sword.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                frame.add_child(sword)
 
-            var heart := Label.new()
-            heart.text = "♥"
-            heart.position = Vector2(custom_minimum_size.x - 39, custom_minimum_size.y - 35)
-            heart.add_theme_font_size_override("font_size", card_font(18))
-            heart.add_theme_color_override("font_color", Color(1.0, 0.35, 0.38))
-            heart.mouse_filter = Control.MOUSE_FILTER_IGNORE
-            frame.add_child(heart)
+                var heart := Label.new()
+                heart.text = "♥"
+                heart.position = Vector2(custom_minimum_size.x - 39, custom_minimum_size.y - 35)
+                heart.add_theme_font_size_override("font_size", card_font(18))
+                heart.add_theme_color_override("font_color", Color(1.0, 0.35, 0.38))
+                heart.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                frame.add_child(heart)
 
-        ability_label = Label.new()
-        ability_label.position = Vector2(9, 112 if not compact else 88)
-        ability_label.size = Vector2(custom_minimum_size.x - 18, 39 if not compact else 30)
-        ability_label.text = str(data.get("display_text", data.get("text", "")))
-        ability_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-        ability_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-        ability_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-        ability_label.add_theme_font_size_override("font_size", card_font(10 if not compact else 9))
-        ability_label.add_theme_color_override("font_color", Color(0.88, 0.88, 0.84))
-        ability_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        frame.add_child(ability_label)
+            ability_label = Label.new()
+            ability_label.position = Vector2(9, 112 if not compact else 88)
+            ability_label.size = Vector2(custom_minimum_size.x - 18, 39 if not compact else 30)
+            ability_label.text = str(data.get("display_text", data.get("text", "")))
+            ability_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            ability_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+            ability_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            ability_label.add_theme_font_size_override("font_size", card_font(10 if not compact else 9))
+            ability_label.add_theme_color_override("font_color", Color(0.88, 0.88, 0.84))
+            ability_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            frame.add_child(ability_label)
 
         if bool(data.get("is_sponsor", false)) or bool(data.get("is_sponsee", false)):
             var bond_badge := Label.new()
@@ -606,19 +658,44 @@ func play_buff_vfx(stat_text: String, color: Color) -> void:
     tw.parallel().tween_property(self, "modulate", Color.WHITE, 0.22)
 
 func summon_animation() -> void:
-    # Slam in from tiny + bright white flash → settle with back-ease overshoot pop
+    # SV-style slam: drop from above → squash on impact → bounce settle
     pivot_offset = custom_minimum_size * 0.5
-    scale = Vector2(0.08, 0.08)
-    modulate = Color(3.0, 3.0, 3.0, 0.0)
-    var tween := create_tween().set_parallel(true)
-    tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    tween.tween_property(self, "scale", Vector2(1.12, 1.12), 0.30)
-    tween.tween_property(self, "modulate", Color.WHITE, 0.20)
-    # Settle to exact 1.0 after overshoot
-    var settle := create_tween()
-    settle.tween_interval(0.30)
-    settle.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-    settle.tween_property(self, "scale", Vector2.ONE, 0.10)
+    var tier    := _rarity_tier_val()
+    var land_y  := position.y
+    var drop_h  := 200.0 + tier * 18.0
+    var drop_d  := 0.15 if tier >= 4 else 0.20
+
+    # Start: high above, tilted, semi-transparent
+    position.y = land_y - drop_h
+    scale      = Vector2(0.72, 0.72)
+    rotation   = randf_range(-0.12, 0.12)
+    modulate   = Color(2.0, 2.0, 2.0, 0.0)
+
+    # Phase 1 — drop fast, squash as it lands
+    var slam := create_tween().set_parallel(true)
+    slam.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+    slam.tween_property(self, "position:y",  land_y,           drop_d)
+    slam.tween_property(self, "scale",       Vector2(1.22, 0.78), drop_d)
+    slam.tween_property(self, "rotation",    0.0,              drop_d * 0.7)
+    slam.tween_property(self, "modulate",    _faction_flash_color(), drop_d * 0.45)
+
+    # Phase 2 — spring back out of squash into normal
+    var bounce := create_tween().set_parallel(true)
+    bounce.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    bounce.tween_property(self, "scale",    Vector2.ONE,   0.30).set_delay(drop_d)
+    bounce.tween_property(self, "modulate", Color.WHITE,   0.24).set_delay(drop_d)
+    bounce.tween_property(self, "rotation", 0.0,           0.12).set_delay(drop_d)
+
+func _faction_flash_color() -> Color:
+    var faction := str(data.get("faction", str(data.get("class", ""))))
+    var tier    := _rarity_tier_val()
+    var i       := 1.8 + tier * 0.10
+    match faction:
+        "Courage":   return Color(i * 1.3, i * 0.55, i * 0.45, 1.0)
+        "Hope":      return Color(i * 0.85, i * 0.72, i * 1.25, 1.0)
+        "Serenity":  return Color(i * 0.55, i * 1.05, i * 1.20, 1.0)
+        "Purpose":   return Color(i * 1.10, i * 0.88, i * 0.42, 1.0)
+        _:           return Color(i, i, i, 1.0)
 
 func damage_flash() -> void:
     var start := position
