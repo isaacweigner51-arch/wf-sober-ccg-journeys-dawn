@@ -24,3 +24,5 @@
 - [wf-sober-ccg cloud save architecture](wf-sober-ccg-cloud-save.md) — upload_save_data() PATCHes save_data JSONB; column must be added by user (SQL in topic file); new email accounts now get profile row upserted on first login.
 - [GitHub uploads.github.com proxy limitation](github-uploads-proxy-limitation.md) — proxyFetch only covers api.github.com; use curl+GITHUB_PAT for release asset uploads; workflow scope also needs PAT.
 - [wf-sober-ccg leader layer stacking](wf-sober-ccg-leader-layer-stacking.md) — aura must render BEHIND the character; hair/blink layers must be derived from the base portrait, never separate AI images.
+- [Battle Prep facing layout](wf-sober-ccg-battle-prep-layout.md) — keep the VS strip centered by making both leader zones equal width.
+- [Developer meta decks](wf-sober-ccg-developer-meta-decks.md) — hardcoded named-card lists in main.gd; new/buffed cards must be added explicitly.
