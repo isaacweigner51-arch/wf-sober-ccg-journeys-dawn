@@ -6007,6 +6007,12 @@ func resolve_combat(attacker_index: int, target_index: int, player_side: bool) -
         var defender_damage: int = int(defender.get("attack", 0))
         var defender_remaining: int = int(defender.get("health", 0)) - attacker_damage
         var attacker_remaining: int = int(attacker.get("health", 0)) - defender_damage
+        # Confrontation: any follower this unit damages is destroyed outright.
+        if str(attacker.get("ability", "")) == "confrontation" and attacker_damage > 0:
+            defender_remaining = mini(defender_remaining, 0)
+        # Confrontation also works defensively (unit being attacked).
+        if str(defender.get("ability", "")) == "confrontation" and defender_damage > 0:
+            attacker_remaining = mini(attacker_remaining, 0)
 
         defender["health"] = defender_remaining
         attacker["health"] = attacker_remaining

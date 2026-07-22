@@ -190,7 +190,9 @@
     "attack": 1,
     "health": 2,
     "effect": "On Play: Deal 1 to the enemy leader.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "confrontation",
+    "description": "Confrontation: Destroys any follower it damages."
   },
   {
     "id": "JD-018",
@@ -522,7 +524,9 @@
     "attack": 1,
     "health": 2,
     "effect": "Arrival: Draw a card. If you have fewer maximum PP than your opponent, gain 1 temporary PP this turn.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "confrontation",
+    "description": "Confrontation: Destroys any follower it damages."
   },
   {
     "id": "JD-047",
@@ -742,7 +746,9 @@
     "attack": 2,
     "health": 3,
     "effect": "If your hand has fewer cards than your opponent, draw a card.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "confrontation",
+    "description": "Confrontation: Destroys any follower it damages."
   },
   {
     "id": "JD-066",
@@ -1015,7 +1021,9 @@
     "attack": 2,
     "health": 1,
     "effect": "Determination. If this survives combat, gain +1 Health.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "confrontation",
+    "description": "Confrontation: Destroys any follower it damages."
   },
   {
     "id": "JD-090",
