@@ -767,9 +767,11 @@ func build_developer_final_boss_deck() -> Array:
     pool.append_array(build_class_cards("Courage"))  # for Phoenix Rising
     var deck: Array = []
     _append_named_cards(deck, pool, [
-        "The Sponsor", "Walking Free",
+        "The Sponsor", "Walking Free", "Renewed Resolve",
         "Phoenix Rising", "Phoenix Rising", "Phoenix Rising",
         "Newcomer", "Newcomer", "Newcomer",
+        "First Brave Step", "First Brave Step", "First Brave Step",
+        "Honest Reflection", "Honest Reflection", "Honest Reflection",
         "Sponsor's Guidance", "Sponsor's Guidance", "Sponsor's Guidance",
         "Daily Progress", "Daily Progress", "Daily Progress",
         "Sponsor's Lesson", "Sponsor's Lesson",
@@ -803,10 +805,11 @@ func build_developer_meta_deck(faction_name: String) -> Array:
     match faction_name:
         "Courage":
             _append_named_cards(deck, pool, [
-                "Rally the Free",
+                "Rally the Free", "Renewed Resolve",
                 "Phoenix Rising", "Phoenix Rising", "Phoenix Rising",
                 "Spark Runner", "Spark Runner", "Spark Runner",
                 "Defiant Voice", "Defiant Voice", "Defiant Voice",
+                "First Brave Step", "First Brave Step", "First Brave Step",
                 "Fearbreaker", "Fearbreaker", "Fearbreaker",
                 "Forward Vanguard", "Forward Vanguard", "Forward Vanguard",
                 "Fight Through It", "Fight Through It", "Fight Through It",
@@ -814,38 +817,39 @@ func build_developer_meta_deck(faction_name: String) -> Array:
                 "Rallying Flame", "Rallying Flame", "Rallying Flame",
                 "Heart of the Charge", "Heart of the Charge",
                 "Rise Together", "Rise Together",
-                "Stand Tall", "Stand Tall", "Stand Tall",
                 "Face It Head-On", "Face It Head-On", "Face It Head-On",
                 "Never Quit", "Never Quit", "Never Quit"
             ])
         "Hope":
             _append_named_cards(deck, pool, [
-                "Beacon of Hope", "Renewed Faith",
+                "Beacon of Hope", "Renewed Faith", "Lyra, Voice of Dawn",
                 "Dawnwing Messenger", "Dawnwing Messenger", "Dawnwing Messenger",
                 "Kindled Promise", "Kindled Promise", "Kindled Promise",
                 "Helping Hand", "Helping Hand", "Helping Hand",
                 "Beacon Keeper", "Beacon Keeper", "Beacon Keeper",
                 "Encouraging Words", "Encouraging Words", "Encouraging Words",
                 "Dreamward Keeper", "Dreamward Keeper", "Dreamward Keeper",
+                "Hope Unending", "Hope Unending", "Hope Unending",
+                "Shared Strength", "Shared Strength", "Shared Strength",
                 "Promise of Tomorrow", "Promise of Tomorrow", "Promise of Tomorrow",
                 "Guardian Angel", "Guardian Angel",
                 "Never Forgotten", "Never Forgotten",
-                "Open Horizon", "Open Horizon", "Open Horizon",
                 "Returned Wanderer", "Returned Wanderer", "Returned Wanderer",
                 "The Comeback Trail", "The Comeback Trail", "The Comeback Trail"
             ])
         "Serenity":
             _append_named_cards(deck, pool, [
-                "Inner Peace", "Calm After the Storm",
+                "Inner Peace", "Calm After the Storm", "Renewed Resolve",
                 "Quiet Observer", "Quiet Observer", "Quiet Observer",
                 "Stillwater Acolyte", "Stillwater Acolyte", "Stillwater Acolyte",
                 "Deep Breath", "Deep Breath", "Deep Breath",
                 "Patient Listener", "Patient Listener", "Patient Listener",
                 "Peacekeeper", "Peacekeeper", "Peacekeeper",
                 "Moment of Peace", "Moment of Peace", "Moment of Peace",
+                "Quiet Boundary", "Quiet Boundary", "Quiet Boundary",
                 "Tranquil Shieldbearer", "Tranquil Shieldbearer", "Tranquil Shieldbearer",
+                "Gentle Breath", "Gentle Breath", "Gentle Breath",
                 "Measured Response", "Measured Response", "Measured Response",
-                "Keeper of Balance", "Keeper of Balance", "Keeper of Balance",
                 "Voice of Reassurance", "Voice of Reassurance",
                 "Sanctuary Elder", "Sanctuary Elder",
                 "Sanctuary of Serenity", "Sanctuary of Serenity", "Sanctuary of Serenity"
@@ -1856,11 +1860,11 @@ func build_ui() -> void:
     # Neutral arena background: no embedded menus or duplicate UI artwork.
     battlefield_background = TextureRect.new()
     battlefield_background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    battlefield_background.texture = load("res://assets/ui/battlefield.png")
     battlefield_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     battlefield_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     battlefield_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(battlefield_background)
+    # SVG arena is applied in refresh_battlefield_theme() once selected_class is known
 
     # Class-tinted shade — updated by refresh_battlefield_theme() each match
     _battle_class_shade = ColorRect.new()
@@ -2012,41 +2016,47 @@ func apply_mobile_touch_targets() -> void:
         enemy_leader.scale = Vector2(1.08, 1.08)
 
 func build_play_point_counter() -> void:
+    # Compact PP panel — no redundant title, just number + pips + opp momentum below.
     var pp_panel := Panel.new()
-    pp_panel.position = Vector2(1028, 548)
-    pp_panel.size = Vector2(232, 100)
+    pp_panel.position = Vector2(1036, 555)
+    pp_panel.size = Vector2(216, 72)
     var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.025, 0.075, 0.11, 0.96)
+    style.bg_color = Color(0.02, 0.06, 0.10, 0.94)
     style.border_color = Color(0.34, 0.82, 1.0)
-    style.set_border_width_all(3)
-    style.set_corner_radius_all(14)
-    style.shadow_color = Color(0, 0, 0, 0.65)
-    style.shadow_size = 10
+    style.set_border_width_all(2)
+    style.set_corner_radius_all(10)
+    style.shadow_color = Color(0, 0, 0, 0.55)
+    style.shadow_size = 8
     pp_panel.add_theme_stylebox_override("panel", style)
     add_child(pp_panel)
 
-    var pp_title := Label.new()
-    pp_title.text = "PLAY POINTS"
-    pp_title.position = Vector2(10, 5)
-    pp_title.size = Vector2(212, 24)
-    pp_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    pp_title.add_theme_font_size_override("font_size", ui_font(14))
-    pp_title.add_theme_color_override("font_color", Color(0.72, 0.92, 1.0))
-    pp_panel.add_child(pp_title)
+    # "PP" tag on the left, number on the right — single compact row
+    var pp_tag := Label.new()
+    pp_tag.text = "PP"
+    pp_tag.position = Vector2(8, 6)
+    pp_tag.size = Vector2(32, 28)
+    pp_tag.add_theme_font_size_override("font_size", ui_font(13))
+    pp_tag.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
+    pp_panel.add_child(pp_tag)
 
     mana_label = Label.new()
-    mana_label.position = Vector2(10, 27)
-    mana_label.size = Vector2(212, 30)
+    mana_label.position = Vector2(36, 3)
+    mana_label.size = Vector2(172, 32)
     mana_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    mana_label.add_theme_font_size_override("font_size", ui_font(24))
-    mana_label.add_theme_color_override("font_color", Color(0.82, 0.96, 1.0))
+    mana_label.add_theme_font_size_override("font_size", ui_font(26))
+    mana_label.add_theme_color_override("font_color", Color(0.88, 0.97, 1.0))
     pp_panel.add_child(mana_label)
 
+    # Pips row
     pp_pips.clear()
-    for i in range(MAX_MANA):
+    var pip_total := MAX_MANA
+    var pip_w := 12; var pip_gap := 16
+    var pips_width := pip_total * pip_gap - (pip_gap - pip_w)
+    var pip_x_start := int((216 - pips_width) / 2)
+    for i in range(pip_total):
         var pip := ColorRect.new()
-        pip.position = Vector2(13 + i * 20, 65)
-        pip.size = Vector2(14, 14)
+        pip.position = Vector2(pip_x_start + i * pip_gap, 44)
+        pip.size = Vector2(pip_w, 10)
         pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
         pp_panel.add_child(pip)
         pp_pips.append(pip)
@@ -2259,10 +2269,10 @@ func build_momentum_control() -> void:
     add_child(momentum_button)
 
     momentum_label = Label.new()
-    momentum_label.position = Vector2(1005, 550)
-    momentum_label.size = Vector2(225, 32)
+    momentum_label.position = Vector2(1010, 658)
+    momentum_label.size = Vector2(210, 24)
     momentum_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    momentum_label.add_theme_font_size_override("font_size", ui_font(13))
+    momentum_label.add_theme_font_size_override("font_size", ui_font(12))
     momentum_label.add_theme_color_override("font_color", Color(1.0, 0.78, 0.30))
     add_child(momentum_label)
 
@@ -7700,10 +7710,14 @@ func svg_texture(svg: String) -> Texture2D:
     var image := Image.new(); image.load_svg_from_string(svg, 1.0); return ImageTexture.create_from_image(image)
 
 func refresh_battlefield_theme() -> void:
-    # PNG background is static; only update the class-colored shade overlay.
+    var ac := class_accent_color(selected_class)
     if is_instance_valid(_battle_class_shade):
-        var ac := class_accent_color(selected_class)
         _battle_class_shade.color = Color(ac.r * 0.10, ac.g * 0.10, ac.b * 0.16, 0.28)
+    if is_instance_valid(battlefield_background):
+        var svg := battlefield_svg()
+        var img := Image.new()
+        if img.load_svg_from_buffer(svg.to_utf8_buffer()) == OK:
+            battlefield_background.texture = ImageTexture.create_from_image(img)
 
 func battlefield_svg() -> String:
     # Strongly differentiated host arenas. The active player's selected deck class
