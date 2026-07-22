@@ -94,15 +94,16 @@ func setup(class_name_str: String, size_vec: Vector2) -> void:
 	size = size_vec
 	clip_contents = true
 
-	# The individual layer PNGs (body/head/hair/aura) were generated as isolated
-	# cutouts, not as shared-canvas composites — none of them sit at matching
-	# canvas coordinates, so stacking them produces misaligned, overlapping, or
-	# opaque-background artifacts in every leader.  Disable the layered path
-	# until the layer assets are regenerated as proper 1024×1024 full-canvas
-	# RGBA overlays with a shared coordinate origin.
-	# The flat composite portraits (hope.png etc.) look great and still get the
-	# breathing idle animation below, so nothing is lost visually.
-	has_layered_art = false
+	# Auto-detect: all layer PNGs are 1024×1024 full-canvas RGBA overlays that
+	# share the same coordinate space, so stacking them inside a clipped frame
+	# composites correctly.  Fall back to the flat portrait for non-class nodes
+	# (enemy placeholder, Sponsor) that have no layer files.
+	var cn := _class_name_value.to_lower()
+	has_layered_art = (
+		_file_exists_res("res://assets/leaders/%s_body.png" % cn) and
+		_file_exists_res("res://assets/leaders/%s_head.png"  % cn) and
+		_file_exists_res("res://assets/leaders/%s_hair.png"  % cn)
+	)
 
 	_setup_nodes(size_vec)
 
