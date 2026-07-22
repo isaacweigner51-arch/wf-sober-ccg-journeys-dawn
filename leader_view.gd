@@ -170,15 +170,21 @@ func _setup_nodes(sz: Vector2) -> void:
 func _make_layer(part: String, sz: Vector2) -> TextureRect:
 	var path := "res://assets/leaders/%s_%s.png" % [_class_name_value.to_lower(), part]
 	var t := TextureRect.new()
-	t.texture = _load_texture_res(path)  # null-safe if file missing
-	# Transparent 1024×1024 layers must FIT — COVERED would crop the canvas and
-	# misalign layers relative to each other.
-	t.position = Vector2.ZERO
-	t.size = sz
+	# IMPORTANT: expand_mode + stretch_mode must be set BEFORE texture.
+	# Setting expand_mode after the texture is assigned triggers a Godot 4
+	# layout bug that resets the node's size to the texture's native dimensions
+	# (1024×1024), so a clipped 200×200 or 392×352 parent only sees the center
+	# slice of the canvas — the same "zoomed in" / blue-square issue the flat-
+	# art path already guards against with this exact ordering.
 	t.expand_mode  = TextureRect.EXPAND_IGNORE_SIZE
 	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	t.clip_contents = false
 	t.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	# Transparent 1024×1024 layers must FIT — COVERED would crop the canvas and
+	# misalign layers relative to each other.
+	t.texture = _load_texture_res(path)  # null-safe if file missing
+	t.position = Vector2.ZERO
+	t.size = sz
 	t.pivot_offset  = sz * 0.5
 	add_child(t)
 	return t
