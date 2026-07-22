@@ -63,7 +63,10 @@
     "attack": 3,
     "health": 4,
     "effect": "On Play: Restore 2 defense and draw a card.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "restore_one",
+    "amount": 1,
+    "description": "On Play: Restore 1 Defense to your leader."
   },
   {
     "id": "JD-007",
@@ -86,7 +89,9 @@
     "attack": 4,
     "health": 4,
     "effect": "Final Breath: Draw 2 cards.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "draw",
+    "description": "On Play: Draw a card."
   },
   {
     "id": "JD-009",
@@ -229,7 +234,9 @@
     "attack": 3,
     "health": 3,
     "effect": "On Play: Give your other followers +1 Attack this turn.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "rush",
+    "description": "Rush."
   },
   {
     "id": "JD-022",
@@ -240,7 +247,9 @@
     "attack": 5,
     "health": 3,
     "effect": "Rush.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "rush",
+    "description": "Rush."
   },
   {
     "id": "JD-023",
@@ -251,7 +260,9 @@
     "attack": 4,
     "health": 4,
     "effect": "After surviving combat, gain +1/+1.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "guard",
+    "description": "Guard."
   },
   {
     "id": "JD-024",
@@ -394,7 +405,10 @@
     "attack": 3,
     "health": 3,
     "effect": "On Play: Exhaust the strongest enemy next turn.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "restore_one",
+    "amount": 1,
+    "description": "On Play: Restore 1 Defense to your leader."
   },
   {
     "id": "JD-037",
@@ -405,7 +419,9 @@
     "attack": 3,
     "health": 5,
     "effect": "On Play: Return the strongest enemy follower to hand.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "draw",
+    "description": "On Play: Draw a card."
   },
   {
     "id": "JD-038",
@@ -416,7 +432,9 @@
     "attack": 3,
     "health": 6,
     "effect": "Guard.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "guard",
+    "description": "Guard."
   },
   {
     "id": "JD-039",
@@ -559,7 +577,10 @@
     "attack": 2,
     "health": 3,
     "effect": "Arrival: If you have gained maximum PP this match, give another ally +1/+1.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "buff_random",
+    "amount": 1,
+    "description": "On Play: Give a friendly follower +1/+1."
   },
   {
     "id": "JD-052",
@@ -570,7 +591,10 @@
     "attack": 2,
     "health": 2,
     "effect": "Arrival: Draw a card. If you spent all your PP this turn, restore 2 defense.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "small_steps",
+    "amount": 1,
+    "description": "On Play: Draw a card. At 0 PP: Restore 1 Defense."
   },
   {
     "id": "JD-053",
@@ -581,7 +605,10 @@
     "attack": 4,
     "health": 4,
     "effect": "On Play: Give all other allies +1/+1.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "buff_random",
+    "amount": 1,
+    "description": "On Play: Give a friendly follower +1/+1."
   },
   {
     "id": "JD-054",
@@ -726,7 +753,10 @@
     "attack": 2,
     "health": 4,
     "effect": "On Play: Restore 1 defense for each allied Recovery card.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "buff_random",
+    "amount": 1,
+    "description": "On Play: Give a friendly follower +1/+1."
   },
   {
     "id": "JD-067",
@@ -737,7 +767,9 @@
     "attack": 3,
     "health": 3,
     "effect": "Return a follower from your Relapse Zone to hand.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "rush",
+    "description": "Rush."
   },
   {
     "id": "JD-068",
@@ -748,7 +780,9 @@
     "attack": 2,
     "health": 4,
     "effect": "Draw a card, then reduce the highest-cost card in hand by 1.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "draw",
+    "description": "On Play: Draw a card."
   },
   {
     "id": "JD-069",
@@ -759,7 +793,9 @@
     "attack": 3,
     "health": 5,
     "effect": "Gain +1/+1 for each other allied follower.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "guard",
+    "description": "Guard."
   },
   {
     "id": "JD-070",
@@ -770,7 +806,9 @@
     "attack": 3,
     "health": 4,
     "effect": "Draw 2, then Revive one card from hand to the bottom of your deck.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "draw",
+    "description": "On Play: Draw a card."
   },
   {
     "id": "JD-071",
@@ -781,7 +819,10 @@
     "attack": 2,
     "health": 3,
     "effect": "Restore 1 defense and draw a card.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "restore_one",
+    "amount": 1,
+    "description": "On Play: Restore 1 Defense to your leader."
   },
   {
     "id": "JD-072",
@@ -847,7 +888,10 @@
     "attack": 2,
     "health": 3,
     "effect": "While linked to a Sponsor, gain +2/+2 and protection.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "buff_random",
+    "amount": 1,
+    "description": "On Play: Give a friendly follower +1/+1."
   },
   {
     "id": "JD-079",
@@ -982,7 +1026,9 @@
     "attack": 3,
     "health": 2,
     "effect": "Breakthrough while your leader has less defense than the enemy leader.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "rush",
+    "description": "Rush."
   },
   {
     "id": "JD-091",
@@ -1070,7 +1116,9 @@
     "attack": 2,
     "health": 4,
     "effect": "Protector. Enemies attacking this lose 1 Attack for that combat.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "guard",
+    "description": "Guard."
   },
   {
     "id": "JD-099",
@@ -1158,7 +1206,9 @@
     "attack": 2,
     "health": 3,
     "effect": "Arrival: Reduce the cost of the highest-cost card in your hand by 1 this turn.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "draw",
+    "description": "On Play: Draw a card."
   },
   {
     "id": "JD-107",
@@ -1246,7 +1296,9 @@
     "attack": 2,
     "health": 3,
     "effect": "If you control a Sponsor or Sponsee, draw a card.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "guard",
+    "description": "Guard."
   },
   {
     "id": "JD-115",
@@ -1394,7 +1446,9 @@
     "attack": 3,
     "health": 6,
     "effect": "Protector.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "guard",
+    "description": "Guard."
   },
   {
     "id": "JD-127",
@@ -1540,7 +1594,9 @@
     "attack": 3,
     "health": 3,
     "effect": "On Play: Give a random Courage ally in play +1/+2.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "guard",
+    "description": "Guard."
   },
   {
     "id": "JD-143",
@@ -1551,7 +1607,10 @@
     "attack": 2,
     "health": 4,
     "effect": "On Play: Restore 2 Defense to your leader.",
-    "max_copies": 3
+    "max_copies": 3,
+    "ability": "restore_one",
+    "amount": 1,
+    "description": "On Play: Restore 1 Defense to your leader."
   },
   {
     "id": "JD-144",
