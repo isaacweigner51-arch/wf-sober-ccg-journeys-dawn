@@ -23,3 +23,4 @@
 - [Godot 4 TextureRect expand_mode ordering bug](godot-texturerect-expand-mode-order.md) — setting expand_mode AFTER texture resets node size to native tex dims; always set expand_mode+stretch_mode BEFORE assigning texture.
 - [wf-sober-ccg cloud save architecture](wf-sober-ccg-cloud-save.md) — upload_save_data() PATCHes save_data JSONB; column must be added by user (SQL in topic file); new email accounts now get profile row upserted on first login.
 - [GitHub uploads.github.com proxy limitation](github-uploads-proxy-limitation.md) — proxyFetch only covers api.github.com; use curl+GITHUB_PAT for release asset uploads; workflow scope also needs PAT.
+- [wf-sober-ccg leader layer stacking](wf-sober-ccg-leader-layer-stacking.md) — aura must render BEHIND the character; hair/blink layers must be derived from the base portrait, never separate AI images.
