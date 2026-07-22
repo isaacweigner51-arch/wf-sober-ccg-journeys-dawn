@@ -54,19 +54,25 @@ const _FOCAL_X := {
 const _BREATH_SHADER_CODE := """
 shader_type canvas_item;
 uniform float breath : hint_range(0.0, 1.0) = 0.0;
+uniform float sway   : hint_range(-1.0, 1.0) = 0.0;
 
 void fragment() {
 	vec2 uv = UV;
 
-	// Chest zone — roughly the mid-torso band (y 30%–75%)
-	float chest = smoothstep(0.25, 0.42, uv.y) * smoothstep(0.78, 0.58, uv.y);
+	// ── Weight-shift lean: whole figure leans as one piece, anchored at the
+	// bottom of the canvas.  Because every layer shares this material, the
+	// body, head, and hair lean together — they can never separate.
+	uv.x -= sway * (1.0 - uv.y) * 0.012;
 
-	// Shoulder spread — upper torso (y 15%–45%) expands outward from center
-	float shoulder = smoothstep(0.12, 0.30, uv.y) * smoothstep(0.50, 0.32, uv.y);
+	// ── Breathing: continuous vertical falloff — strongest in the chest,
+	// fading smoothly to zero at the very top and bottom of the figure so
+	// there is NO seam anywhere.
+	float lift = smoothstep(0.95, 0.55, uv.y) * smoothstep(0.02, 0.30, uv.y);
+	uv.y += lift * breath * 0.014;
 
-	// On inhale: chest pixels shift upward, shoulders spread outward
-	uv.y -= chest    * breath * 0.026;
-	uv.x += (uv.x - 0.5) * 2.0 * shoulder * breath * 0.014;
+	// Shoulder spread — upper torso expands outward from center on inhale
+	float shoulder = smoothstep(0.15, 0.35, uv.y) * smoothstep(0.60, 0.40, uv.y);
+	uv.x += (uv.x - 0.5) * 2.0 * shoulder * breath * 0.010;
 
 	COLOR = texture(TEXTURE, clamp(uv, vec2(0.001), vec2(0.999)));
 }
@@ -297,16 +303,22 @@ func _play_idle() -> void:
 			node.material      = null   # clear any breath shader from a previous idle
 
 	if has_layered_art:
-		# ── Body: UV-deformation shader so the chest actually moves ───────────
-		# Scaling the rectangle looks fake because the whole image grows uniformly.
-		# This shader pushes chest pixels upward and spreads shoulders outward on
-		# the inhale — the same technique 2D fighting games use.
+		# ── ONE shader material shared by body + head + hair ─────────────────
+		# CRITICAL: every character layer must deform through the SAME material
+		# instance.  When layers were tweened independently (head drifting while
+		# the body deformed) the neck seam showed and the character read as two
+		# pieces of paper sliding past each other.  A shared material means all
+		# pixels of the character move as one continuous surface — the layers
+		# can never separate, exactly like Shadowverse's Live2D-style leaders.
 		var sm := ShaderMaterial.new()
 		var sh := Shader.new()
 		sh.code = _BREATH_SHADER_CODE
 		sm.shader = sh
 		_layer_body.material = sm
-		# Tween the shader's breath uniform 0→1→0 in a loop (4.6s full cycle).
+		if _layer_head != null: _layer_head.material = sm
+		if _layer_hair != null: _layer_hair.material = sm
+
+		# Breath: 0→1→0, 4.6 s full cycle
 		_idle_tween = create_tween().set_loops()
 		_idle_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		_idle_tween.tween_method(func(v: float): sm.set_shader_parameter("breath", v),
@@ -314,37 +326,15 @@ func _play_idle() -> void:
 		_idle_tween.tween_method(func(v: float): sm.set_shader_parameter("breath", v),
 			1.0, 0.0, 2.3)
 
-		# ── Whole-character sway — weight shift every ~6 s ───────────────────
-		# Very subtle left/right drift that makes the character feel alive
-		# even when standing still, like a person shifting their weight.
+		# Sway: -1→1→-1 inside the same shader (top of the figure leans, feet
+		# anchored) on a longer period so it never syncs with the breath.
 		var sw := create_tween().set_loops()
 		sw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		sw.tween_property(self, "position:x",  4.0, 3.1)
-		sw.tween_property(self, "position:x", -4.0, 3.1)
+		sw.tween_method(func(v: float): sm.set_shader_parameter("sway", v),
+			-1.0, 1.0, 3.4)
+		sw.tween_method(func(v: float): sm.set_shader_parameter("sway", v),
+			1.0, -1.0, 3.4)
 		_aux_idle_tweens.append(sw)
-
-		# ── Head: micro-lift that rides the breath (not a rigid scale) ────────
-		if _layer_head != null:
-			var hdt := create_tween().set_loops()
-			hdt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			hdt.tween_property(_layer_head, "position:y", -5.0, 2.3).set_delay(0.2)
-			hdt.tween_property(_layer_head, "position:y",  0.0, 2.3)
-			_aux_idle_tweens.append(hdt)
-
-		# ── Hair: rotation sway + slight drift so it doesn't look glued down ─
-		if _layer_hair != null:
-			_layer_hair.pivot_offset = Vector2(_layer_hair.size.x * 0.5, 0.0)
-			var ht := create_tween().set_loops()
-			ht.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			ht.tween_property(_layer_hair, "rotation_degrees",  2.8, 1.9)
-			ht.tween_property(_layer_hair, "rotation_degrees", -2.8, 1.9)
-			_aux_idle_tweens.append(ht)
-			# Also drift horizontally at a slightly different period for organic feel
-			var hx := create_tween().set_loops()
-			hx.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			hx.tween_property(_layer_hair, "position:x",  6.0, 2.7)
-			hx.tween_property(_layer_hair, "position:x", -6.0, 2.7)
-			_aux_idle_tweens.append(hx)
 
 		# ── Aura: slow pulse ─────────────────────────────────────────────────
 		if _layer_aura != null:

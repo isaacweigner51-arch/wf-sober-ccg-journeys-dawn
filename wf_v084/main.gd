@@ -1,5 +1,7 @@
 extends Control
 
+const _LeaderView := preload("res://leader_view.gd")
+
 const STARTING_HEALTH := 20
 const BATTLE_BARK_HEALTH_THRESHOLD := 7
 const BATTLE_BARK_COOLDOWN := 3.0
@@ -31,6 +33,8 @@ var enemy_max_mana := 0
 var turn_number := 0
 var game_over := false
 var busy := false
+var _active_amulet_tooltip: Control = null   # tap-to-reveal tooltip on field amulets
+var _near_win_barked := false                # fire near_win bark only once per match
 var selected_attacker := -1
 var selected_evolution_cost: int = 0
 var attack_drag_line: Line2D = null
@@ -451,7 +455,7 @@ func build_class_cards(faction_name: String) -> Array:
             card("Relentless Drive",6,6,4,faction_name,"Epic","charge_storm",0,"Charge. Storm. Cuts through every follower on the field.","flame","jd-132"),
             card("Battle Hardened",5,5,5,faction_name,"Epic","buff_all",1,"On Play: Give all allied followers +1/+1.","flame","jd-133"),
             card("Rally the Free",8,5,7,faction_name,"Platinum","rally_the_free",0,"SIGNATURE PLATINUM — Evolve for free. Give every Courage follower remaining in your deck +2/+2. The first Courage follower you play each turn gains Rush.","star"),
-            card("Phoenix Rising",1,1,1,faction_name,"Legendary","phoenix_rising",0,"Destroyed: returns at the start of your next turn at +1/+1 (1/1 → 10/10). At 10/10, permanently falls. Does not return if banished or transformed.","star","jd-125")]
+            card("Phoenix Rising",1,1,1,faction_name,"Legendary","phoenix_rising",0,"Last Words: rises immediately at +1/+1. Evolves on the 3rd, 6th, and 9th rise (+2/+2). 9th rise: 3 damage to all. Falls forever after 9 lives.","star","jd-125")]
     if faction_name == "Purpose":
         return [
             card("First Step",1,1,2,faction_name,"Bronze","first_step",0,"Arrival: Draw a card. If you have fewer maximum PP than your opponent, gain 1 temporary PP this turn.","road"),
@@ -1209,32 +1213,64 @@ func attack_impact_sound(attacker_index: int, target_index: int, player_side: bo
 # running low on health, winning, or losing), not just in a rulebook.
 const BATTLE_BARKS := {
     "Hope": {
-        "play": ["Every card here is a reason to keep going.", "Small moves add up. Watch."],
-        "attack": ["Hope doesn't hit soft.", "I'm not backing down from this."],
-        "low_health": ["I've been lower than this and still stood up.", "This isn't the end of my story."],
-        "victory": ["We made it through. Together.", "That's what hope looks like."],
-        "defeat": ["This isn't over. Hope doesn't quit.", "I'll be back on my feet tomorrow."],
+        "play":          ["Every card here is a reason to keep going.", "Small moves add up. Watch."],
+        "attack":        ["Hope doesn't hit soft.", "I'm not backing down from this."],
+        "low_health":    ["I've been lower than this and still stood up.", "This isn't the end of my story."],
+        "victory":       ["We made it through. Together.", "That's what hope looks like."],
+        "defeat":        ["This isn't over. Hope doesn't quit.", "I'll be back on my feet tomorrow."],
+        # ── New ──
+        "damage":        ["Ouch. But I'm still here.", "That one landed. Keep going."],
+        "near_win":      ["We're almost through this.", "The light is right there. Hold on."],
+        "emote_hello":   ["Hey. Glad you're here.", "Hello, friend. Let's make this count."],
+        "emote_thanks":  ["Thank you. Really.", "That means something."],
+        "emote_nice":    ["That was a good one.", "Well played. Genuinely."],
+        "emote_taunt":   ["Is that all? I was hoping for more.", "Come on. Show me what you've got."],
+        "emote_thinking":["Give me a second. I've got this.", "Just thinking it through."],
     },
     "Courage": {
-        "play": ["Stepping up. Watch this.", "Fear doesn't get a vote here."],
-        "attack": ["Stand my ground? Not today.", "That's what courage looks like."],
-        "low_health": ["I've faced worse than this.", "Hurt, not broken."],
-        "victory": ["Courage carried the day.", "Told you I wouldn't back down."],
-        "defeat": ["I'll take the hit. I won't take the excuse.", "Down, not out."],
+        "play":          ["Stepping up. Watch this.", "Fear doesn't get a vote here."],
+        "attack":        ["Stand my ground? Not today.", "That's what courage looks like."],
+        "low_health":    ["I've faced worse than this.", "Hurt, not broken."],
+        "victory":       ["Courage carried the day.", "Told you I wouldn't back down."],
+        "defeat":        ["I'll take the hit. I won't take the excuse.", "Down, not out."],
+        # ── New ──
+        "damage":        ["Gah! You'll pay for that.", "Hit me again. See what happens."],
+        "near_win":      ["I can smell the finish line.", "Almost done. Don't blink."],
+        "emote_hello":   ["Let's go. I don't back down.", "Ready? Because I am."],
+        "emote_thanks":  ["Appreciated. Now let's fight.", "Ha. Thanks."],
+        "emote_nice":    ["Now that's a move.", "Respect. Solid play."],
+        "emote_taunt":   ["That's your strategy? Really?", "Push harder. You're holding back."],
+        "emote_thinking":["Hmm. Give me a second.", "Running it through my head."],
     },
     "Serenity": {
-        "play": ["Patience. Let it land.", "Steady hands win this."],
-        "attack": ["Calm doesn't mean passive.", "Quiet, then decisive."],
-        "low_health": ["I'm still breathing. I'm still here.", "Stillness isn't weakness."],
-        "victory": ["Peace, earned the hard way.", "That's the power of staying steady."],
-        "defeat": ["I'll sit with this and come back stronger.", "Not every round is won. That's fine."],
+        "play":          ["Patience. Let it land.", "Steady hands win this."],
+        "attack":        ["Calm doesn't mean passive.", "Quiet, then decisive."],
+        "low_health":    ["I'm still breathing. I'm still here.", "Stillness isn't weakness."],
+        "victory":       ["Peace, earned the hard way.", "That's the power of staying steady."],
+        "defeat":        ["I'll sit with this and come back stronger.", "Not every round is won. That's fine."],
+        # ── New ──
+        "damage":        ["Pain teaches. I'm listening.", "That hurt. I'll be fine."],
+        "near_win":      ["The end is close. Stay centered.", "Almost there. Breathe."],
+        "emote_hello":   ["Hello. May this be a worthy match.", "Greetings. Let's begin with respect."],
+        "emote_thanks":  ["Your kindness is noted.", "Thank you. Truly."],
+        "emote_nice":    ["A thoughtful move. Well done.", "That was precise. I respect it."],
+        "emote_taunt":   ["You're still holding back. I can tell.", "There's more in you. Find it."],
+        "emote_thinking":["Let the mind settle.", "Patience. I'll see it clearly."],
     },
     "Purpose": {
-        "play": ["Every move has a reason behind it.", "Building toward something. Watch."],
-        "attack": ["This is what I'm fighting for.", "Purpose doesn't flinch."],
-        "low_health": ["I know why I'm still standing.", "Too much left to build to quit now."],
-        "victory": ["That's what purpose gets you.", "Built this win, one step at a time."],
-        "defeat": ["This sets back the plan. Not the purpose.", "I'll rebuild from here."],
+        "play":          ["Every move has a reason behind it.", "Building toward something. Watch."],
+        "attack":        ["This is what I'm fighting for.", "Purpose doesn't flinch."],
+        "low_health":    ["I know why I'm still standing.", "Too much left to build to quit now."],
+        "victory":       ["That's what purpose gets you.", "Built this win, one step at a time."],
+        "defeat":        ["This sets back the plan. Not the purpose.", "I'll rebuild from here."],
+        # ── New ──
+        "damage":        ["An unexpected variable.", "Noted. Adjusting."],
+        "near_win":      ["Objective nearly complete.", "The outcome is decided. Almost."],
+        "emote_hello":   ["Every move has a reason. Let's begin.", "I won't waste a single turn."],
+        "emote_thanks":  ["Noted. Thank you.", "I'll remember that."],
+        "emote_nice":    ["Efficient. Well executed.", "Precision. I respect that."],
+        "emote_taunt":   ["Your plan has flaws. I see them.", "I'm already three moves ahead."],
+        "emote_thinking":["Processing.", "Running the numbers."],
     },
 }
 
@@ -1408,142 +1444,193 @@ func play_sponsor_evolution_animation(unit: Dictionary, player_side: bool) -> vo
     var old_music_db := music_player.volume_db if is_instance_valid(music_player) else -5.0
     if is_instance_valid(music_player):
         music_player.volume_db = old_music_db - 12.0
-    play_sfx("sponsor_evolve")
 
     card_view.z_index = 1400
     var original_position := card_view.position
-    var original_scale := card_view.scale
-    var screen_center := Vector2(640.0, 360.0)
-    var centered_position := screen_center - card_view.size * 0.5 - area.global_position
+    var original_scale    := card_view.scale
+    var screen_center     := Vector2(640.0, 360.0)
+    # Card rests left-of-centre so the sponsee portrait has room on the right.
+    var card_dest := screen_center - card_view.size * 0.5 - area.global_position + Vector2(-120, 0)
 
+    # ── Dark overlay ────────────────────────────────────────────────────────
     var dimmer := ColorRect.new()
-    dimmer.color = Color(0.01, 0.015, 0.03, 0.0)
+    dimmer.color         = Color(0.01, 0.012, 0.025, 0.0)
+    dimmer.z_index       = 1200
+    dimmer.mouse_filter  = Control.MOUSE_FILTER_IGNORE
     dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    dimmer.z_index = 1200
     add_child(dimmer)
 
-    # Cinematic backdrop: the Sponsor's diner scene fades in behind the card
-    # as the evolution fires, grounding the moment in a real place and face.
+    # ── Cinematic background (Sponsor's scene) ──────────────────────────────
     var cinematic_bg := TextureRect.new()
     var _cin_tex := load("res://assets/cards/full/jd-080-cinematic.jpg") as Texture2D
-    cinematic_bg.texture = _cin_tex
-    cinematic_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    cinematic_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    cinematic_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    cinematic_bg.texture     = _cin_tex
+    cinematic_bg.z_index     = 1205
+    cinematic_bg.modulate    = Color(1.0, 1.0, 1.0, 0.0)
     cinematic_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    cinematic_bg.z_index = 1205
-    cinematic_bg.modulate = Color(1.0, 1.0, 1.0, 0.0)
+    cinematic_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    cinematic_bg.expand_mode  = TextureRect.EXPAND_IGNORE_SIZE
+    cinematic_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     add_child(cinematic_bg)
 
-    var sponsor_glow := ColorRect.new()
-    sponsor_glow.position = screen_center - Vector2(175, 175)
-    sponsor_glow.size = Vector2(350, 350)
-    sponsor_glow.color = Color(1.0, 0.72, 0.18, 0.0)
-    sponsor_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    sponsor_glow.z_index = 1220
-    add_child(sponsor_glow)
-
-    # Real illustrations for both figures instead of ASCII-art silhouettes and
-    # a blocky "WALKING FREE" wordmark: the sponsor's own card art rises
-    # center-stage, and a second portrait (the sponsee's real art, resolved
-    # the same way every other card's art is) fades in beside it once the
-    # sponsor speaks — reinforcing "you are never alone" with an actual face,
-    # not a wall of text.
-    var sponsee_preview := card("Sponsee", 2, 2, 2, "Universal", "Token", "sponsee", 0, "", "hands")
-    var sponsee_portrait := build_art_medallion(CardArt.resolve(sponsee_preview), Vector2(838, 210), Vector2(180, 250), Color(1.0, 0.86, 0.42))
-    sponsee_portrait.scale = Vector2(0.55, 0.55)
+    # ── Sponsee portrait (slides in from the right) ─────────────────────────
+    var sponsee_preview  := card("Sponsee", 2, 2, 2, "Universal", "Token", "sponsee", 0, "", "hands")
+    var sponsee_portrait := build_art_medallion(
+        CardArt.resolve(sponsee_preview), Vector2(920, 180), Vector2(220, 300),
+        Color(1.0, 0.88, 0.44))
+    sponsee_portrait.modulate = Color(1, 1, 1, 0)
+    sponsee_portrait.z_index  = 1310
     add_child(sponsee_portrait)
 
-    var connection := ColorRect.new()
-    connection.position = Vector2(690, 357)
-    connection.size = Vector2(145, 6)
-    connection.color = Color(1.0, 0.86, 0.36, 0.0)
-    connection.rotation = -0.12
-    connection.z_index = 1310
-    connection.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(connection)
-
+    # ── Quote / title text ──────────────────────────────────────────────────
     var line_label := Label.new()
-    line_label.text = "\"YOU ARE NEVER ALONE.\""
-    line_label.position = Vector2(240, 470)
-    line_label.size = Vector2(800, 56)
+    line_label.text        = "\"YOU ARE NEVER ALONE.\""
+    line_label.position    = Vector2(160, 505)
+    line_label.size        = Vector2(960, 60)
     line_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    line_label.add_theme_font_size_override("font_size", ui_font(36))
-    line_label.add_theme_color_override("font_color", Color(1.0, 0.93, 0.68))
-    line_label.add_theme_color_override("font_shadow_color", Color(0.15, 0.08, 0.0, 0.85))
+    line_label.add_theme_font_size_override("font_size", ui_font(40))
+    line_label.add_theme_color_override("font_color",        Color(1.0, 0.95, 0.72))
+    line_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.90))
     line_label.add_theme_constant_override("shadow_offset_x", 3)
-    line_label.add_theme_constant_override("shadow_offset_y", 3)
-    line_label.modulate.a = 0.0
-    line_label.z_index = 1360
+    line_label.add_theme_constant_override("shadow_offset_y", 4)
+    line_label.modulate.a  = 0.0
+    line_label.z_index     = 1380
     add_child(line_label)
 
-    var title := Label.new()
-    title.text = "GUIDANCE BECOMES FREEDOM"
-    title.position = Vector2(290, 545)
-    title.size = Vector2(700, 40)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", ui_font(22))
-    title.add_theme_color_override("font_color", Color(1.0, 0.84, 0.42))
-    title.modulate.a = 0.0
-    title.z_index = 1360
-    add_child(title)
+    var title_label := Label.new()
+    title_label.text       = "GUIDANCE BECOMES FREEDOM"
+    title_label.position   = Vector2(200, 576)
+    title_label.size       = Vector2(880, 36)
+    title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title_label.add_theme_font_size_override("font_size", ui_font(20))
+    title_label.add_theme_color_override("font_color", Color(1.0, 0.78, 0.30))
+    title_label.modulate.a = 0.0
+    title_label.z_index    = 1380
+    add_child(title_label)
 
+    # ── Phase 1 — dim + cinematic rise + card zoom ──────────────────────────
     var rise := create_tween().set_parallel(true)
-    rise.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-    rise.tween_property(dimmer, "color:a", 0.86, 0.32)
-    rise.tween_property(cinematic_bg, "modulate:a", 0.60, 0.45)
-    rise.tween_property(card_view, "position", centered_position + Vector2(-90, 0), 0.42)
-    rise.tween_property(card_view, "scale", Vector2(1.9, 1.9), 0.42)
-    rise.tween_property(sponsor_glow, "color:a", 0.24, 0.35)
+    rise.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+    rise.tween_property(dimmer,       "color:a",           0.90,             0.35)
+    rise.tween_property(cinematic_bg, "modulate:a",        0.55,             0.50)
+    rise.tween_property(card_view,    "position",          card_dest,        0.40)
+    rise.tween_property(card_view,    "scale",  Vector2(2.0, 2.0),           0.40)
     await rise.finished
 
-    await play_signature_voice("The Sponsor", player_side, false)
-    var quote_tween := create_tween().set_parallel(true)
-    quote_tween.tween_property(line_label, "modulate:a", 1.0, 0.3)
-    await quote_tween.finished
+    # ── Phase 2 — white flash + sunburst rays ──────────────────────────────
+    # White flash: full-screen, very brief — the card "transforms" in the light.
+    var flash := ColorRect.new()
+    flash.color       = Color(1.0, 1.0, 1.0, 0.0)
+    flash.z_index     = 1450
+    flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    add_child(flash)
+    var flash_t := create_tween()
+    flash_t.set_trans(Tween.TRANS_QUAD)
+    flash_t.tween_property(flash, "color:a", 0.92, 0.08)
+    flash_t.tween_property(flash, "color:a", 0.0,  0.22)
+    flash_t.finished.connect(flash.queue_free)
 
-    var connect_tween := create_tween().set_parallel(true)
-    connect_tween.tween_property(sponsee_portrait, "modulate:a", 1.0, 0.34)
-    connect_tween.tween_property(sponsee_portrait, "scale", Vector2(1.0, 1.0), 0.34)
-    connect_tween.tween_property(connection, "color:a", 0.95, 0.28)
-    connect_tween.tween_property(title, "modulate:a", 1.0, 0.28)
-    connect_tween.tween_property(sponsor_glow, "scale", Vector2(1.3, 1.3), 0.40)
-    await connect_tween.finished
-    spawn_sparkle_burst(Vector2(760, 335), 14, [Color(1.0, 0.86, 0.34), Color(1.0, 1.0, 1.0)], self, 80.0)
+    play_sfx("sponsor_evolve")
+
+    # Sunburst — 16 thin gold rays expanding from the card center.
+    # Each ray is a ColorRect whose pivot is at its own top-left, rotated
+    # so it points outward from screen_center.
+    var burst_origin := screen_center + Vector2(-120, 0)  # matches card_dest center
+    var ray_nodes: Array = []
+    for ri in range(16):
+        var ray := ColorRect.new()
+        ray.size          = Vector2(4, 260)
+        ray.color         = Color(1.0, 0.84, 0.22, 0.80)
+        ray.pivot_offset  = Vector2(2, 0)
+        ray.position      = burst_origin - Vector2(2, 0)
+        ray.rotation      = ri * TAU / 16.0
+        ray.z_index       = 1240
+        ray.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+        add_child(ray)
+        ray_nodes.append(ray)
+        var rt := create_tween().set_parallel(true)
+        rt.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+        rt.tween_property(ray, "color:a",            0.0, 0.55).set_delay(0.08)
+        rt.finished.connect(ray.queue_free)
+
+    # Concentric glow rings (3 circles made from square ColorRects with
+    # modulate — each offset so they look centred on burst_origin).
+    var ring_colors := [Color(1.0, 0.88, 0.40, 0.30),
+                        Color(1.0, 0.72, 0.18, 0.18),
+                        Color(0.90, 0.60, 0.10, 0.10)]
+    var ring_nodes: Array = []
+    for rk in range(3):
+        var sz := float(200 + rk * 130)
+        var ring := ColorRect.new()
+        ring.size         = Vector2(sz, sz)
+        ring.color        = ring_colors[rk]
+        ring.position     = burst_origin - Vector2(sz * 0.5, sz * 0.5)
+        ring.z_index      = 1215 + rk
+        ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        add_child(ring)
+        ring_nodes.append(ring)
+        # Pulse outward then fade
+        var rnt := create_tween().set_parallel(true)
+        rnt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+        rnt.tween_property(ring, "scale",      Vector2(1.6, 1.6), 0.70)
+        rnt.tween_property(ring, "color:a",    0.0,               0.60)
+        rnt.finished.connect(ring.queue_free)
+
+    spawn_sparkle_burst(burst_origin, 20,
+        [Color(1.0, 0.86, 0.34), Color(1.0, 1.0, 1.0), Color(1.0, 0.60, 0.10)], self, 110.0)
     await get_tree().create_timer(0.30).timeout
 
-    unit["attack"] = int(unit.get("attack", 0)) + 2
-    unit["health"] = int(unit.get("health", 0)) + 2
-    unit["max_health"] = int(unit.get("max_health", unit.get("health", 0))) + 2
-    unit["evolved"] = true
-    unit["can_attack"] = true
+    # ── Phase 3 — voice + quote ────────────────────────────────────────────
+    await play_signature_voice("The Sponsor", player_side, false)
+    var quote_t := create_tween()
+    quote_t.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    quote_t.tween_property(line_label, "modulate:a", 1.0, 0.35)
+    await quote_t.finished
+
+    # ── Phase 4 — sponsee portrait slides in + title + connection spark ────
+    # Slide sponsee in from the right
+    var connect_t := create_tween().set_parallel(true)
+    connect_t.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    connect_t.tween_property(sponsee_portrait, "position",    Vector2(820, 180), 0.40)
+    connect_t.tween_property(sponsee_portrait, "modulate:a",  1.0,               0.35)
+    connect_t.set_trans(Tween.TRANS_QUAD)
+    connect_t.tween_property(title_label,      "modulate:a",  1.0,               0.30)
+    await connect_t.finished
+
+    # Connection spark — runs from card to sponsee in a brief burst
+    spawn_sparkle_burst(burst_origin + Vector2(160, 0), 10,
+        [Color(1.0, 0.86, 0.34), Color(1.0, 1.0, 1.0)], self, 60.0)
+    spawn_sparkle_burst(Vector2(870, 330), 10,
+        [Color(1.0, 0.86, 0.34), Color(1.0, 1.0, 1.0)], self, 60.0)
+    await get_tree().create_timer(0.45).timeout
+
+    # ── Apply evolution stats ───────────────────────────────────────────────
+    unit["attack"]       = int(unit.get("attack", 0)) + 2
+    unit["health"]       = int(unit.get("health", 0)) + 2
+    unit["max_health"]   = int(unit.get("max_health", unit.get("health", 0))) + 2
+    unit["evolved"]      = true
+    unit["can_attack"]   = true
     unit["evolved_this_turn"] = true
     board[index] = unit
 
     await create_sponsee(player_side)
 
-    var return_tween := create_tween().set_parallel(true)
-    return_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-    return_tween.tween_property(card_view, "position", original_position, 0.30)
-    return_tween.tween_property(card_view, "scale", original_scale, 0.30)
-    return_tween.tween_property(dimmer, "color:a", 0.0, 0.28)
-    return_tween.tween_property(cinematic_bg, "modulate:a", 0.0, 0.28)
-    return_tween.tween_property(sponsor_glow, "color:a", 0.0, 0.24)
-    return_tween.tween_property(sponsee_portrait, "modulate:a", 0.0, 0.24)
-    return_tween.tween_property(connection, "modulate:a", 0.0, 0.24)
-    return_tween.tween_property(title, "modulate:a", 0.0, 0.24)
-    return_tween.tween_property(line_label, "modulate:a", 0.0, 0.24)
-    await return_tween.finished
+    # ── Phase 5 — everything fades out + card returns ──────────────────────
+    var return_t := create_tween().set_parallel(true)
+    return_t.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+    return_t.tween_property(card_view,        "position",    original_position, 0.30)
+    return_t.tween_property(card_view,        "scale",       original_scale,    0.30)
+    return_t.tween_property(dimmer,           "color:a",     0.0,               0.30)
+    return_t.tween_property(cinematic_bg,     "modulate:a",  0.0,               0.28)
+    return_t.tween_property(sponsee_portrait, "modulate:a",  0.0,               0.24)
+    return_t.tween_property(line_label,       "modulate:a",  0.0,               0.24)
+    return_t.tween_property(title_label,      "modulate:a",  0.0,               0.24)
+    await return_t.finished
 
     card_view.z_index = 0
-    dimmer.queue_free()
-    cinematic_bg.queue_free()
-    sponsor_glow.queue_free()
-    sponsee_portrait.queue_free()
-    connection.queue_free()
-    title.queue_free()
-    line_label.queue_free()
+    for n in [dimmer, cinematic_bg, sponsee_portrait, line_label, title_label]:
+        if is_instance_valid(n):
+            n.queue_free()
     if is_instance_valid(music_player):
         music_player.volume_db = old_music_db
     busy = false
@@ -1620,6 +1707,9 @@ func update_dynamic_music() -> void:
     set_battle_music(desired)
 
 func leader_feedback(leader: Control, damage: int, healing: bool = false) -> void:
+    # Auto-react bark: player leader takes a hit
+    if not healing and is_instance_valid(player_leader) and leader == player_leader:
+        play_battle_bark(player_leader, selected_class, "damage", true, true)
     play_sfx("heal" if healing else ("hit_heavy" if damage >= 4 else "hit_light"))
     var start := leader.position
     var tween := create_tween()
@@ -1801,9 +1891,19 @@ func build_ui() -> void:
 
     enemy_hand_area = Control.new(); enemy_hand_area.position = Vector2(355, 34); enemy_hand_area.size = Vector2(570, 70); add_child(enemy_hand_area)
     enemy_board_area = Control.new(); enemy_board_area.position = Vector2(245, 82); enemy_board_area.size = Vector2(790, 165); enemy_board_area.z_index = 60; enemy_board_area.clip_contents = false; add_child(enemy_board_area)
-    enemy_amulet_area = Control.new(); enemy_amulet_area.position = Vector2(365, 246); enemy_amulet_area.size = Vector2(550, 54); enemy_amulet_area.z_index = 30; add_child(enemy_amulet_area)
-    player_amulet_area = Control.new(); player_amulet_area.position = Vector2(365, 308); player_amulet_area.size = Vector2(550, 54); player_amulet_area.z_index = 30; add_child(player_amulet_area)
+    # Amulet rows sit flush against the inside edge of each board so they
+    # never occupy the open battlefield center.  Empty slots are hidden so
+    # "RECOVERY SKILL" placeholders never clutter the screen.
     player_board_area = Control.new(); player_board_area.position = Vector2(245, 365); player_board_area.size = Vector2(790, 165); player_board_area.z_index = 60; player_board_area.clip_contents = false; add_child(player_board_area)
+    # IMPORTANT: amulet areas must be added AFTER the board areas.  Godot gives
+    # input to later siblings first (they draw on top); when the amulet row was
+    # added before player_board_area (which fully overlaps it at y=365), the
+    # board area swallowed every tap and the amulet tooltip never fired.
+    # The area containers are IGNORE so they never block taps meant for cards
+    # underneath — only the visible amulet holder panels inside them (STOP)
+    # catch input.
+    enemy_amulet_area = Control.new(); enemy_amulet_area.position = Vector2(245, 240); enemy_amulet_area.size = Vector2(790, 54); enemy_amulet_area.z_index = 65; enemy_amulet_area.clip_contents = false; enemy_amulet_area.mouse_filter = Control.MOUSE_FILTER_IGNORE; add_child(enemy_amulet_area)
+    player_amulet_area = Control.new(); player_amulet_area.position = Vector2(245, 365); player_amulet_area.size = Vector2(790, 54); player_amulet_area.z_index = 65; player_amulet_area.clip_contents = false; player_amulet_area.mouse_filter = Control.MOUSE_FILTER_IGNORE; add_child(player_amulet_area)
     # Keep the hand in a dedicated bottom tray so it never covers the battlefield.
     player_hand_area = Control.new(); player_hand_area.position = Vector2(150, 600); player_hand_area.size = Vector2(880, 115); player_hand_area.clip_contents = false; player_hand_area.z_index = 120; add_child(player_hand_area)
 
@@ -1872,10 +1972,13 @@ func build_ui() -> void:
     build_evolution_panel()
 
     var restart := _make_header_pill_button("RESTART", Vector2(1165, 10)); restart.tooltip_text = "Restart this battle"; restart.pressed.connect(func(): get_tree().reload_current_scene()); add_child(restart)
-    var home := _make_header_pill_button("HOME", Vector2(1062, 10)); home.pressed.connect(func(): get_tree().change_scene_to_file("res://main.tscn")); add_child(home)
+    var home := _make_header_pill_button("HOME", Vector2(1062, 10)); home.pressed.connect(func():
+        var _nav := ConfigFile.new(); _nav.set_value("nav","return_from_battle",true); _nav.save("user://nav.cfg")
+        get_tree().change_scene_to_file("res://main.tscn")); add_child(home)
 
     overlay = ColorRect.new(); overlay.color = Color(0, 0, 0, 0.68); overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); overlay.visible = false; overlay.mouse_filter = Control.MOUSE_FILTER_STOP; add_child(overlay)
     apply_mobile_touch_targets()
+    build_emote_buttons()
 
 func apply_mobile_touch_targets() -> void:
     if not is_mobile_device():
@@ -1949,15 +2052,11 @@ func leader_art_for(faction_name: String) -> String:
         _: return "res://assets/leaders/player.png"
 
 func update_leader_visual(leader: Button, faction_name: String, player_side: bool) -> void:
-    var portrait := leader.get_node_or_null("Portrait") as TextureRect
-    if portrait != null:
-        # The card-art image doesn't have the leader paintings' baked-in top
-        # 60% framing, so it's shown uncropped rather than through the
-        # leader-portrait crop meant for the full-scene illustrations.
-        var leader_texture: Texture2D = load(leader_art_for(faction_name)) as Texture2D if faction_name == "Sponsor" else leader_portrait_texture(leader_art_for(faction_name))
-        portrait.texture = leader_texture
-        portrait.visible = leader_texture != null
-        portrait.modulate = Color.WHITE
+    # Drive the single authoritative LeaderView — same layered art, same registry,
+    # same focal offsets as Battle Prep and every other screen.
+    var lv := leader.get_node_or_null("LeaderPortrait")
+    if lv != null:
+        lv.setup(faction_name, Vector2(200, 200))
     var name_label := leader.get_node_or_null("NameLabel") as Label
     if name_label != null:
         name_label.text = leader_name_for(faction_name)
@@ -2557,6 +2656,8 @@ func play_standard_evolution_animation(index: int, cost: int, player_side: bool)
     var card_view: CardView = find_card_view_for_board_index(area, index)
     if card_view == null:
         return
+    var board_std: Array = player_board if player_side else enemy_board
+    var follower_std: Dictionary = board_std[index]
 
     busy = true
     play_sfx("evolve_cinematic")
@@ -2564,52 +2665,96 @@ func play_standard_evolution_animation(index: int, cost: int, player_side: bool)
     var original_position: Vector2 = card_view.position
     var original_scale: Vector2 = card_view.scale
     var screen_center: Vector2 = Vector2(640.0, 360.0)
-    var centered_position: Vector2 = screen_center - card_view.size * 0.5
-    centered_position -= area.global_position
+    var centered_position: Vector2 = screen_center - card_view.size * 0.5 - area.global_position
+
+    var evo_col := Color(0.28, 0.82, 1.0) if cost < 3 else (Color(0.95, 0.72, 0.20) if cost == 3 else Color(0.85, 0.42, 1.0))
+
+    # Full-bleed backdrop of the card's own art — cinematic even at standard tier
+    var backdrop := TextureRect.new()
+    backdrop.texture = CardArt.resolve(follower_std)
+    backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    backdrop.modulate = Color(1.0, 1.0, 1.0, 0.0)
+    backdrop.z_index = 1085
+    add_child(backdrop)
 
     var dimmer := ColorRect.new()
     dimmer.color = Color(0.01, 0.02, 0.05, 0.0)
     dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    dimmer.z_index = 1100
+    dimmer.z_index = 1095
     add_child(dimmer)
 
-    var ring := ColorRect.new()
-    ring.position = screen_center - Vector2(115, 115)
-    ring.size = Vector2(230, 230)
-    ring.color = Color(0.28, 0.82, 1.0, 0.0) if cost < 3 else (Color(0.95, 0.72, 0.20, 0.0) if cost == 3 else Color(0.85, 0.42, 1.0, 0.0))
-    ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    ring.z_index = 1150
-    add_child(ring)
-
+    # Title — starts huge, smashes down to reading size
     var title := Label.new()
     title.text = "ASCEND" if cost < 3 else ("AWAKEN" if cost == 3 else "TRANSCEND")
     title.position = Vector2(390, 90)
     title.size = Vector2(500, 70)
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     title.add_theme_font_size_override("font_size", ui_font(46 if cost < 3 else (54 if cost == 3 else 48)))
-    title.add_theme_color_override("font_color", Color(0.55, 0.92, 1.0) if cost < 3 else (Color(1.0, 0.82, 0.28) if cost == 3 else Color(0.92, 0.62, 1.0)))
+    title.add_theme_color_override("font_color", evo_col)
     title.add_theme_color_override("font_shadow_color", Color.BLACK)
-    title.add_theme_constant_override("shadow_offset_x", 4)
-    title.add_theme_constant_override("shadow_offset_y", 4)
+    title.add_theme_constant_override("shadow_offset_x", 5)
+    title.add_theme_constant_override("shadow_offset_y", 5)
+    title.pivot_offset = Vector2(250, 35)
+    title.scale = Vector2(2.8, 2.8)
     title.modulate.a = 0.0
     title.z_index = 1300
     add_child(title)
 
+    # Phase 1 — backdrop + dimmer fade in, card slides to centre
     var rise := create_tween().set_parallel(true)
     rise.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    rise.tween_property(dimmer, "color:a", 0.78, 0.18)
-    rise.tween_property(card_view, "position", centered_position, 0.32)
-    rise.tween_property(card_view, "scale", Vector2(1.75, 1.75), 0.32)
-    rise.tween_property(card_view, "rotation", -0.035, 0.16)
-    rise.tween_property(title, "modulate:a", 1.0, 0.20)
-    rise.tween_property(ring, "color:a", 0.20, 0.22)
+    rise.tween_property(dimmer,   "color:a",              0.82,             0.22)
+    rise.tween_property(backdrop, "modulate:a",           0.22,             0.30)
+    rise.tween_property(card_view, "position",            centered_position, 0.34)
+    rise.tween_property(card_view, "scale",    Vector2(1.80, 1.80),         0.34)
     await rise.finished
 
-    var pulse := create_tween().set_loops(2)
-    pulse.tween_property(card_view, "scale", Vector2(1.92, 1.92), 0.10)
-    pulse.tween_property(card_view, "scale", Vector2(1.75, 1.75), 0.10)
+    # Phase 2 — white flash, title smash-in, three staggered expanding rings
+    var flash := ColorRect.new()
+    flash.color = Color(1.0, 1.0, 1.0, 0.0)
+    flash.z_index = 1450
+    flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    add_child(flash)
+    var ft := create_tween()
+    ft.tween_property(flash, "color:a", 0.90, 0.07)
+    ft.tween_property(flash, "color:a", 0.0,  0.22)
+    ft.finished.connect(flash.queue_free)
+
+    for ri in range(3):
+        var rsz := float(180 + ri * 90)
+        var er := ColorRect.new()
+        er.size = Vector2(rsz, rsz)
+        er.color = Color(evo_col.r, evo_col.g, evo_col.b, 0.55 - ri * 0.12)
+        er.position = screen_center - Vector2(rsz * 0.5, rsz * 0.5)
+        er.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        er.z_index = 1150
+        add_child(er)
+        var rt := create_tween().set_parallel(true)
+        rt.tween_property(er, "scale",     Vector2(2.2, 2.2), 0.42).set_delay(ri * 0.07)
+        rt.tween_property(er, "color:a",   0.0,               0.36).set_delay(ri * 0.07)
+        rt.finished.connect(er.queue_free)
+
+    # Title smashes in
+    var tt := create_tween().set_parallel(true)
+    tt.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tt.tween_property(title, "scale",      Vector2(1.0, 1.0), 0.24)
+    tt.tween_property(title, "modulate:a", 1.0,               0.18)
+    await tt.finished
+
+    # Card pulses three times
+    var pulse := create_tween().set_loops(3)
+    pulse.tween_property(card_view, "scale", Vector2(2.0, 2.0), 0.09)
+    pulse.tween_property(card_view, "scale", Vector2(1.80, 1.80), 0.07)
     await pulse.finished
+
+    spawn_sparkle_burst(screen_center, 18 if CardView.graphics_quality >= 1 else 6,
+        [evo_col, Color.WHITE, evo_col.lightened(0.4)], self, 95.0)
+    _spawn_impact_ring(screen_center, evo_col, mini(cost + 2, 5))
 
     var stat_text := Label.new()
     stat_text.text = "+1 ATK" if cost == 1 else ("+1 ATK  +2 DEF" if cost == 2 else ("+3 ATK  +3 DEF\nSPECIAL ABILITY" if cost == 3 else "+4 ATK  +4 DEF\nSPECIAL ABILITY"))
@@ -2617,7 +2762,7 @@ func play_standard_evolution_animation(index: int, cost: int, player_side: bool)
     stat_text.size = Vector2(500, 80)
     stat_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     stat_text.add_theme_font_size_override("font_size", ui_font(30 if cost < 3 else 34))
-    stat_text.add_theme_color_override("font_color", Color(0.70, 0.95, 1.0) if cost < 3 else (Color(1.0, 0.86, 0.35) if cost == 3 else Color(0.93, 0.68, 1.0)))
+    stat_text.add_theme_color_override("font_color", evo_col.lightened(0.3))
     stat_text.add_theme_color_override("font_shadow_color", Color.BLACK)
     stat_text.add_theme_constant_override("shadow_offset_x", 3)
     stat_text.add_theme_constant_override("shadow_offset_y", 3)
@@ -2625,31 +2770,24 @@ func play_standard_evolution_animation(index: int, cost: int, player_side: bool)
     stat_text.z_index = 1300
     add_child(stat_text)
 
-    var reveal := create_tween().set_parallel(true)
+    var reveal := create_tween()
     reveal.tween_property(stat_text, "modulate:a", 1.0, 0.18)
-    reveal.tween_property(ring, "scale", Vector2(1.35, 1.35), 0.30)
-    reveal.tween_property(ring, "color:a", 0.0, 0.30)
     await reveal.finished
-    var _evo_col_std := Color(0.28, 0.82, 1.0) if cost < 3 else (Color(0.95, 0.72, 0.20) if cost == 3 else Color(0.85, 0.42, 1.0))
-    spawn_sparkle_burst(screen_center, 10 if CardView.graphics_quality >= 1 else 4, [_evo_col_std, Color.WHITE], self, 82.0)
-    _spawn_impact_ring(screen_center, _evo_col_std, mini(cost + 1, 5))
-    await get_tree().create_timer(0.22).timeout
+    await get_tree().create_timer(0.28).timeout
 
     var return_tween := create_tween().set_parallel(true)
     return_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-    return_tween.tween_property(card_view, "position", original_position, 0.26)
-    return_tween.tween_property(card_view, "scale", original_scale, 0.26)
-    return_tween.tween_property(card_view, "rotation", 0.0, 0.20)
-    return_tween.tween_property(dimmer, "color:a", 0.0, 0.22)
-    return_tween.tween_property(title, "modulate:a", 0.0, 0.18)
-    return_tween.tween_property(stat_text, "modulate:a", 0.0, 0.18)
+    return_tween.tween_property(card_view, "position",   original_position, 0.26)
+    return_tween.tween_property(card_view, "scale",      original_scale,    0.26)
+    return_tween.tween_property(dimmer,    "color:a",    0.0,               0.22)
+    return_tween.tween_property(backdrop,  "modulate:a", 0.0,               0.20)
+    return_tween.tween_property(title,     "modulate:a", 0.0,               0.18)
+    return_tween.tween_property(stat_text, "modulate:a", 0.0,               0.18)
     await return_tween.finished
 
     card_view.z_index = 0
-    dimmer.queue_free()
-    ring.queue_free()
-    title.queue_free()
-    stat_text.queue_free()
+    for n in [dimmer, backdrop, title, stat_text]:
+        if is_instance_valid(n): n.queue_free()
     busy = false
 
 func play_epic_evolution_animation(index: int, cost: int, player_side: bool) -> void:
@@ -2670,96 +2808,157 @@ func play_epic_evolution_animation(index: int, cost: int, player_side: bool) -> 
     var screen_center := Vector2(640.0, 360.0)
     var centered_position: Vector2 = screen_center - card_view.size * 0.5 - area.global_position
 
+    # Full-bleed backdrop — card art fills the screen, tinted purple, semi-transparent
+    var backdrop := TextureRect.new()
+    backdrop.texture = CardArt.resolve(follower)
+    backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    backdrop.modulate = Color(0.72, 0.45, 1.0, 0.0)
+    backdrop.z_index = 1082
+    add_child(backdrop)
+
     var dimmer := ColorRect.new()
-    dimmer.color = Color(0.02, 0.01, 0.05, 0.0)
+    dimmer.color = Color(0.02, 0.01, 0.06, 0.0)
     dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    dimmer.z_index = 1100
+    dimmer.z_index = 1092
     add_child(dimmer)
 
-    var ring := ColorRect.new()
-    ring.position = screen_center - Vector2(130, 130)
-    ring.size = Vector2(260, 260)
-    ring.color = Color(0.72, 0.30, 1.0, 0.0)
-    ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    ring.z_index = 1150
-    add_child(ring)
+    # Spinning beam crown behind the card
+    var beam_root := Control.new()
+    beam_root.position = screen_center
+    beam_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    beam_root.z_index = 1115
+    beam_root.modulate.a = 0.0
+    add_child(beam_root)
+    for i in range(12):
+        var beam := ColorRect.new()
+        beam.color = Color(0.80, 0.42, 1.0, 0.60)
+        beam.size = Vector2(4, 220)
+        beam.position = Vector2(-2, -110)
+        beam.pivot_offset = Vector2(2, 110)
+        beam.rotation = TAU * float(i) / 12.0
+        beam.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        beam_root.add_child(beam)
+    var spin := create_tween().set_loops().bind_node(beam_root)
+    spin.tween_property(beam_root, "rotation", TAU, 5.0).set_trans(Tween.TRANS_LINEAR)
 
-    var medallion := build_art_medallion(CardArt.resolve(follower), screen_center + Vector2(160, -40), Vector2(140, 196), Color(0.78, 0.38, 1.0))
-    medallion.scale = Vector2(0.4, 0.4)
+    # Large art medallion on the right — starts off-screen, slides in
+    var medallion := build_art_medallion(CardArt.resolve(follower),
+        screen_center + Vector2(340, -60), Vector2(200, 280), Color(0.82, 0.48, 1.0), 18)
+    medallion.modulate.a = 0.0
+    medallion.scale = Vector2(0.5, 0.5)
     add_child(medallion)
 
     var title := Label.new()
     title.text = "EPIC EVOLUTION"
-    title.position = Vector2(340, 88)
-    title.size = Vector2(600, 66)
+    title.position = Vector2(290, 82)
+    title.size = Vector2(700, 70)
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", ui_font(48))
-    title.add_theme_color_override("font_color", Color(0.86, 0.62, 1.0))
-    title.add_theme_color_override("font_shadow_color", Color.BLACK)
-    title.add_theme_constant_override("shadow_offset_x", 4)
-    title.add_theme_constant_override("shadow_offset_y", 4)
+    title.add_theme_font_size_override("font_size", ui_font(52))
+    title.add_theme_color_override("font_color", Color(0.90, 0.65, 1.0))
+    title.add_theme_color_override("font_shadow_color", Color(0.3, 0.0, 0.6, 0.9))
+    title.add_theme_constant_override("shadow_offset_x", 5)
+    title.add_theme_constant_override("shadow_offset_y", 5)
+    title.pivot_offset = Vector2(350, 35)
+    title.scale = Vector2(2.5, 2.5)
     title.modulate.a = 0.0
     title.z_index = 1300
     add_child(title)
 
+    # Phase 1 — everything rises simultaneously
     var rise := create_tween().set_parallel(true)
     rise.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    rise.tween_property(dimmer, "color:a", 0.82, 0.20)
-    rise.tween_property(card_view, "position", centered_position, 0.34)
-    rise.tween_property(card_view, "scale", Vector2(1.8, 1.8), 0.34)
-    rise.tween_property(title, "modulate:a", 1.0, 0.22)
-    rise.tween_property(ring, "color:a", 0.24, 0.24)
-    rise.tween_property(medallion, "modulate:a", 1.0, 0.30).set_delay(0.10)
-    rise.tween_property(medallion, "scale", Vector2(1.0, 1.0), 0.30).set_delay(0.10)
+    rise.tween_property(dimmer,    "color:a",              0.86,            0.22)
+    rise.tween_property(backdrop,  "modulate:a",           0.28,            0.35)
+    rise.tween_property(beam_root, "modulate:a",           0.80,            0.40)
+    rise.tween_property(card_view, "position",             centered_position, 0.36)
+    rise.tween_property(card_view, "scale",    Vector2(1.85, 1.85),         0.36)
+    rise.tween_property(medallion, "position", screen_center + Vector2(150, -60), 0.40).set_delay(0.10)
+    rise.tween_property(medallion, "modulate:a", 1.0,                       0.32).set_delay(0.10)
+    rise.tween_property(medallion, "scale",    Vector2(1.0, 1.0),           0.32).set_delay(0.10)
     await rise.finished
 
-    var pulse := create_tween().set_loops(2)
-    pulse.tween_property(card_view, "scale", Vector2(1.98, 1.98), 0.10)
-    pulse.tween_property(card_view, "scale", Vector2(1.8, 1.8), 0.10)
+    # Phase 2 — flash, title smash, staggered rings
+    var flash := ColorRect.new()
+    flash.color = Color(0.85, 0.60, 1.0, 0.0)
+    flash.z_index = 1450
+    flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    add_child(flash)
+    var ft := create_tween()
+    ft.tween_property(flash, "color:a", 0.80, 0.07)
+    ft.tween_property(flash, "color:a", 0.0,  0.22)
+    ft.finished.connect(flash.queue_free)
+
+    for ri in range(4):
+        var rsz := float(160 + ri * 80)
+        var er := ColorRect.new()
+        er.size = Vector2(rsz, rsz)
+        er.color = Color(0.78, 0.38, 1.0, 0.60 - ri * 0.10)
+        er.position = screen_center - Vector2(rsz * 0.5, rsz * 0.5)
+        er.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        er.z_index = 1150
+        add_child(er)
+        var rt := create_tween().set_parallel(true)
+        rt.tween_property(er, "scale",   Vector2(2.4, 2.4), 0.48).set_delay(ri * 0.06)
+        rt.tween_property(er, "color:a", 0.0,               0.40).set_delay(ri * 0.06)
+        rt.finished.connect(er.queue_free)
+
+    var tt := create_tween().set_parallel(true)
+    tt.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tt.tween_property(title, "scale",      Vector2(1.0, 1.0), 0.26)
+    tt.tween_property(title, "modulate:a", 1.0,               0.20)
+    await tt.finished
+
+    var pulse := create_tween().set_loops(3)
+    pulse.tween_property(card_view, "scale", Vector2(2.05, 2.05), 0.09)
+    pulse.tween_property(card_view, "scale", Vector2(1.85, 1.85), 0.08)
     await pulse.finished
-    spawn_sparkle_burst(screen_center, 16, [Color(0.86, 0.62, 1.0), Color(1.0, 1.0, 1.0), Color(0.62, 0.82, 1.0)], self)
-    _spawn_impact_ring(screen_center, Color(0.78, 0.48, 1.0), 4)
+
+    spawn_sparkle_burst(screen_center, 22 if CardView.graphics_quality >= 1 else 8,
+        [Color(0.90, 0.65, 1.0), Color(1.0, 1.0, 1.0), Color(0.62, 0.82, 1.0)], self, 105.0)
+    _spawn_impact_ring(screen_center, Color(0.82, 0.48, 1.0), 5)
 
     var attack_gain: int = 1 if cost < 3 else (3 if cost == 3 else 4)
     var defense_gain: int = 0 if cost == 1 else (2 if cost == 2 else (3 if cost == 3 else 4))
     var stat_text := Label.new()
     stat_text.text = "+%d ATK  +%d DEF" % [attack_gain, defense_gain]
-    stat_text.position = Vector2(340, 568)
-    stat_text.size = Vector2(600, 64)
+    stat_text.position = Vector2(290, 570)
+    stat_text.size = Vector2(700, 68)
     stat_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    stat_text.add_theme_font_size_override("font_size", ui_font(32))
-    stat_text.add_theme_color_override("font_color", Color(0.90, 0.72, 1.0))
-    stat_text.add_theme_color_override("font_shadow_color", Color.BLACK)
+    stat_text.add_theme_font_size_override("font_size", ui_font(34))
+    stat_text.add_theme_color_override("font_color", Color(0.92, 0.75, 1.0))
+    stat_text.add_theme_color_override("font_shadow_color", Color(0.3, 0.0, 0.6, 0.9))
     stat_text.add_theme_constant_override("shadow_offset_x", 3)
     stat_text.add_theme_constant_override("shadow_offset_y", 3)
     stat_text.modulate.a = 0.0
     stat_text.z_index = 1300
     add_child(stat_text)
 
-    var reveal := create_tween().set_parallel(true)
+    var reveal := create_tween()
     reveal.tween_property(stat_text, "modulate:a", 1.0, 0.18)
-    reveal.tween_property(ring, "scale", Vector2(1.4, 1.4), 0.32)
-    reveal.tween_property(ring, "color:a", 0.0, 0.32)
     await reveal.finished
-    await get_tree().create_timer(0.26).timeout
+    await get_tree().create_timer(0.30).timeout
 
+    spin.kill()
     var return_tween := create_tween().set_parallel(true)
     return_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-    return_tween.tween_property(card_view, "position", original_position, 0.28)
-    return_tween.tween_property(card_view, "scale", original_scale, 0.28)
-    return_tween.tween_property(dimmer, "color:a", 0.0, 0.24)
-    return_tween.tween_property(title, "modulate:a", 0.0, 0.20)
-    return_tween.tween_property(stat_text, "modulate:a", 0.0, 0.20)
-    return_tween.tween_property(medallion, "modulate:a", 0.0, 0.20)
+    return_tween.tween_property(card_view, "position",   original_position, 0.28)
+    return_tween.tween_property(card_view, "scale",      original_scale,    0.28)
+    return_tween.tween_property(dimmer,    "color:a",    0.0,               0.24)
+    return_tween.tween_property(backdrop,  "modulate:a", 0.0,               0.22)
+    return_tween.tween_property(beam_root, "modulate:a", 0.0,               0.22)
+    return_tween.tween_property(medallion, "modulate:a", 0.0,               0.22)
+    return_tween.tween_property(title,     "modulate:a", 0.0,               0.20)
+    return_tween.tween_property(stat_text, "modulate:a", 0.0,               0.20)
     await return_tween.finished
 
     card_view.z_index = 0
-    dimmer.queue_free()
-    ring.queue_free()
-    medallion.queue_free()
-    title.queue_free()
-    stat_text.queue_free()
+    for n in [dimmer, backdrop, beam_root, medallion, title, stat_text]:
+        if is_instance_valid(n): n.queue_free()
     busy = false
 
 func play_legendary_evolution_animation(index: int, cost: int, player_side: bool) -> void:
@@ -3134,27 +3333,15 @@ func make_leader(label_text: String, pos: Vector2, player_side: bool) -> Button:
     leader.add_theme_stylebox_override("pressed", style_empty)
     leader.add_theme_stylebox_override("focus",   style_empty)
 
-    # Deep atmospheric background; class-tinted in _start_leader_class_aura().
-    var aura_bg := ColorRect.new()
-    aura_bg.name = "AuraBg"
-    aura_bg.color = Color(0.03, 0.05, 0.10, 1.0)
-    aura_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    aura_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    leader.add_child(aura_bg)
-
-    # Full-frame portrait — edge to edge, COVERED so the face always fills the frame.
-    var portrait := TextureRect.new()
-    portrait.name = "Portrait"
-    portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    portrait.texture = leader_portrait_texture(
-        "res://assets/leaders/player.png" if player_side else "res://assets/leaders/enemy.png")
-    portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    portrait.clip_contents = false
-    portrait.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-    portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    leader.add_child(portrait)
-    start_leader_idle(portrait)
+    # Animated leader portrait — layered art (body/head/hair/blink/aura) with
+    # idle breathing, hair sway, and blinking handled by LeaderView.
+    # Class is set by update_leader_visual() once faction_name is known.
+    var lv := _LeaderView.new()
+    lv.name = "LeaderPortrait"
+    lv.position = Vector2.ZERO
+    lv.size = Vector2(200, 200)
+    lv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    leader.add_child(lv)
 
     # Gradient scrim fades the portrait into the name area.
     var scrim := ColorRect.new()
@@ -4080,6 +4267,7 @@ func start_game() -> void:
     refresh_leader_hp_badge_colors()
     signature_voice_played.clear()
     last_bark_at = -999.0
+    _near_win_barked = false
     player_low_health_barked = false
     enemy_low_health_barked = false
     player_walking_free_active = false
@@ -4440,8 +4628,23 @@ func start_player_turn() -> void:
         if follower_count(player_board) < MAX_BOARD:
             var phoenix := _make_phoenix_card(t)
             player_board.append(phoenix)
-            refresh_ui(true, player_board.size() - 1, true)
-            await show_vfx("PHOENIX RISES! %d/%d" % [t, t], area_center(true), Color(1.0, 0.72, 0.30))
+            var ph_idx_p := player_board.size() - 1
+            refresh_ui(true, ph_idx_p, true)
+            await show_vfx("LAST WORDS RESOLVED: RISES %d/%d" % [t, t], area_center(true), Color(1.0, 0.72, 0.30))
+            # Milestone evolutions also apply on board-full delayed returns
+            if t in [4, 7, 10]:
+                phoenix["attack"]     = int(phoenix.get("attack",     0)) + 2
+                phoenix["health"]     = int(phoenix.get("health",     0)) + 2
+                phoenix["max_health"] = int(phoenix.get("max_health", 0)) + 2
+                phoenix["evolved"]          = true
+                phoenix["can_attack"]        = true
+                phoenix["evolved_this_turn"] = true
+                player_board[ph_idx_p] = phoenix
+                await play_evolution_animation(ph_idx_p, 3, true)
+                await show_vfx("REBIRTH ASCENSION +2/+2", area_center(true), Color(1.0, 0.65, 0.20))
+            if t == 10:
+                await show_vfx("PYROCLASM — 3 DAMAGE TO ALL!", area_center(true), Color(1.0, 0.28, 0.08))
+                await _phoenix_board_aoe(3)
         else:
             await show_vfx("PHOENIX CANNOT RETURN — BOARD FULL", area_center(true), Color(1.0, 0.25, 0.18))
     if not (turn_number == 1 and player_goes_first):
@@ -4459,13 +4662,34 @@ func sponsor_in_play(board: Array) -> bool:
 
 func _make_phoenix_card(tier: int) -> Dictionary:
     var phoenix := card("Phoenix Rising", 1, tier, tier, "Courage", "Legendary", "phoenix_rising", 0,
-        "Destroyed: returns at the start of your next turn at +1/+1 (1/1 → 10/10). At 10/10, permanently falls.",
+        "Last Words: rises immediately at +1/+1. Evolves on the 3rd, 6th, and 9th rise (+2/+2). 9th rise: 3 damage to all. Falls forever after 9 lives.",
         "star", "jd-125")
     phoenix["phoenix_tier"] = tier
-    phoenix["max_health"] = tier
-    phoenix["can_attack"] = false
+    phoenix["max_health"]   = tier
+    phoenix["can_attack"]   = false
     phoenix["summoned_turn"] = turn_number
     return phoenix
+
+## Deals flat AOE damage to every non-amulet follower on both boards, then
+## cascades deaths. Called by the Phoenix Rising 9th-return Last Words.
+func _phoenix_board_aoe(damage: int) -> void:
+    for unit in player_board:
+        if not bool(unit.get("is_amulet", false)):
+            unit["health"] = int(unit.get("health", 0)) - damage
+    for unit in enemy_board:
+        if not bool(unit.get("is_amulet", false)):
+            unit["health"] = int(unit.get("health", 0)) - damage
+    refresh_ui()
+    await get_tree().create_timer(0.30).timeout
+    # High → low index so removals don't shift earlier positions
+    for i in range(player_board.size() - 1, -1, -1):
+        if not bool(player_board[i].get("is_amulet", false)) and int(player_board[i].get("health", 1)) <= 0:
+            await destroy_unit(player_board, i, true)
+    for i in range(enemy_board.size() - 1, -1, -1):
+        if not bool(enemy_board[i].get("is_amulet", false)) and int(enemy_board[i].get("health", 1)) <= 0:
+            await destroy_unit(enemy_board, i, false)
+    check_winner()
+    refresh_ui()
 
 func create_sponsee(player_side: bool) -> void:
     var board: Array = player_board if player_side else enemy_board
@@ -4731,8 +4955,22 @@ func enemy_turn() -> void:
             var phoenix := _make_phoenix_card(t)
             phoenix["can_attack"] = false
             enemy_board.append(phoenix)
+            var ph_idx_e := enemy_board.size() - 1
             refresh_ui(true, -1, false)
-            await show_vfx("PHOENIX RISES! %d/%d" % [t, t], area_center(false), Color(1.0, 0.72, 0.30))
+            await show_vfx("LAST WORDS RESOLVED: RISES %d/%d" % [t, t], area_center(false), Color(1.0, 0.72, 0.30))
+            if t in [4, 7, 10]:
+                phoenix["attack"]     = int(phoenix.get("attack",     0)) + 2
+                phoenix["health"]     = int(phoenix.get("health",     0)) + 2
+                phoenix["max_health"] = int(phoenix.get("max_health", 0)) + 2
+                phoenix["evolved"]          = true
+                phoenix["can_attack"]        = false
+                phoenix["evolved_this_turn"] = true
+                enemy_board[ph_idx_e] = phoenix
+                await play_evolution_animation(ph_idx_e, 3, false)
+                await show_vfx("REBIRTH ASCENSION +2/+2", area_center(false), Color(1.0, 0.65, 0.20))
+            if t == 10:
+                await show_vfx("PYROCLASM — 3 DAMAGE TO ALL!", area_center(false), Color(1.0, 0.28, 0.08))
+                await _phoenix_board_aoe(3)
         else:
             await show_vfx("PHOENIX CANNOT RETURN — BOARD FULL", area_center(false), Color(1.0, 0.25, 0.18))
     enemy_max_mana = min(MAX_MANA, enemy_max_mana + 1); enemy_mana = enemy_max_mana
@@ -5729,6 +5967,23 @@ func destroy_unit(board: Array, index: int, player_side: bool, specifically_targ
         var protected_area: Control = player_board_area if player_side else enemy_board_area
         await show_vfx("SPONSOR SAVES SPONSEE", protected_area.global_position + Vector2(210 + index * 85, 45), Color(1.0, 0.86, 0.38))
         return
+    # Guardian Angel (guard_protect) — the first OTHER allied follower destroyed
+    # each game is saved at 1 defense. The Guardian cannot save itself.
+    if not bool(dead.get("is_amulet", false)):
+        for gi in range(board.size()):
+            if gi == index:
+                continue  # Guardian Angel cannot save itself
+            var guardian: Dictionary = board[gi]
+            if str(guardian.get("ability", "")) == "guard_protect" and not bool(guardian.get("guardian_used", false)):
+                board[gi]["guardian_used"] = true
+                dead["health"] = 1
+                dead["max_health"] = maxi(int(dead.get("max_health", 1)), 1)
+                board[index] = dead
+                var ga_area: Control = player_board_area if player_side else enemy_board_area
+                show_vfx("GUARDIAN ANGEL SAVES ALLY!", ga_area.global_position + Vector2(90 + index * 145, 20), Color(0.55, 0.90, 1.0))
+                await get_tree().create_timer(0.45).timeout
+                refresh_ui()
+                return
     if bool(dead.get("is_sponsee", false)):
         var path := selected_class if player_side else enemy_class
         var heal_amount := 5 if path == "Hope" else (3 if path == "Serenity" else (2 if path == "Courage" else 1))
@@ -5747,13 +6002,47 @@ func destroy_unit(board: Array, index: int, player_side: bool, specifically_targ
         training_on_follower_lost(player_side)
         board.remove_at(index)
         if tier >= 10:
+            # After the 9th return the phoenix falls forever on next death.
             var rz: Array = player_relapse if player_side else enemy_relapse
             rz.append(dead.duplicate(true))
-            await show_vfx("NOTHING CAN BREAK MY RESOLVE!", area_center(player_side), Color(1.0, 0.82, 0.34))
+            await show_vfx("PHOENIX FALLS — NINE LIVES SPENT", area_center(player_side), Color(1.0, 0.82, 0.34))
         else:
-            if player_side: phoenix_pending_player = true; phoenix_tier_player = tier + 1
-            else: phoenix_pending_enemy = true; phoenix_tier_enemy = tier + 1
-            await show_vfx("GETS BACK UP!", area_center(player_side), Color(1.0, 0.65, 0.25))
+            # ── LAST WORDS: immediate return ─────────────────────────────────
+            var new_tier := tier + 1
+            # 3rd return=tier 4, 6th=tier 7, 9th=tier 10 (ascension milestones)
+            var is_milestone := new_tier in [4, 7, 10]
+            if follower_count(board) < MAX_BOARD:
+                var phoenix := _make_phoenix_card(new_tier)
+                board.append(phoenix)
+                var ph_idx := board.size() - 1
+                var rise_col := Color(1.0, 0.40, 0.12) if new_tier == 10 else \
+                                (Color(1.0, 0.62, 0.18) if is_milestone else Color(1.0, 0.72, 0.30))
+                var rise_msg := "LAST WORDS: FINAL ASCENSION  %d/%d" % [new_tier, new_tier] if new_tier == 10 else \
+                                ("LAST WORDS: ASCENDS  %d/%d" % [new_tier, new_tier] if is_milestone else \
+                                 "LAST WORDS: RISES  %d/%d" % [new_tier, new_tier])
+                refresh_ui(true, ph_idx, true)
+                await show_vfx(rise_msg, area_center(player_side), rise_col)
+                # Auto-evolve on 3rd / 6th / 9th return (+2/+2)
+                if is_milestone:
+                    phoenix["attack"]     = int(phoenix.get("attack",     0)) + 2
+                    phoenix["health"]     = int(phoenix.get("health",     0)) + 2
+                    phoenix["max_health"] = int(phoenix.get("max_health", 0)) + 2
+                    phoenix["evolved"]          = true
+                    phoenix["can_attack"]        = true
+                    phoenix["evolved_this_turn"] = true
+                    board[ph_idx] = phoenix
+                    await play_evolution_animation(ph_idx, 3, player_side)
+                    await show_vfx("REBIRTH ASCENSION +2/+2", area_center(player_side), Color(1.0, 0.65, 0.20))
+                # 9th return: 3 damage AOE to every follower on the board
+                if new_tier == 10:
+                    await show_vfx("PYROCLASM — 3 DAMAGE TO ALL!", area_center(player_side), Color(1.0, 0.28, 0.08))
+                    await _phoenix_board_aoe(3)
+            else:
+                # Board full — defer to start of next turn as a fallback
+                if player_side: phoenix_pending_player = true; phoenix_tier_player = new_tier
+                else:           phoenix_pending_enemy  = true; phoenix_tier_enemy  = new_tier
+                await show_vfx("LAST WORDS: RISES NEXT TURN  %d/%d" % [new_tier, new_tier],
+                               area_center(player_side), Color(1.0, 0.65, 0.25))
         refresh_ui()
         return
     var area := player_board_area if player_side else enemy_board_area
@@ -5785,6 +6074,10 @@ func first_guard_index(board: Array) -> int:
 func check_winner() -> void:
     if game_over:
         return
+    # Near-win bark fires once when the opponent drops to 5 HP or below
+    if enemy_health > 0 and enemy_health <= 5 and not _near_win_barked:
+        _near_win_barked = true
+        play_battle_bark(player_leader, selected_class, "near_win", true, true)
     if enemy_health <= 0:
         enemy_health = 0
         game_over = true
@@ -6040,7 +6333,15 @@ func record_recovery_challenge_win(winning_class: String) -> Dictionary:
     var cfg := _load_shared_profile_cfg_for_partial_write()
     if cfg == null:
         return {}
+
+    # Reset progress if we've rolled into a new week.
+    var current_week := str(int(Time.get_unix_time_from_system() / 604800.0))
+    var saved_week := str(cfg.get_value("challenge", "week_key", ""))
     var progress: Dictionary = cfg.get_value("challenge", "recovery_progress", {})
+    if saved_week != current_week:
+        progress = {}
+        cfg.set_value("challenge", "week_key", current_week)
+
     var count := int(progress.get(winning_class, 0)) + 1
     var result := {}
     if count >= 3:
@@ -6352,6 +6653,10 @@ func _return_to_main_menu() -> void:
         game_over_layer.queue_free()
     game_over = false
     busy = false
+    # Signal menu.gd to skip the login screen and go straight to Home.
+    var _nav := ConfigFile.new()
+    _nav.set_value("nav", "return_from_battle", true)
+    _nav.save("user://nav.cfg")
     var err := get_tree().change_scene_to_file("res://main.tscn")
     if err != OK:
         push_error("Could not return to main menu: %s" % err)
@@ -7089,7 +7394,7 @@ func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
     for slot in range(3):
         var holder := Panel.new()
         holder.position = Vector2(slot * 182.0, 2)
-        holder.size = Vector2(slot_width, 52)
+        holder.size = Vector2(slot_width, 72)
         area.add_child(holder)
         if slot < amulets.size():
             var accent := class_accent_color(str(amulets[slot].get("faction", amulets[slot].get("class", ""))))
@@ -7124,17 +7429,131 @@ func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
             tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
             holder.add_child(tag)
 
-            var b := Button.new(); b.flat = true; b.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); b.focus_mode = Control.FOCUS_NONE; b.tooltip_text = str(amulets[slot].get("display_text", ""))
-            b.disabled = true
-            holder.add_child(b)
+            # Tap/touch the amulet panel to reveal its effect in a floating tooltip.
+            var effect_text := str(amulets[slot].get("display_text", ""))
+            var amulet_name_str := str(amulets[slot].get("name", "Amulet"))
+            var accent_cap := accent
+            if not effect_text.is_empty():
+                holder.mouse_filter = Control.MOUSE_FILTER_STOP
+                holder.gui_input.connect(func(ev: InputEvent):
+                    var pressed := false
+                    if ev is InputEventMouseButton and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+                        pressed = (ev as InputEventMouseButton).pressed
+                    elif ev is InputEventScreenTouch:
+                        pressed = (ev as InputEventScreenTouch).pressed
+                    if pressed:
+                        _show_amulet_tooltip(holder, amulet_name_str, effect_text, accent_cap)
+                )
         else:
-            var st_empty := StyleBoxFlat.new()
-            st_empty.bg_color = Color(0.035, 0.045, 0.06, 0.55)
-            st_empty.border_color = Color(0.4, 0.46, 0.52, 0.35)
-            st_empty.set_border_width_all(1)
-            st_empty.set_corner_radius_all(10)
-            holder.add_theme_stylebox_override("panel", st_empty)
-            var l := Label.new(); l.text = "RECOVERY SKILL"; l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); l.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; l.vertical_alignment=VERTICAL_ALIGNMENT_CENTER; l.add_theme_font_size_override("font_size",ui_font(10)); l.modulate=Color(0.55,0.62,0.68,0.55); holder.add_child(l)
+            # Empty slot — hide entirely so the battlefield center stays clean.
+            holder.visible = false
+
+## Five emote buttons in a horizontal strip below the PP panel (player side only).
+## Labels: HI / THX / GG / !! / ... — each fires the matching bark category.
+func build_emote_buttons() -> void:
+    var emotes := [
+        {"label": "HI",  "cat": "emote_hello"},
+        {"label": "THX", "cat": "emote_thanks"},
+        {"label": "GG",  "cat": "emote_nice"},
+        {"label": "!!",  "cat": "emote_taunt"},
+        {"label": "...", "cat": "emote_thinking"},
+    ]
+    var strip := Panel.new()
+    strip.position = Vector2(1028, 654)
+    strip.size     = Vector2(242, 36)
+    strip.z_index  = 250
+    var ss := StyleBoxFlat.new()
+    ss.bg_color = Color(0.04, 0.06, 0.11, 0.85)
+    ss.border_color = Color(0.35, 0.55, 0.82, 0.70)
+    ss.set_border_width_all(1)
+    ss.set_corner_radius_all(10)
+    strip.add_theme_stylebox_override("panel", ss)
+    add_child(strip)
+
+    var btn_w := 44.0
+    var btn_h := 26.0
+    var pad_x := 5.0
+    var pad_y := 5.0
+    for i in range(emotes.size()):
+        var edata: Dictionary = emotes[i]
+        var btn := Button.new()
+        btn.text = str(edata["label"])
+        btn.position = Vector2(pad_x + i * (btn_w + 4.0), pad_y)
+        btn.size = Vector2(btn_w, btn_h)
+        btn.z_index = 251
+        btn.add_theme_font_size_override("font_size", ui_font(11))
+        var bs := StyleBoxFlat.new()
+        bs.bg_color = Color(0.08, 0.14, 0.26, 0.95)
+        bs.border_color = Color(0.40, 0.62, 0.90, 0.80)
+        bs.set_border_width_all(1)
+        bs.set_corner_radius_all(7)
+        var bs_hover := bs.duplicate() as StyleBoxFlat
+        bs_hover.bg_color = Color(0.14, 0.24, 0.42)
+        var bs_pressed := bs.duplicate() as StyleBoxFlat
+        bs_pressed.bg_color = Color(0.22, 0.38, 0.68)
+        btn.add_theme_stylebox_override("normal",  bs)
+        btn.add_theme_stylebox_override("hover",   bs_hover)
+        btn.add_theme_stylebox_override("pressed", bs_pressed)
+        btn.add_theme_color_override("font_color", Color(0.82, 0.92, 1.0))
+        var cat: String = str(edata["cat"])
+        btn.pressed.connect(func():
+            play_battle_bark(player_leader, selected_class, cat, true, true))
+        strip.add_child(btn)
+
+func _show_amulet_tooltip(anchor: Control, amulet_name: String, effect: String, accent: Color) -> void:
+    # Dismiss any previous tooltip immediately; second tap on same amulet dismisses.
+    if is_instance_valid(_active_amulet_tooltip):
+        _active_amulet_tooltip.queue_free()
+        _active_amulet_tooltip = null
+        return
+    var tip := Panel.new()
+    tip.z_index = 2200
+    tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var ts := StyleBoxFlat.new()
+    ts.bg_color     = Color(0.03, 0.06, 0.12, 0.97)
+    ts.border_color = accent
+    ts.set_border_width_all(2)
+    ts.set_corner_radius_all(12)
+    ts.shadow_color = Color(0, 0, 0, 0.70)
+    ts.shadow_size  = 10
+    tip.add_theme_stylebox_override("panel", ts)
+    var gp := anchor.global_position
+    var tip_w := 260.0
+    var tip_h := 88.0
+    tip.size = Vector2(tip_w, tip_h)
+    # Appear above the amulet; clamp so it doesn't go off-screen top
+    var tip_x := clampf(gp.x - 46.0, 4.0, 1280.0 - tip_w - 4.0)
+    var tip_y := clampf(gp.y - tip_h - 8.0, 4.0, 720.0 - tip_h - 4.0)
+    tip.position = Vector2(tip_x, tip_y)
+    add_child(tip)
+    var n_lbl := Label.new()
+    n_lbl.text = amulet_name
+    n_lbl.position = Vector2(12, 8)
+    n_lbl.size = Vector2(tip_w - 24, 22)
+    n_lbl.add_theme_font_size_override("font_size", ui_font(14))
+    n_lbl.add_theme_color_override("font_color", accent.lightened(0.3))
+    n_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    tip.add_child(n_lbl)
+    var e_lbl := Label.new()
+    e_lbl.text = effect
+    e_lbl.position = Vector2(12, 32)
+    e_lbl.size = Vector2(tip_w - 24, tip_h - 36)
+    e_lbl.add_theme_font_size_override("font_size", ui_font(12))
+    e_lbl.add_theme_color_override("font_color", Color(0.85, 0.90, 0.98))
+    e_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    e_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    tip.add_child(e_lbl)
+    _active_amulet_tooltip = tip
+    # Fade in
+    tip.modulate.a = 0.0
+    var fade := create_tween()
+    fade.tween_property(tip, "modulate:a", 1.0, 0.18)
+    # Auto-dismiss after 4 s
+    await get_tree().create_timer(4.0).timeout
+    if is_instance_valid(tip):
+        tip.queue_free()
+    if _active_amulet_tooltip == tip:
+        _active_amulet_tooltip = null
 
 func clear_children(node: Node) -> void:
     for child in node.get_children():

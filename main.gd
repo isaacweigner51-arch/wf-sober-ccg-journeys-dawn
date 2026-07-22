@@ -1894,9 +1894,16 @@ func build_ui() -> void:
     # Amulet rows sit flush against the inside edge of each board so they
     # never occupy the open battlefield center.  Empty slots are hidden so
     # "RECOVERY SKILL" placeholders never clutter the screen.
-    enemy_amulet_area = Control.new(); enemy_amulet_area.position = Vector2(245, 240); enemy_amulet_area.size = Vector2(790, 54); enemy_amulet_area.z_index = 65; enemy_amulet_area.clip_contents = false; add_child(enemy_amulet_area)
-    player_amulet_area = Control.new(); player_amulet_area.position = Vector2(245, 365); player_amulet_area.size = Vector2(790, 54); player_amulet_area.z_index = 65; player_amulet_area.clip_contents = false; add_child(player_amulet_area)
     player_board_area = Control.new(); player_board_area.position = Vector2(245, 365); player_board_area.size = Vector2(790, 165); player_board_area.z_index = 60; player_board_area.clip_contents = false; add_child(player_board_area)
+    # IMPORTANT: amulet areas must be added AFTER the board areas.  Godot gives
+    # input to later siblings first (they draw on top); when the amulet row was
+    # added before player_board_area (which fully overlaps it at y=365), the
+    # board area swallowed every tap and the amulet tooltip never fired.
+    # The area containers are IGNORE so they never block taps meant for cards
+    # underneath — only the visible amulet holder panels inside them (STOP)
+    # catch input.
+    enemy_amulet_area = Control.new(); enemy_amulet_area.position = Vector2(245, 240); enemy_amulet_area.size = Vector2(790, 54); enemy_amulet_area.z_index = 65; enemy_amulet_area.clip_contents = false; enemy_amulet_area.mouse_filter = Control.MOUSE_FILTER_IGNORE; add_child(enemy_amulet_area)
+    player_amulet_area = Control.new(); player_amulet_area.position = Vector2(245, 365); player_amulet_area.size = Vector2(790, 54); player_amulet_area.z_index = 65; player_amulet_area.clip_contents = false; player_amulet_area.mouse_filter = Control.MOUSE_FILTER_IGNORE; add_child(player_amulet_area)
     # Keep the hand in a dedicated bottom tray so it never covers the battlefield.
     player_hand_area = Control.new(); player_hand_area.position = Vector2(150, 600); player_hand_area.size = Vector2(880, 115); player_hand_area.clip_contents = false; player_hand_area.z_index = 120; add_child(player_hand_area)
 
