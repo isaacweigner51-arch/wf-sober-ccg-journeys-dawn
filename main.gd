@@ -5280,6 +5280,20 @@ func resolve_on_play(unit: Dictionary, player_side: bool) -> void:
         await show_vfx("+%d + DRAW" % amount, player_leader.global_position if player_side else enemy_leader.global_position, Color(0.4, 1.0, 0.55))
     elif ability == "draw":
         draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand); await show_vfx("DRAW", Vector2(550, 475 if player_side else 70), Color(0.55, 0.85, 1.0))
+    elif ability == "hopeful_heart":
+        var own_hp := player_health if player_side else enemy_health
+        if own_hp >= 15:
+            draw_card(player_deck if player_side else enemy_deck, player_hand if player_side else enemy_hand)
+            await show_vfx("HOPEFUL HEART: DRAW", Vector2(550, 475 if player_side else 70), Color(0.55, 0.9, 1.0))
+        else:
+            await show_vfx("HOPEFUL HEART: NO DRAW", Vector2(550, 475 if player_side else 70), Color(0.6, 0.6, 0.7))
+    elif ability == "faithful_return":
+        var rz: Array = player_relapse if player_side else enemy_relapse
+        var hand: Array = player_hand if player_side else enemy_hand
+        if not rz.is_empty():
+            var returned: Dictionary = rz.pop_back()
+            hand.append(returned)
+            await show_vfx("FAITHFUL RETURN: %s" % str(returned.get("name", "")), Vector2(550, 475 if player_side else 70), Color(0.75, 0.9, 1.0))
     elif ability == "damage_enemy":
         if player_side: enemy_health -= amount
         else: player_health -= amount

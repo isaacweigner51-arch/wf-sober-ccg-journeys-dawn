@@ -64,9 +64,9 @@
     "health": 4,
     "effect": "On Play: Restore 2 defense and draw a card.",
     "max_copies": 3,
-    "ability": "restore_one",
+    "ability": "buff_random",
     "amount": 1,
-    "description": "On Play: Restore 1 Defense to your leader."
+    "description": "On Play: Give a friendly follower +1/+1."
   },
   {
     "id": "JD-007",
@@ -942,8 +942,9 @@
     "health": 3,
     "effect": "Inspire: When another allied follower enters play, restore 1 defense to it.",
     "max_copies": 3,
-    "ability": "restore_one",
-    "description": "On Play: Restore 1 Defense to your leader."
+    "ability": "heal_leader_draw",
+    "description": "On Play: Restore 1 Defense and draw a card.",
+    "amount": 1
   },
   {
     "id": "JD-083",
@@ -1792,7 +1793,8 @@
     "health": 3,
     "type": "Follower",
     "description": "On Play: Draw a card if your leader has 15 or more Defense.",
-    "flavor": "Hope is not passive \u2014 it is a choice."
+    "flavor": "Hope is not passive \u2014 it is a choice.",
+    "ability": "hopeful_heart"
   },
   {
     "id": "JD-162",
@@ -1804,7 +1806,9 @@
     "health": 3,
     "type": "Follower",
     "description": "On Play: Restore 3 Defense to your leader.",
-    "flavor": "What you shine outward comes back to you."
+    "flavor": "What you shine outward comes back to you.",
+    "ability": "heal_leader",
+    "amount": 3
   },
   {
     "id": "JD-166",
@@ -2067,8 +2071,10 @@
     "attack": 2,
     "health": 3,
     "type": "Follower",
-    "description": "On Play: Give a friendly follower +1/+1.",
-    "flavor": "What you carry becomes lighter when shared."
+    "description": "On Play: Restore 2 Defense to your leader.",
+    "flavor": "What you carry becomes lighter when shared.",
+    "ability": "heal_leader",
+    "amount": 2
   },
   {
     "id": "JD-194",
@@ -2092,8 +2098,9 @@
     "attack": 3,
     "health": 3,
     "type": "Follower",
-    "description": "On Play: Return a card from your Relapse Zone to your hand.",
-    "flavor": "Nothing that truly matters stays gone forever."
+    "description": "On Play: Return the top card of your Relapse Zone to your hand.",
+    "flavor": "Nothing that truly matters stays gone forever.",
+    "ability": "faithful_return"
   },
   {
     "id": "JD-196",
