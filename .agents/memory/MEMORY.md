@@ -20,5 +20,6 @@
 - [GitHub API multi-branch push with large binary files](github-api-large-binary-push.md) — 250 binary blobs at 150ms each takes ~38s/branch; reuse main's tree SHA for other branches instead of re-uploading blobs; stays under 10 RPS rate limit.
 - [wf-sober-ccg duplicate pull badge](wf-sober-ccg-duplicate-pull-badge.md) — pull metadata must be stamped on a duplicated card dict, never the shared `cards` array entry, or it leaks onto future pulls of that card.
 - [wf-sober-ccg menu vs CardView art rendering](wf-sober-ccg-menu-art-rendering.md) — deck preview/collection/pack use card_panel→card_art_texture in menu.gd, NOT CardView; both must share CardView._art_cache + CardView._catalog_by_name.
+- [Godot 4 TextureRect expand_mode ordering bug](godot-texturerect-expand-mode-order.md) — setting expand_mode AFTER texture resets node size to native tex dims; always set expand_mode+stretch_mode BEFORE assigning texture.
 - [wf-sober-ccg cloud save architecture](wf-sober-ccg-cloud-save.md) — upload_save_data() PATCHes save_data JSONB; column must be added by user (SQL in topic file); new email accounts now get profile row upserted on first login.
 - [GitHub uploads.github.com proxy limitation](github-uploads-proxy-limitation.md) — proxyFetch only covers api.github.com; use curl+GITHUB_PAT for release asset uploads; workflow scope also needs PAT.
