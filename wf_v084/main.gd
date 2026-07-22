@@ -123,7 +123,7 @@ var evolution_drag_start := Vector2.ZERO
 var evolution_dragging := false
 var evolution_drag_orb: Button = null
 const EVOLUTION_DRAG_THRESHOLD := 10.0
-var pp_pips: Array[ColorRect] = []
+var pp_pips: Array = []  # Array of Panel nodes, round gem style
 var music_player: AudioStreamPlayer
 var music_player_alt: AudioStreamPlayer
 var music_using_alt := false
@@ -1926,8 +1926,8 @@ func build_ui() -> void:
     # parent silently prevents ALL children from receiving gui_input in Godot 4,
     # so the amulet holder panels (MOUSE_FILTER_STOP) inside never saw taps.
     # PASS lets events fall through to the board behind when no child catches them.
-    enemy_amulet_area = Control.new(); enemy_amulet_area.position = Vector2(245, 240); enemy_amulet_area.size = Vector2(790, 54); enemy_amulet_area.z_index = 65; enemy_amulet_area.clip_contents = false; enemy_amulet_area.mouse_filter = Control.MOUSE_FILTER_PASS; add_child(enemy_amulet_area)
-    player_amulet_area = Control.new(); player_amulet_area.position = Vector2(245, 365); player_amulet_area.size = Vector2(790, 54); player_amulet_area.z_index = 65; player_amulet_area.clip_contents = false; player_amulet_area.mouse_filter = Control.MOUSE_FILTER_PASS; add_child(player_amulet_area)
+    enemy_amulet_area = Control.new(); enemy_amulet_area.position = Vector2(245, 236); enemy_amulet_area.size = Vector2(790, 92); enemy_amulet_area.z_index = 65; enemy_amulet_area.clip_contents = false; enemy_amulet_area.mouse_filter = Control.MOUSE_FILTER_PASS; add_child(enemy_amulet_area)
+    player_amulet_area = Control.new(); player_amulet_area.position = Vector2(245, 360); player_amulet_area.size = Vector2(790, 92); player_amulet_area.z_index = 65; player_amulet_area.clip_contents = false; player_amulet_area.mouse_filter = Control.MOUSE_FILTER_PASS; add_child(player_amulet_area)
     # Keep the hand in a dedicated bottom tray so it never covers the battlefield.
     player_hand_area = Control.new(); player_hand_area.position = Vector2(150, 600); player_hand_area.size = Vector2(880, 115); player_hand_area.clip_contents = false; player_hand_area.z_index = 120; add_child(player_hand_area)
 
@@ -2016,49 +2016,48 @@ func apply_mobile_touch_targets() -> void:
         enemy_leader.scale = Vector2(1.08, 1.08)
 
 func build_play_point_counter() -> void:
-    # Compact PP panel — no redundant title, just number + pips + opp momentum below.
-    var pp_panel := Panel.new()
-    pp_panel.position = Vector2(1036, 555)
-    pp_panel.size = Vector2(216, 72)
-    var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.02, 0.06, 0.10, 0.94)
-    style.border_color = Color(0.34, 0.82, 1.0)
-    style.set_border_width_all(2)
-    style.set_corner_radius_all(10)
-    style.shadow_color = Color(0, 0, 0, 0.55)
-    style.shadow_size = 8
-    pp_panel.add_theme_stylebox_override("panel", style)
-    add_child(pp_panel)
+    # No container box — floating gem pips directly on the scene.
+    # Two rows of 5 (PP 1–5 top, 6–10 bottom), each pip a glowing round Panel.
+    pp_pips.clear()
 
-    # "PP" tag on the left, number on the right — single compact row
+    # Small "PP" label
     var pp_tag := Label.new()
     pp_tag.text = "PP"
-    pp_tag.position = Vector2(8, 6)
-    pp_tag.size = Vector2(32, 28)
-    pp_tag.add_theme_font_size_override("font_size", ui_font(13))
-    pp_tag.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
-    pp_panel.add_child(pp_tag)
+    pp_tag.position = Vector2(1040, 558)
+    pp_tag.size = Vector2(26, 16)
+    pp_tag.add_theme_font_size_override("font_size", ui_font(11))
+    pp_tag.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0, 0.90))
+    pp_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(pp_tag)
 
+    # "X / Y" counter — tiny, right of PP tag
     mana_label = Label.new()
-    mana_label.position = Vector2(36, 3)
-    mana_label.size = Vector2(172, 32)
-    mana_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    mana_label.add_theme_font_size_override("font_size", ui_font(26))
-    mana_label.add_theme_color_override("font_color", Color(0.88, 0.97, 1.0))
-    pp_panel.add_child(mana_label)
+    mana_label.position = Vector2(1063, 558)
+    mana_label.size = Vector2(54, 16)
+    mana_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+    mana_label.add_theme_font_size_override("font_size", ui_font(11))
+    mana_label.add_theme_color_override("font_color", Color(0.78, 0.94, 1.0, 0.80))
+    mana_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(mana_label)
 
-    # Pips row
-    pp_pips.clear()
-    var pip_total := MAX_MANA
-    var pip_w := 12; var pip_gap := 16
-    var pips_width := pip_total * pip_gap - (pip_gap - pip_w)
-    var pip_x_start := int((216 - pips_width) / 2)
-    for i in range(pip_total):
-        var pip := ColorRect.new()
-        pip.position = Vector2(pip_x_start + i * pip_gap, 44)
-        pip.size = Vector2(pip_w, 10)
+    # Gem pips — 2 rows × 5, round panels
+    var pip_size := Vector2(18, 18)
+    var pip_gap := 22          # center-to-center distance
+    var row_w   := 5 * pip_gap - (pip_gap - int(pip_size.x))  # 106 px
+    var pip_ox  := int(1036 + (216 - row_w) * 0.5)            # center in PP zone
+    var row_ys  := [577, 600]  # top row, bottom row
+    for i in range(MAX_MANA):
+        var pip := Panel.new()
+        var row := i / 5
+        var col := i % 5
+        pip.position = Vector2(pip_ox + col * pip_gap, row_ys[row])
+        pip.size = pip_size
         pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        pp_panel.add_child(pip)
+        var st := StyleBoxFlat.new()
+        st.bg_color = Color(0.03, 0.06, 0.09)
+        st.set_corner_radius_all(9)
+        pip.add_theme_stylebox_override("panel", st)
+        add_child(pip)
         pp_pips.append(pip)
 
 func leader_name_for(faction_name: String) -> String:
@@ -7140,13 +7139,24 @@ func refresh_ui(animate_new: bool = false, new_index: int = -1, new_player_side:
     safe_set_text(player_health_label, "♥ %d" % player_health); safe_set_text(enemy_health_label, "♥ %d" % enemy_health)
     safe_set_text(mana_label, "%d / %d" % [player_mana, player_max_mana])
     for i in range(pp_pips.size()):
-        var pip: ColorRect = pp_pips[i]
+        var pip: Panel = pp_pips[i]
+        var pst := StyleBoxFlat.new()
+        pst.set_corner_radius_all(9)
         if i < player_mana:
-            pip.color = Color(0.25, 0.82, 1.0, 1.0)
+            pst.bg_color    = Color(0.20, 0.76, 1.0)
+            pst.shadow_color = Color(0.10, 0.72, 1.0, 0.70)
+            pst.shadow_size  = 8
+            pst.border_color = Color(0.55, 0.95, 1.0, 0.80)
+            pst.set_border_width_all(1)
         elif i < player_max_mana:
-            pip.color = Color(0.16, 0.34, 0.46, 1.0)
+            pst.bg_color    = Color(0.07, 0.20, 0.32)
+            pst.border_color = Color(0.18, 0.42, 0.60, 0.55)
+            pst.set_border_width_all(1)
+            pst.shadow_size  = 0
         else:
-            pip.color = Color(0.055, 0.09, 0.12, 0.9)
+            pst.bg_color    = Color(0.03, 0.05, 0.08)
+            pst.shadow_size  = 0
+        pip.add_theme_stylebox_override("panel", pst)
     safe_set_text(turn_label, "TURN %d" % turn_number)
     safe_set_text(hand_count_label, "HAND  %d/%d" % [player_hand.size(), MAX_HAND])
     var evolutions_left := 0
@@ -7531,53 +7541,111 @@ func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
         return
     clear_children(area)
     var amulets: Array = []
-    var indices: Array = []
     for i in range(board.size()):
         if bool(board[i].get("is_amulet", false)):
             amulets.append(board[i])
-            indices.append(i)
     var slot_width := 168.0
+    # Progress counters shared across all progress-type amulets on this side
+    var prog_now: int = player_progress_counters if player_side else enemy_progress_counters
     for slot in range(3):
         var holder := Panel.new()
         holder.position = Vector2(slot * 182.0, 2)
-        holder.size = Vector2(slot_width, 72)
+        holder.size = Vector2(slot_width, 88)
         area.add_child(holder)
         if slot < amulets.size():
-            var accent := class_accent_color(str(amulets[slot].get("faction", amulets[slot].get("class", ""))))
+            var am: Dictionary = amulets[slot]
+            var accent := class_accent_color(str(am.get("faction", am.get("class", ""))))
             var st := StyleBoxFlat.new()
-            st.bg_color = Color(0.045, 0.065, 0.10, 0.92)
+            st.bg_color = Color(0.04, 0.06, 0.10, 0.94)
             st.border_color = accent
             st.set_border_width_all(2)
             st.set_corner_radius_all(10)
-            st.shadow_color = Color(0, 0, 0, 0.4)
-            st.shadow_size = 4
+            st.shadow_color = Color(0, 0, 0, 0.45)
+            st.shadow_size = 5
             holder.add_theme_stylebox_override("panel", st)
 
-            var accent_bar := ColorRect.new(); accent_bar.position = Vector2(0, 0); accent_bar.size = Vector2(4, slot_width * 0 + 52); accent_bar.color = accent; accent_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            # Left accent stripe
+            var accent_bar := ColorRect.new()
+            accent_bar.position = Vector2(0, 0); accent_bar.size = Vector2(4, 88)
+            accent_bar.color = accent; accent_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
             holder.add_child(accent_bar)
 
+            # Name
             var name_label := Label.new()
-            name_label.text = str(amulets[slot].get("name", "Amulet"))
+            name_label.text = str(am.get("name", "Amulet"))
             name_label.position = Vector2(10, 4)
-            name_label.size = Vector2(slot_width - 18, 22)
+            name_label.size = Vector2(slot_width - 18, 20)
             name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
             name_label.add_theme_font_size_override("font_size", ui_font(12))
-            name_label.add_theme_color_override("font_color", Color(0.95, 0.95, 0.97))
+            name_label.add_theme_color_override("font_color", Color(0.96, 0.96, 0.98))
             name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
             holder.add_child(name_label)
 
-            var tag := Label.new()
-            tag.text = "RECOVERY SKILL"
-            tag.position = Vector2(10, 26)
-            tag.size = Vector2(slot_width - 18, 18)
-            tag.add_theme_font_size_override("font_size", ui_font(9))
-            tag.add_theme_color_override("font_color", accent.lightened(0.25))
-            tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-            holder.add_child(tag)
+            # Effect text — always visible, small, truncated to 2 lines
+            var eff_text := str(am.get("display_text", am.get("text", "")))
+            # Strip "Amulet — " prefix to save space
+            if eff_text.begins_with("Amulet —"):
+                eff_text = eff_text.substr(9).strip_edges()
+            var eff_lbl := Label.new()
+            eff_lbl.text = eff_text
+            eff_lbl.position = Vector2(10, 26)
+            eff_lbl.size = Vector2(slot_width - 18, 34)
+            eff_lbl.add_theme_font_size_override("font_size", ui_font(9))
+            eff_lbl.add_theme_color_override("font_color", Color(0.76, 0.80, 0.88))
+            eff_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            eff_lbl.max_lines_visible = 2
+            eff_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            holder.add_child(eff_lbl)
 
-            # Tap/touch the amulet panel to reveal its effect in a floating tooltip.
-            var effect_text := str(amulets[slot].get("display_text", ""))
-            var amulet_name_str := str(amulets[slot].get("name", "Amulet"))
+            # Progress dots — only for progress-tracking amulets
+            var ability := str(am.get("ability", ""))
+            var is_progress_amulet := ability in ["daily_progress", "standing_ground", "second_chances"]
+            if is_progress_amulet:
+                # Milestone is 3; phase 2 is 6
+                var prog_max := 6
+                var prog_phase2 := (player_life_rebuilt if player_side else enemy_life_rebuilt) or \
+                                   (player_courage_recovery_evolved if player_side else enemy_courage_recovery_evolved) or \
+                                   (player_hope_recovery_evolved if player_side else enemy_hope_recovery_evolved)
+                var dot_row := HBoxContainer.new()
+                dot_row.position = Vector2(10, 64)
+                dot_row.size = Vector2(slot_width - 18, 18)
+                dot_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                holder.add_child(dot_row)
+                for d in range(prog_max):
+                    var dot := Label.new()
+                    dot.text = "●" if d < prog_now else "○"
+                    dot.add_theme_font_size_override("font_size", ui_font(10))
+                    var dot_col: Color
+                    if d < prog_now:
+                        dot_col = Color(1.0, 0.84, 0.28) if d < 3 else Color(0.50, 0.95, 1.0)
+                    else:
+                        dot_col = Color(0.42, 0.46, 0.52)
+                    dot.add_theme_color_override("font_color", dot_col)
+                    dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                    if d == 2:   # milestone marker after 3rd dot
+                        var sep := Label.new()
+                        sep.text = " ★ "
+                        sep.add_theme_font_size_override("font_size", ui_font(9))
+                        sep.add_theme_color_override("font_color", Color(0.78, 0.62, 0.28))
+                        sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                        dot_row.add_child(dot)
+                        dot_row.add_child(sep)
+                        continue
+                    dot_row.add_child(dot)
+            else:
+                # Non-progress amulet: just show AMULET tag
+                var tag := Label.new()
+                tag.text = "AMULET"
+                tag.position = Vector2(10, 68)
+                tag.size = Vector2(slot_width - 18, 14)
+                tag.add_theme_font_size_override("font_size", ui_font(8))
+                tag.add_theme_color_override("font_color", accent.lightened(0.30))
+                tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                holder.add_child(tag)
+
+            # Tap to reveal full-text tooltip (still available for long descriptions)
+            var effect_text := str(am.get("display_text", am.get("text", "")))
+            var amulet_name_str := str(am.get("name", "Amulet"))
             var accent_cap := accent
             if not effect_text.is_empty():
                 holder.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -7591,7 +7659,6 @@ func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
                         _show_amulet_tooltip(holder, amulet_name_str, effect_text, accent_cap)
                 )
         else:
-            # Empty slot — hide entirely so the battlefield center stays clean.
             holder.visible = false
 
 ## Five emote buttons in a horizontal strip below the PP panel (player side only).

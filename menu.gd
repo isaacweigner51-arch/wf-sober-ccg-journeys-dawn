@@ -3806,72 +3806,146 @@ func _show_battle_intro(player_class_name: String, opponent_class_name: String) 
     if opponent_class_name == "Sponsor":
         await _show_sponsor_cinematic()
         return
-    # Premium versus transition before the battlefield loads.
+
+    var pc  := class_color(player_class_name)
+    var oc  := class_color(opponent_class_name)
+
+    # ── Root overlay ──────────────────────────────────────────────────────────
     var intro := ColorRect.new()
     intro.color = Color(0.005, 0.008, 0.018, 1.0)
     intro.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    # Was 5000 -- over Godot's CanvasItem z_index cap of 4096, which silently
-    # fails to apply instead of clamping (see main.gd's show_game_over for
-    # the full explanation of this failure mode).
     intro.z_index = 4096
     intro.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(intro)
 
-    var title := Label.new()
-    title.text = "WALKING FREE CCG\nJOURNEY'S DAWN"
-    title.position = Vector2(390, 44)
-    title.size = Vector2(500, 90)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", ui_font_size(28))
-    title.add_theme_color_override("font_color", GOLD_COLOR)
-    intro.add_child(title)
+    # ── Subtle half-tinted background panels ──────────────────────────────────
+    var left_bg := ColorRect.new()
+    left_bg.position = Vector2(0, 0); left_bg.size = Vector2(620, 720)
+    left_bg.color   = Color(pc.r * 0.07, pc.g * 0.07, pc.b * 0.09, 1.0)
+    left_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    intro.add_child(left_bg)
 
-    # Portrait block raised so the VS screen sits in the upper-middle of the
-    # viewport rather than drifting toward the bottom edge.
+    var right_bg := ColorRect.new()
+    right_bg.position = Vector2(660, 0); right_bg.size = Vector2(620, 720)
+    right_bg.color   = Color(oc.r * 0.07, oc.g * 0.07, oc.b * 0.09, 1.0)
+    right_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    intro.add_child(right_bg)
+
+    # ── Thin top accent bars ──────────────────────────────────────────────────
+    var bar_l := ColorRect.new()
+    bar_l.position = Vector2(0, 0); bar_l.size = Vector2(620, 5)
+    bar_l.color = pc; bar_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    intro.add_child(bar_l)
+
+    var bar_r := ColorRect.new()
+    bar_r.position = Vector2(660, 0); bar_r.size = Vector2(620, 5)
+    bar_r.color = oc; bar_r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    intro.add_child(bar_r)
+
+    # ── Centre divider ────────────────────────────────────────────────────────
+    var divider := ColorRect.new()
+    divider.position = Vector2(636, 30); divider.size = Vector2(2, 660)
+    divider.color = Color(0.80, 0.65, 0.28, 0.38)
+    divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    intro.add_child(divider)
+
+    # ── Left portrait (framed panel, clips art) ───────────────────────────────
+    var left_frame := Panel.new()
+    left_frame.size = Vector2(430, 450)
+    left_frame.clip_contents = true
+    var lf_st := StyleBoxFlat.new()
+    lf_st.bg_color = Color(0.01, 0.015, 0.03)
+    lf_st.border_color = pc
+    lf_st.set_border_width_all(3)
+    lf_st.set_corner_radius_all(14)
+    lf_st.shadow_color = Color(pc.r, pc.g, pc.b, 0.55)
+    lf_st.shadow_size = 20
+    left_frame.add_theme_stylebox_override("panel", lf_st)
+    left_frame.position = Vector2(-500, 80)   # starts off left; slides in
+    left_frame.modulate = Color(1,1,1,0)
+    intro.add_child(left_frame)
+
     var left_art := TextureRect.new()
     left_art.texture = class_leader_texture(player_class_name)
-    left_art.position = Vector2(105, 110)
-    left_art.size = Vector2(390, 390)
+    left_art.position = Vector2(0, 0); left_art.size = Vector2(430, 450)
     left_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     left_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    left_art.clip_contents = true
-    left_art.modulate = Color(1,1,1,0)
-    intro.add_child(left_art)
+    left_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    left_frame.add_child(left_art)
+
+    # ── Right portrait ────────────────────────────────────────────────────────
+    var right_frame := Panel.new()
+    right_frame.size = Vector2(430, 450)
+    right_frame.clip_contents = true
+    var rf_st := StyleBoxFlat.new()
+    rf_st.bg_color = Color(0.01, 0.015, 0.03)
+    rf_st.border_color = oc
+    rf_st.set_border_width_all(3)
+    rf_st.set_corner_radius_all(14)
+    rf_st.shadow_color = Color(oc.r, oc.g, oc.b, 0.55)
+    rf_st.shadow_size = 20
+    right_frame.add_theme_stylebox_override("panel", rf_st)
+    right_frame.position = Vector2(1380, 80)  # starts off right; slides in
+    right_frame.modulate = Color(1,1,1,0)
+    intro.add_child(right_frame)
 
     var right_art := TextureRect.new()
     right_art.texture = class_leader_texture(opponent_class_name)
-    right_art.position = Vector2(785, 110)
-    right_art.size = Vector2(390, 390)
+    right_art.position = Vector2(0, 0); right_art.size = Vector2(430, 450)
     right_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     right_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    right_art.clip_contents = true
-    right_art.flip_h = true  # Mirror opponent so both leaders face the centre VS
-    right_art.modulate = Color(1,1,1,0)
-    intro.add_child(right_art)
+    right_art.flip_h = true   # mirror so opponent faces centre
+    right_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    right_frame.add_child(right_art)
 
-    # Name labels centered directly beneath their respective portraits
-    var left_name := centered_label(player_class_name.to_upper(), Vector2(155, 512), Vector2(390, 44), 25, intro)
-    left_name.add_theme_color_override("font_color", class_color(player_class_name).lightened(0.25))
-    var right_name := centered_label(opponent_class_name.to_upper(), Vector2(735, 512), Vector2(390, 44), 25, intro)
-    right_name.add_theme_color_override("font_color", class_color(opponent_class_name).lightened(0.25))
-    # VS centred at portrait midpoint (110 + 195 = 305)
-    var vs := centered_label("VS", Vector2(540, 255), Vector2(200, 100), 64, intro)
+    # ── Class name labels (below portraits) ───────────────────────────────────
+    var left_name := Label.new()
+    left_name.text = player_class_name.to_upper()
+    left_name.position = Vector2(55, 548); left_name.size = Vector2(430, 52)
+    left_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    left_name.add_theme_font_size_override("font_size", ui_font_size(30))
+    left_name.add_theme_color_override("font_color", pc.lightened(0.30))
+    left_name.modulate.a = 0.0
+    intro.add_child(left_name)
+
+    var right_name := Label.new()
+    right_name.text = opponent_class_name.to_upper()
+    right_name.position = Vector2(795, 548); right_name.size = Vector2(430, 52)
+    right_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    right_name.add_theme_font_size_override("font_size", ui_font_size(30))
+    right_name.add_theme_color_override("font_color", oc.lightened(0.30))
+    right_name.modulate.a = 0.0
+    intro.add_child(right_name)
+
+    # ── VS label ─────────────────────────────────────────────────────────────
+    var vs := Label.new()
+    vs.text = "VS"
+    vs.position = Vector2(540, 240); vs.size = Vector2(200, 110)
+    vs.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    vs.add_theme_font_size_override("font_size", ui_font_size(80))
     vs.add_theme_color_override("font_color", GOLD_COLOR)
-    vs.scale = Vector2(0.35, 0.35)
+    vs.scale = Vector2(0.20, 0.20)
     vs.pivot_offset = vs.size * 0.5
+    vs.modulate.a = 0.0
+    intro.add_child(vs)
 
+    # ── Animation ─────────────────────────────────────────────────────────────
     var tween := create_tween().set_parallel(true)
-    tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-    tween.tween_property(left_art, "position:x", 155.0, 0.45)
-    tween.tween_property(left_art, "modulate:a", 1.0, 0.35)
-    tween.tween_property(right_art, "position:x", 735.0, 0.45)
-    tween.tween_property(right_art, "modulate:a", 1.0, 0.35)
-    tween.tween_property(vs, "scale", Vector2.ONE, 0.5)
+    tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tween.tween_property(left_frame,  "position:x", 55.0,   0.42)
+    tween.tween_property(left_frame,  "modulate:a", 1.0,    0.30)
+    tween.tween_property(right_frame, "position:x", 795.0,  0.42)
+    tween.tween_property(right_frame, "modulate:a", 1.0,    0.30)
+    tween.tween_property(vs, "scale",     Vector2.ONE, 0.52)
+    tween.tween_property(vs, "modulate:a", 1.0,        0.36)
+    tween.tween_property(left_name,  "modulate:a", 1.0, 0.40).set_delay(0.28)
+    tween.tween_property(right_name, "modulate:a", 1.0, 0.40).set_delay(0.28)
     await tween.finished
-    await get_tree().create_timer(1.15).timeout
+
+    await get_tree().create_timer(1.10).timeout
     AudioManager.stop_music(0.55)
     var fade := create_tween()
-    fade.tween_property(intro, "modulate:a", 0.0, 0.55)
+    fade.tween_property(intro, "modulate:a", 0.0, 0.50)
     await fade.finished
     get_tree().change_scene_to_file("res://battle.tscn")
 
