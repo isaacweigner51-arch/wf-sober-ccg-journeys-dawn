@@ -1,15 +1,25 @@
 {
-  "version": "0.9.6",
-  "build_name": "Battle Prep Overhaul",
+  "version": "0.9.7",
+  "build_name": "Evolution Overhaul",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
   "notes": "Battle Prep rebuilt as 3-panel deck-selection UI; per-leader portrait focal offsets on Home; LeaderView state-machine created.",
   "required": false,
-  "version_code": "93",
-  "version_name": "0.9.3",
+  "version_code": "97",
+  "version_name": "0.9.7",
   "card_count": 195,
   "sections": [
+    {
+      "category": "What's New in 0.9.7",
+      "items": [
+        "Evolution animations completely rebuilt — all four tiers now use real radial glow orbs instead of colored rectangles, and all ring shockwaves are true circles rather than expanding squares.",
+        "Standard evolution: blinding white flash at peak, three circular shockwave rings fan outward, title smashes in at scale.",
+        "Epic evolution: purple glow blob swells behind the card, four circular rings, spinning beam crown, art medallion slides in from the right.",
+        "Legendary evolution: massive gold glow (580 px) fills the stage, full card-art backdrop at 52% opacity, five circular gold rings, gold flash, hero portrait slides in left.",
+        "Platinum evolution: twin radial glow layers (680 px + 960 px) make the whole screen feel lit; true full-opacity white flash; seven circular shockwave rings; 40 silver-white sparkles; music ducks on impact then restores; dual glow pulse and chromatic title sheen linger after the hit."
+      ]
+    },
     {
       "category": "What's New in 0.9.3 (hotfix)",
       "items": [
