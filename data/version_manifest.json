@@ -1,5 +1,5 @@
 {
-  "version": "0.9.4",
+  "version": "0.9.5",
   "build_name": "Battle Prep Overhaul",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
@@ -91,6 +91,15 @@
     "More seasonal content and cards are in development \u2014 check back after future updates."
   ],
   "whats_new": [
+    {
+      "version": "0.9.5",
+      "date": "2026-07-22",
+      "notes": [
+        "App icon updated: now shows the Walking Free Platinum card.",
+        "Battle intro screen: now shows each leader's actual name (Lyra, Kael, Aurelia, Orin) and title below their portrait.",
+        "Battle intro screen: larger portraits, stronger class-color split background, tighter layout, bolder VS text."
+      ]
+    },
     {
       "version": "0.9.4",
       "date": "2026-07-22",
