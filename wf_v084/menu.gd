@@ -7599,7 +7599,7 @@ func _build_db_filter_column(parent: Control) -> void:
     rar_grid.add_theme_constant_override("h_separation", 3)
     rar_grid.add_theme_constant_override("v_separation", 3)
     vb.add_child(rar_grid)
-    var rar_vals := ["","Bronze","Silver","Gold","Epic","Legendary","Signature Platinum"]
+    var rar_vals := ["","Bronze","Silver","Gold","Epic","Legendary","Platinum"]
     var rar_txts := ["ALL","BRZ","SIL","GOLD","EPIC","LEG","SIG"]
     for i in rar_vals.size():
         var rv: String = rar_vals[i]; var rt: String = rar_txts[i]
