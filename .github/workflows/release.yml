@@ -35,17 +35,30 @@ jobs:
           VER=$(python3 -c "import json; print(json.load(open('data/version_manifest.json'))['version'])")
           echo "version=$VER" >> $GITHUB_OUTPUT
 
+      # Godot 4 must import assets before it can export. Without this step the
+      # export fails immediately because resources can't be deserialized.
+      # --import exits non-zero in some builds even on success, hence || true.
+      - name: Import project assets
+        run: |
+          godot4 --headless --path . --import 2>&1 | tail -40 || true
+
       - name: Export Windows
         run: |
+          set -e
           mkdir -p build
-          godot4 --headless --path . --export-release "Windows Desktop" build/WalkingFreeCCG-v${{ steps.version.outputs.version }}.exe 2>&1
+          godot4 --headless --verbose --path . \
+            --export-release "Windows Desktop" \
+            "build/WalkingFreeCCG-v${{ steps.version.outputs.version }}.exe" \
+            2>&1
+          # Verify the output files exist
+          ls -lh build/
 
       - name: Zip Windows build
         run: |
           cd build
-          zip WalkingFreeCCG-v${{ steps.version.outputs.version }}-Windows.zip \
-              WalkingFreeCCG-v${{ steps.version.outputs.version }}.exe \
-              WalkingFreeCCG-v${{ steps.version.outputs.version }}.pck
+          zip "WalkingFreeCCG-v${{ steps.version.outputs.version }}-Windows.zip" \
+              "WalkingFreeCCG-v${{ steps.version.outputs.version }}.exe" \
+              "WalkingFreeCCG-v${{ steps.version.outputs.version }}.pck"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
