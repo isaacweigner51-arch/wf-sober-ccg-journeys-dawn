@@ -22,7 +22,9 @@
         "Epic evolution animations overhauled: purple-tinted full-bleed backdrop, spinning beam crown, large art medallion slides in from the right, colored flash and four ring burst.",
         "Leader portraits fixed in Battle Prep — full painting now shown, not a zoomed close-up of scales/feathers.",
         "Leader portrait now visible in the active battle screen (was blank/missing).",
-        "Amulets on the field now show their effect when you hover over them (tooltip was silently broken)."
+        "Amulets on the field now show their effect when you hover over them (tooltip was silently broken).",
+        "Courage Dev Meta deck now includes 3 copies of Phoenix Rising.",
+        "Battle Prep 'who's facing who' stage is now centered — both leader zones are equal width (449 px each) with the VS strip dead-center."
       ]
     },
     {

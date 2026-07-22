@@ -4540,22 +4540,26 @@ func _bp_build_battle_stage(stage: Panel) -> void:
     var my_col    := class_color(my_class)
     var opp_col   := class_color(opp_class)
 
-    # Dual tinted backgrounds — each leader's class color bleeds into their half
+    # Dual tinted backgrounds — each leader's class color bleeds into their half.
+    # The stage is 998 px wide; the VS strip is centered, so both leader zones
+    # must be exactly (998 - 100) / 2 = 449 px wide.  The previous layout had
+    # a 408 px left zone and 490 px right zone, which pushed the VS text 41 px
+    # left of center and made the "who's facing who" look off-balance.
     var bg_my := ColorRect.new()
     bg_my.color = Color(my_col.r * 0.12, my_col.g * 0.12, my_col.b * 0.18, 1.0)
-    bg_my.position = Vector2.ZERO; bg_my.size = Vector2(408, 608)
+    bg_my.position = Vector2.ZERO; bg_my.size = Vector2(449, 608)
     bg_my.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_my)
 
     var bg_vs := ColorRect.new()
     bg_vs.color = Color(0.02, 0.03, 0.06, 1.0)
-    bg_vs.position = Vector2(408, 0); bg_vs.size = Vector2(100, 608)
+    bg_vs.position = Vector2(449, 0); bg_vs.size = Vector2(100, 608)
     bg_vs.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_vs)
 
     var bg_opp := ColorRect.new()
     bg_opp.color = Color(opp_col.r * 0.12, opp_col.g * 0.12, opp_col.b * 0.18, 1.0)
-    bg_opp.position = Vector2(508, 0); bg_opp.size = Vector2(490, 608)
+    bg_opp.position = Vector2(549, 0); bg_opp.size = Vector2(449, 608)
     bg_opp.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_opp)
 
@@ -4587,14 +4591,14 @@ func _bp_build_battle_stage(stage: Panel) -> void:
     prac_b.add_theme_stylebox_override("normal", style(Color(0.12, 0.26, 0.16), 0))
     if not is_valid: prac_b.disabled = true
 
-## MY LEADER zone — x=0, w=408
+## MY LEADER zone — x=0, w=449
 func _bp_build_my_leader_zone(parent: Control, my_class: String, my_col: Color) -> void:
-    var PX := 8; var PY := 8; var PW := 392; var PH := 352
+    var PX := 8; var PY := 8; var PW := 433; var PH := 352
 
     # Outer zone glow (behind the framed portrait)
     var glow := ColorRect.new()
     glow.color = Color(my_col, 0.07)
-    glow.position = Vector2(0, 0); glow.size = Vector2(408, PY + PH + 4)
+    glow.position = Vector2(0, 0); glow.size = Vector2(449, PY + PH + 4)
     glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
     parent.add_child(glow)
     var gt := glow.create_tween().set_loops()
@@ -4696,11 +4700,11 @@ func _bp_build_my_leader_zone(parent: Control, my_class: String, my_col: Color) 
         dlb.add_theme_font_size_override("font_size", ui_font_size(10))
         dlb.add_theme_stylebox_override("normal", style(Color(0.30, 0.10, 0.10), 6))
 
-## VS divider strip — x=408, w=100
+## VS divider strip — x=449, w=100
 func _bp_build_vs_zone(parent: Control) -> void:
-    var VX := 408; var VW := 100
+    var VX := 449; var VW := 100
 
-    # Vertical gold lines flanking the VS text
+    # Vertical gold lines flanking the VS text — now centered in the 998 px stage
     var lt := ColorRect.new()
     lt.color = Color(GOLD_COLOR, 0.30)
     lt.position = Vector2(VX + VW / 2 - 1, 18); lt.size = Vector2(2, 148)
@@ -4722,10 +4726,10 @@ func _bp_build_vs_zone(parent: Control) -> void:
     left_sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
     parent.add_child(left_sep)
 
-## OPPONENT zone — x=508, w=490
+## OPPONENT zone — x=549, w=449
 func _bp_build_opp_zone(parent: Control, opp_class: String, opp_col: Color) -> void:
-    var OX := 508; var OW := 490
-    var PX := OX + 10; var PY := 8; var PW := 470; var PH := 352
+    var OX := 549; var OW := 449
+    var PX := OX + 8; var PY := 8; var PW := 433; var PH := 352
 
     # Pulsing aura (slightly offset phase from MY side for visual interest)
     var glow := ColorRect.new()

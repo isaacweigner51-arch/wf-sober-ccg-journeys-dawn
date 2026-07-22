@@ -801,6 +801,7 @@ func build_developer_meta_deck(faction_name: String) -> Array:
         "Courage":
             _append_named_cards(deck, pool, [
                 "Rally the Free",
+                "Phoenix Rising", "Phoenix Rising", "Phoenix Rising",
                 "Spark Runner", "Spark Runner", "Spark Runner",
                 "Defiant Voice", "Defiant Voice", "Defiant Voice",
                 "Fearbreaker", "Fearbreaker", "Fearbreaker",

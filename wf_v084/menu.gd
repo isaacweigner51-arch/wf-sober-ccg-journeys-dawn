@@ -1,5 +1,6 @@
 extends Control
 
+const _LeaderView := preload("res://leader_view.gd")
 const GOLD_COLOR := Color(0.95, 0.78, 0.34)
 const PANEL := Color(0.025, 0.045, 0.08, 0.97)
 const SAVE_PATH := "user://journeys_dawn_profile.cfg"
@@ -23,7 +24,7 @@ func _load_profile_cfg_for_partial_write() -> ConfigFile:
         return null
     return cfg
 const APP_VERSION := "0.5.7"
-const BUILD_NAME := "v0.8.4 • AUDIO & CARD ART RECOVERY"
+const BUILD_NAME := "v0.9.3 • BATTLE PREP OVERHAUL"
 const CLASSES := ["Hope", "Courage", "Serenity", "Purpose"]
 const RARITIES := ["Bronze", "Silver", "Gold", "Epic", "Legendary", "Signature Platinum"]
 # Total interactive Academy tutorial lessons. Kept as one const instead of a
@@ -49,6 +50,10 @@ const KEYWORD_EXAMPLE_CARDS := [
 ]
 const COPY_LIMITS := {"Bronze":3, "Silver":3, "Gold":3, "Epic":3, "Legendary":2, "Platinum":1, "Signature Gold":2, "Signature Platinum":1}
 const MAX_DECK_SLOTS := 8
+# Per-leader horizontal display shift in pixels applied to the art TextureRect
+# inside its clipped container. Negative = move character LEFT in the frame.
+# Tune each leader individually until the face / upper body is well-centred.
+const LEADER_FOCAL_PX := {"hope": -20, "courage": -55, "serenity": -40, "purpose": -50}
 const DUST_VALUES := {"Bronze":12, "Silver":37, "Gold":125, "Epic":625, "Legendary":875, "Platinum":1125, "Signature Platinum":1125}
 const CRAFT_COSTS := {"Bronze":50, "Silver":150, "Gold":500, "Epic":2500, "Legendary":3500, "Platinum":4500, "Signature Platinum":4500}
 const DAILY_REWARDS := [
@@ -698,6 +703,7 @@ var collection_shiny_owned: Dictionary = {}  # card_id -> shiny copy count (draw
 var saved_deck: Array = []
 var saved_decks: Dictionary = {}
 var recovery_challenge_progress: Dictionary = {}
+var challenge_week_key: String = ""  # ISO week bucket; resets progress when the week rolls over
 # The Trials: repeatable PvE gauntlet. trials_cleared keys are "<Class>_<tier>"
 # (tier 1-3) or "Sponsor_4" for the bonus boss. Cosmetic rewards are separate
 # flags since they persist even if sponsor_defeated bookkeeping ever changes.
@@ -723,6 +729,12 @@ var collection_filter_class := "All"
 var collection_filter_rarity := "All"
 var collection_search_query := ""
 var _collection_focus_search_next := false
+# Deck Builder filter state — persists across filter interactions within a session.
+var _db_owned_only    := false
+var _db_cost_filter   := -1    # -1 = all costs; 7 = "7+"
+var _db_rarity_filter := ""    # "" = all rarities
+var _db_type_filter   := ""    # "" = all types
+var _db_search_text   := ""
 # When true, the collection/crafting binder only shows cards the player
 # doesn't yet own at their copy limit -- the direct answer to "which card do
 # I craft with these Vials I just earned?" without scrolling past cards
@@ -760,6 +772,13 @@ var contact_message_input: TextEdit
 var contact_status: Label
 var last_seen_whats_new_version := ""
 var whats_new_checked_this_session := false
+# Upload safety gate — set to true only after a successful cloud profile fetch
+# and apply. Any path that leaves this false will block all save uploads so an
+# empty/default local save can never overwrite real cloud data.
+var _cloud_safe_to_upload := false
+# Snapshot of the last successfully fetched cloud save, used by the upload
+# integrity check to block uploads that would regress collection/progress.
+var _last_cloud_snapshot: Dictionary = {}
 const SUPPORT_EMAIL := "walkingfreeagain@gmail.com"
 
 func ensure_home_music() -> void:
@@ -799,6 +818,18 @@ func _ready() -> void:
         # the next lesson — that would loop them through the whole Academy.
         show_home()
         return
+    # Fast-path back to Home after a normal battle — skip login since the
+    # player is already authenticated. Flag written by _return_to_main_menu()
+    # and the HOME button in the battle scene.
+    var _nav_cfg := ConfigFile.new()
+    if _nav_cfg.load("user://nav.cfg") == OK \
+            and bool(_nav_cfg.get_value("nav", "return_from_battle", false)):
+        _nav_cfg.set_value("nav", "return_from_battle", false)
+        _nav_cfg.save("user://nav.cfg")
+        cards = load_cards()
+        load_profile()
+        show_home()
+        return
     if not get_viewport().size_changed.is_connected(_on_viewport_size_changed):
         get_viewport().size_changed.connect(_on_viewport_size_changed)
     if not AccessManager.authentication_finished.is_connected(_on_access_authentication_finished):
@@ -836,62 +867,165 @@ func show_launch_screen() -> void:
     ensure_home_music()
     launch_screen_active = true
     clear_screen()
-    add_background(0.58)
+    add_background(0.96)
 
-    var title := centered_label("WF SOBER CCG", Vector2(240, 54), Vector2(800, 62), 42, root_layer)
-    title.add_theme_color_override("font_color", GOLD_COLOR)
-    centered_label("JOURNEYS DAWN", Vector2(340, 115), Vector2(600, 42), 25, root_layer)
-    centered_label("Loading your recovery journey...", Vector2(390, 158), Vector2(500, 30), 16, root_layer).modulate = Color(0.72, 0.82, 0.92)
+    # ── Left half: 2×2 leader portrait mosaic ─────────────────────────────────
+    var leaders_data := [
+        {"name": "Hope",     "color": Color(0.25, 0.55, 1.00)},
+        {"name": "Courage",  "color": Color(0.95, 0.40, 0.18)},
+        {"name": "Serenity", "color": Color(0.28, 0.75, 0.55)},
+        {"name": "Purpose",  "color": Color(0.72, 0.38, 0.90)},
+    ]
+    var grid_w := 310.0; var grid_h := 360.0
+    var grid_origins := [Vector2(0,0), Vector2(grid_w,0), Vector2(0,grid_h), Vector2(grid_w,grid_h)]
+    for i in range(4):
+        var ld: Dictionary = leaders_data[i]
+        var lname: String = str(ld.get("name",""))
+        var lcol: Color  = ld.get("color", GOLD_COLOR)
 
-    var panel := Panel.new()
-    panel.position = Vector2(330, 210)
-    panel.size = Vector2(620, 430)
-    panel.add_theme_stylebox_override("panel", style(GOLD_COLOR, 20))
-    root_layer.add_child(panel)
+        var frame := Panel.new()
+        frame.position = grid_origins[i]
+        frame.size = Vector2(grid_w, grid_h)
+        frame.clip_contents = true
+        frame.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+        root_layer.add_child(frame)
 
-    centered_label("PLAYER ACCOUNT", Vector2(40, 22), Vector2(540, 44), 26, panel).add_theme_color_override("font_color", GOLD_COLOR)
-    centered_label("Sign in to keep your collection and Vials tied to your account, or continue as a guest for testing.", Vector2(70, 72), Vector2(480, 58), 15, panel)
+        var portrait := TextureRect.new()
+        portrait.texture = current_leader_texture(lname)
+        portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        frame.add_child(portrait)
 
+        # Bottom scrim so class name is readable
+        var scrim := ColorRect.new()
+        scrim.color = Color(0.01, 0.02, 0.04, 0.72)
+        scrim.position = Vector2(0, grid_h * 0.62)
+        scrim.size = Vector2(grid_w, grid_h * 0.38)
+        scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        frame.add_child(scrim)
+
+        var name_lbl := centered_label(lname.to_upper(), Vector2(0, grid_h - 40), Vector2(grid_w, 32), 17, frame)
+        name_lbl.add_theme_color_override("font_color", lcol)
+
+        # Class-coloured accent bar along the top
+        var top_bar := ColorRect.new(); top_bar.color = lcol
+        top_bar.position = Vector2.ZERO; top_bar.size = Vector2(grid_w, 4)
+        top_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE; frame.add_child(top_bar)
+
+        # Thin border on inner edges (right edge for left column, bottom edge for top row)
+        var inner_v := ColorRect.new(); inner_v.color = Color(lcol, 0.6)
+        inner_v.position = Vector2(grid_w - 2, 0); inner_v.size = Vector2(2, grid_h)
+        inner_v.mouse_filter = Control.MOUSE_FILTER_IGNORE; frame.add_child(inner_v)
+        var inner_h := ColorRect.new(); inner_h.color = Color(lcol, 0.6)
+        inner_h.position = Vector2(0, grid_h - 2); inner_h.size = Vector2(grid_w, 2)
+        inner_h.mouse_filter = Control.MOUSE_FILTER_IGNORE; frame.add_child(inner_h)
+
+    # Vertical gold divider between mosaic and login panel
+    var divider := ColorRect.new()
+    divider.position = Vector2(620, 0); divider.size = Vector2(3, 720)
+    divider.color = GOLD_COLOR; divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    root_layer.add_child(divider)
+
+    # ── Right half: login form ─────────────────────────────────────────────────
+    var right := Panel.new()
+    right.position = Vector2(623, 0); right.size = Vector2(657, 720)
+    var rg_style := StyleBoxFlat.new()
+    rg_style.bg_color = Color(0.022, 0.032, 0.060, 0.99)
+    right.add_theme_stylebox_override("panel", rg_style)
+    root_layer.add_child(right)
+
+    # Game branding
+    var title_lbl := centered_label("WALKING FREE CCG", Vector2(20, 70), Vector2(617, 54), 34, right)
+    title_lbl.add_theme_color_override("font_color", GOLD_COLOR)
+    var sub_lbl := centered_label("JOURNEY'S DAWN", Vector2(20, 126), Vector2(617, 32), 20, right)
+    sub_lbl.add_theme_color_override("font_color", Color(0.76, 0.83, 0.96))
+
+    # Gold separator
+    var hsep := ColorRect.new(); hsep.position = Vector2(80, 170); hsep.size = Vector2(497, 2)
+    hsep.color = Color(GOLD_COLOR, 0.45); hsep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    right.add_child(hsep)
+
+    centered_label("Sign in to save your collection and progress.", Vector2(60, 182), Vector2(537, 26), 13, right).modulate = Color(0.62, 0.70, 0.85)
+
+    # Input field shared style
+    var field_norm := StyleBoxFlat.new()
+    field_norm.bg_color = Color(0.055, 0.08, 0.15)
+    field_norm.border_color = Color(0.30, 0.40, 0.62)
+    field_norm.set_border_width_all(2); field_norm.set_corner_radius_all(10)
+    field_norm.content_margin_left = 16; field_norm.content_margin_right = 10
+
+    var field_focus := StyleBoxFlat.new()
+    field_focus.bg_color = Color(0.06, 0.09, 0.18)
+    field_focus.border_color = GOLD_COLOR
+    field_focus.set_border_width_all(2); field_focus.set_corner_radius_all(10)
+    field_focus.content_margin_left = 16; field_focus.content_margin_right = 10
+
+    # Email
+    label("EMAIL", Vector2(80, 228), Vector2(200, 20), 11, right).add_theme_color_override("font_color", Color(0.58, 0.68, 0.86))
     launch_email = LineEdit.new()
-    launch_email.position = Vector2(80, 145)
-    launch_email.size = Vector2(460, 48)
-    launch_email.placeholder_text = "Email address"
+    launch_email.position = Vector2(80, 250); launch_email.size = Vector2(497, 52)
+    launch_email.placeholder_text = "your@email.com"
     launch_email.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_EMAIL_ADDRESS
-    launch_email.add_theme_font_size_override("font_size", 17)
-    panel.add_child(launch_email)
+    launch_email.add_theme_font_size_override("font_size", 18)
+    launch_email.add_theme_stylebox_override("normal", field_norm)
+    launch_email.add_theme_stylebox_override("focus",  field_focus)
+    right.add_child(launch_email)
 
+    # Password
+    label("PASSWORD", Vector2(80, 316), Vector2(200, 20), 11, right).add_theme_color_override("font_color", Color(0.58, 0.68, 0.86))
     launch_password = LineEdit.new()
-    launch_password.position = Vector2(80, 205)
-    launch_password.size = Vector2(460, 48)
-    launch_password.placeholder_text = "Password (6+ characters)"
+    launch_password.position = Vector2(80, 338); launch_password.size = Vector2(497, 52)
+    launch_password.placeholder_text = "••••••••"
     launch_password.secret = true
-    launch_password.add_theme_font_size_override("font_size", 17)
-    panel.add_child(launch_password)
+    launch_password.add_theme_font_size_override("font_size", 18)
+    launch_password.add_theme_stylebox_override("normal", field_norm)
+    launch_password.add_theme_stylebox_override("focus",  field_focus)
+    right.add_child(launch_password)
 
-    button("SIGN IN", Vector2(80, 275), Vector2(220, 50), func():
-        print("LOGIN UI ── SIGN IN pressed  email_len=%d  pass_len=%d" % [launch_email.text.length(), launch_password.text.length()])
+    # Primary SIGN IN
+    var si_style := solid_style(GOLD_COLOR, 12)
+    var si_hover  := solid_style(GOLD_COLOR.lightened(0.18), 12)
+    var sign_in := button("SIGN IN", Vector2(80, 414), Vector2(497, 58), func():
+        _cloud_safe_to_upload = false
         launch_status.text = "Signing in..."
         launch_status.add_theme_color_override("font_color", Color(0.94, 0.95, 1.0))
         NetworkManager.sign_in_with_email(launch_email.text, launch_password.text)
-    , panel)
-    button("CREATE ACCOUNT", Vector2(320, 275), Vector2(220, 50), func():
-        print("LOGIN UI ── CREATE ACCOUNT pressed  email_len=%d  pass_len=%d" % [launch_email.text.length(), launch_password.text.length()])
+    , right)
+    sign_in.add_theme_font_size_override("font_size", ui_font_size(21))
+    sign_in.add_theme_stylebox_override("normal",  si_style)
+    sign_in.add_theme_stylebox_override("hover",   si_hover)
+    sign_in.add_theme_stylebox_override("pressed", si_style)
+    sign_in.add_theme_color_override("font_color",       Color(0.06, 0.04, 0.01))
+    sign_in.add_theme_color_override("font_hover_color", Color(0.06, 0.04, 0.01))
+
+    # Secondary row
+    button("CREATE ACCOUNT", Vector2(80, 486), Vector2(238, 50), func():
         launch_status.text = "Creating account..."
         launch_status.add_theme_color_override("font_color", Color(0.94, 0.95, 1.0))
         NetworkManager.create_account_with_email(launch_email.text, launch_password.text)
-    , panel)
-    button("CONTINUE AS GUEST", Vector2(180, 338), Vector2(260, 46), func():
+    , right)
+    button("CONTINUE AS GUEST", Vector2(339, 486), Vector2(238, 50), func():
         launch_status.text = "Starting guest session..."
         NetworkManager.continue_as_guest()
-    , panel)
+    , right)
 
-    launch_status = centered_label("", Vector2(55, 388), Vector2(510, 28), 14, panel)
+    launch_status = centered_label("", Vector2(60, 552), Vector2(537, 28), 14, right)
+
+    # Bottom quote + build label
+    var quote := centered_label("\"One day at a time.\"", Vector2(60, 630), Vector2(537, 32), 19, right)
+    quote.add_theme_color_override("font_color", Color(GOLD_COLOR, 0.52))
+    centered_label(BUILD_NAME, Vector2(60, 672), Vector2(537, 22), 11, right).modulate = Color(0.38, 0.46, 0.60)
 
 func _on_launch_auth_result(success: bool, message: String) -> void:
+    print("LOGIN RESULT ── success=%s  message='%s'  user_id=%s  role=%s  cloud_safe=%s" % [
+        str(success), message, NetworkManager.user_id, NetworkManager.account_role, str(_cloud_safe_to_upload)])
     if is_instance_valid(launch_status):
         launch_status.text = message
         launch_status.add_theme_color_override("font_color", Color(0.55, 1.0, 0.70) if success else Color(1.0, 0.55, 0.55))
     if not success:
+        print("LOGIN RESULT ── FAILED — staying on launch screen, upload gate remains locked")
         return
     if NetworkManager.account_role == "owner":
         message += " Developer access enabled."
@@ -899,10 +1033,11 @@ func _on_launch_auth_result(success: bool, message: String) -> void:
         message += " Tester account ready."
     if is_instance_valid(launch_status):
         launch_status.text = message
+    print("LOGIN RESULT ── SUCCESS — gold=%d vials=%d packs=%d cards=%d  cloud_safe=%s" % [
+        gold_balance, dust_balance, pack_inventory, collection_owned.size(), str(_cloud_safe_to_upload)])
     launch_screen_active = false
     await get_tree().create_timer(0.35).timeout
-    # Daily rewards are automatic after a successful sign-in/session restore.
-    # Players never need to visit a separate daily-reward menu.
+    print("LOGIN RESULT ── HOME SCREEN OPENED")
     if can_claim_daily_reward():
         auto_claim_daily_reward_after_login()
     else:
@@ -950,6 +1085,13 @@ func load_profile() -> void:
         daily_reward_day = int(cfg.get_value("daily", "reward_day", 0))
         daily_last_claim_day = int(cfg.get_value("daily", "last_claim_day", -1))
         recovery_challenge_progress = cfg.get_value("challenge", "recovery_progress", {})
+        challenge_week_key = str(cfg.get_value("challenge", "week_key", ""))
+        # Reset progress if we've rolled into a new week.  This is what makes
+        # the home screen label say "this week's challenge" with actual meaning.
+        var current_week := _current_week_key()
+        if challenge_week_key != current_week:
+            recovery_challenge_progress = {}
+            challenge_week_key = current_week
         trials_cleared = cfg.get_value("trials", "cleared", {})
         sponsor_leader_unlocked = bool(cfg.get_value("trials", "sponsor_leader_unlocked", false))
         sponsor_sleeve_unlocked = bool(cfg.get_value("trials", "sponsor_sleeve_unlocked", false))
@@ -966,6 +1108,8 @@ func load_profile() -> void:
             academy_complete = true
             academy_reward_claimed = true
         migrate_sponsor_out_of_prebuilt_deck()
+    print("LOAD_PROFILE ── DISK READ : gold=%d  vials=%d  packs=%d  cards=%d" % [
+        gold_balance, dust_balance, pack_inventory, collection_owned.size()])
 
 func migrate_sponsor_out_of_prebuilt_deck() -> void:
     # v0.6.3 migration: Sponsor used to be inserted into every starter deck.
@@ -997,6 +1141,11 @@ func migrate_sponsor_out_of_prebuilt_deck() -> void:
         if not added:
             break
 
+func _current_week_key() -> String:
+    # Returns a monotonically-increasing week bucket string.
+    # 604800 = seconds in one week.  Changes every Monday at ~00:00 UTC.
+    return str(int(Time.get_unix_time_from_system() / 604800.0))
+
 func save_profile() -> void:
     var cfg := ConfigFile.new()
     cfg.set_value("economy", "gold", gold_balance)
@@ -1018,6 +1167,7 @@ func save_profile() -> void:
     cfg.set_value("daily", "reward_day", daily_reward_day)
     cfg.set_value("daily", "last_claim_day", daily_last_claim_day)
     cfg.set_value("challenge", "recovery_progress", recovery_challenge_progress)
+    cfg.set_value("challenge", "week_key", challenge_week_key)
     cfg.set_value("trials", "cleared", trials_cleared)
     cfg.set_value("trials", "sponsor_leader_unlocked", sponsor_leader_unlocked)
     cfg.set_value("trials", "sponsor_sleeve_unlocked", sponsor_sleeve_unlocked)
@@ -1040,8 +1190,82 @@ func save_profile() -> void:
 
 func _queue_cloud_upload() -> void:
     if NetworkManager.user_id.is_empty():
+        push_warning("CLOUD UPLOAD ── BLOCKED: not authenticated")
         return
-    await NetworkManager.upload_save_data(_serialize_profile_for_cloud())
+    if not _cloud_safe_to_upload:
+        push_error("CLOUD UPLOAD ── BLOCKED: cloud profile was not safely fetched and applied — refusing to overwrite cloud data with local state")
+        return
+    var outgoing := _serialize_profile_for_cloud()
+    var _out_packs: int = int(((outgoing.get("economy", {}) as Dictionary).get("packs", -1)))
+    print("CLOUD UPLOAD ── OUTGOING PACKS = %d  (in-memory pack_inventory=%d)" % [_out_packs, pack_inventory])
+    if not _upload_integrity_ok(outgoing):
+        push_error("CLOUD UPLOAD ── BLOCKED: integrity check failed — outgoing save would regress cloud progress")
+        return
+    print("CLOUD UPLOAD ── ALLOWED  user_id=%s  gold=%d vials=%d packs=%d cards=%d" % [
+        NetworkManager.user_id, gold_balance, dust_balance, pack_inventory, collection_owned.size()])
+    await NetworkManager.upload_save_data(outgoing)
+
+## Compare the outgoing save against the last known cloud snapshot.
+## Returns false (and logs the reason) if the upload would regress any
+## critical progress field. Always returns true when there is no prior snapshot.
+func _upload_integrity_ok(outgoing: Dictionary) -> bool:
+    if _last_cloud_snapshot.is_empty():
+        print("CLOUD INTEGRITY ── no prior snapshot, first sync allowed")
+        return true
+
+    # ── Collection must never shrink ──────────────────────────────────────────
+    var snap_coll: Variant = _last_cloud_snapshot.get("collection", {})
+    var out_coll: Variant  = outgoing.get("collection", {})
+    if snap_coll is Dictionary and out_coll is Dictionary:
+        var snap_owned: Variant = (snap_coll as Dictionary).get("owned", {})
+        var out_owned: Variant  = (out_coll  as Dictionary).get("owned", {})
+        var snap_n := (snap_owned as Dictionary).size() if snap_owned is Dictionary else 0
+        var out_n  := (out_owned  as Dictionary).size() if out_owned  is Dictionary else 0
+        if out_n < snap_n:
+            push_error("CLOUD INTEGRITY ── FAIL: collection would shrink %d -> %d cards" % [snap_n, out_n])
+            return false
+
+    # ── Economy must not crater (allow normal spending, block total wipe) ──────
+    var snap_econ: Variant = _last_cloud_snapshot.get("economy", {})
+    var out_econ: Variant  = outgoing.get("economy", {})
+    if snap_econ is Dictionary and out_econ is Dictionary:
+        var snap_gold := int((snap_econ as Dictionary).get("gold", 0))
+        var out_gold  := int((out_econ  as Dictionary).get("gold", 0))
+        # Block upload if gold would drop by more than 90% AND cloud had >500 gold.
+        # Legitimate spending never wipes a whole balance in one save cycle.
+        if snap_gold > 500 and out_gold < int(snap_gold * 0.10):
+            push_error("CLOUD INTEGRITY ── FAIL: gold would drop %d -> %d (>90%% loss)" % [snap_gold, out_gold])
+            return false
+
+    # ── Academy must not regress ───────────────────────────────────────────────
+    var snap_acad: Variant = _last_cloud_snapshot.get("academy", {})
+    var out_acad: Variant  = outgoing.get("academy", {})
+    if snap_acad is Dictionary and out_acad is Dictionary:
+        var snap_complete := _safe_bool((snap_acad as Dictionary).get("complete", false))
+        var out_complete  := _safe_bool((out_acad  as Dictionary).get("complete", false))
+        var snap_step     := int((snap_acad as Dictionary).get("step", 0))
+        var out_step      := int((out_acad  as Dictionary).get("step", 0))
+        if snap_complete and not out_complete:
+            push_error("CLOUD INTEGRITY ── FAIL: academy.complete would regress true -> false")
+            return false
+        if out_step < snap_step:
+            push_error("CLOUD INTEGRITY ── FAIL: academy.step would regress %d -> %d" % [snap_step, out_step])
+            return false
+
+    # ── Trials must not shrink ────────────────────────────────────────────────
+    var snap_trials: Variant = _last_cloud_snapshot.get("trials", {})
+    var out_trials: Variant  = outgoing.get("trials", {})
+    if snap_trials is Dictionary and out_trials is Dictionary:
+        var snap_cleared: Variant = (snap_trials as Dictionary).get("cleared", {})
+        var out_cleared: Variant  = (out_trials  as Dictionary).get("cleared", {})
+        var snap_n2 := (snap_cleared as Dictionary).size() if snap_cleared is Dictionary else 0
+        var out_n2  := (out_cleared  as Dictionary).size() if out_cleared  is Dictionary else 0
+        if out_n2 < snap_n2:
+            push_error("CLOUD INTEGRITY ── FAIL: trials.cleared would shrink %d -> %d" % [snap_n2, out_n2])
+            return false
+
+    print("CLOUD INTEGRITY ── OK")
+    return true
 
 func _serialize_profile_for_cloud() -> Dictionary:
     saved_decks[selected_deck_class] = saved_deck.duplicate()
@@ -1062,7 +1286,7 @@ func _serialize_profile_for_cloud() -> Dictionary:
         },
         "academy": {"complete": academy_complete, "step": academy_step, "reward_claimed": academy_reward_claimed},
         "daily": {"reward_day": daily_reward_day, "last_claim_day": daily_last_claim_day},
-        "challenge": {"recovery_progress": recovery_challenge_progress},
+        "challenge": {"recovery_progress": recovery_challenge_progress, "week_key": challenge_week_key},
         "trials": {
             "cleared": trials_cleared,
             "sponsor_leader_unlocked": sponsor_leader_unlocked,
@@ -1090,61 +1314,123 @@ func _safe_bool(v: Variant) -> bool:
 ## Returns true on success, false if anything goes wrong.
 ## The caller MUST NOT upload to Supabase when this returns false.
 func _apply_cloud_profile(data: Dictionary) -> bool:
-    # Merge cloud data into the local ConfigFile, never downgrading progress.
-    # Rule: local wins whenever it represents MORE progress than the cloud value.
+    # Merge cloud save Dictionary into the local ConfigFile.
+    # Rules: progress never regresses; collection never shrinks; decks only
+    # replaced by cloud when cloud is non-empty; pending_rewards applied once.
     if data.is_empty():
         return true
-
-    if not (data is Dictionary):
-        push_error("CLOUD MERGE: data is not a Dictionary — aborting merge")
-        return false
 
     var cfg := ConfigFile.new()
     cfg.load(SAVE_PATH)
 
     for section in data.keys():
+        if section == "pending_rewards":
+            continue  # Handled separately below
         var sec_data: Variant = data[section]
         if not (sec_data is Dictionary):
-            push_warning("CLOUD MERGE: section '%s' value is not a Dictionary (got %s) — skipping" % [section, typeof(sec_data)])
+            push_warning("CLOUD MERGE: section '%s' is not a Dictionary (type=%d) — skipping" % [section, typeof(sec_data)])
             continue
         for key in sec_data.keys():
             var cloud_val: Variant = sec_data[key]
             var local_val: Variant = cfg.get_value(section, key, null)
 
-            # ── Never regress boolean progress flags ──────────────────────────
-            if section == "academy" and key in ["complete", "reward_claimed"]:
-                cfg.set_value(section, key, _safe_bool(local_val) or _safe_bool(cloud_val))
-                continue
-            if section == "trials" and key in ["sponsor_leader_unlocked", "sponsor_sleeve_unlocked", "sponsor_defeated"]:
+            # ── Boolean progress flags: OR — never regress ─────────────────────
+            if (section == "academy" and key in ["complete", "reward_claimed"]) or \
+               (section == "trials" and key in ["sponsor_leader_unlocked",
+                    "sponsor_sleeve_unlocked", "sponsor_defeated"]):
                 cfg.set_value(section, key, _safe_bool(local_val) or _safe_bool(cloud_val))
                 continue
 
-            # ── Never regress numeric progress counters ───────────────────────
-            if section == "academy" and key == "step":
+            # ── Numeric progress counters: max — never regress ─────────────────
+            if (section == "academy" and key == "step") or \
+               (section == "economy" and key in ["gold", "dust", "packs"]) or \
+               (section == "packs" and key in ["platinum_pity", "legendary_pity", "opened"]):
                 cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
                 continue
+
+            # ── challenge.week_key: cloud wins (take the more recent week) ────────
+            if section == "challenge" and key == "week_key":
+                var local_wk := str(local_val if local_val != null else "")
+                var cloud_wk := str(cloud_val if cloud_val != null else "")
+                # Both are stringified unix-week integers; higher number = later week.
+                var merged_wk := cloud_wk if int(cloud_wk) >= int(local_wk) else local_wk
+                cfg.set_value(section, key, merged_wk)
+                # If cloud says a later week, reset local progress too.
+                if merged_wk != local_wk:
+                    cfg.set_value("challenge", "recovery_progress", {})
+                continue
+
+            # ── challenge.recovery_progress: {class: int}, max per key ────────
             if section == "challenge" and key == "recovery_progress":
-                # recovery_challenge_progress is a Dictionary {class_name: int}.
-                # Merge per-key, keeping the higher progress value.
-                var local_dict: Dictionary = local_val if local_val is Dictionary else {}
-                var cloud_dict: Dictionary = cloud_val if cloud_val is Dictionary else {}
-                var merged_dict := local_dict.duplicate()
-                for cls in cloud_dict.keys():
-                    merged_dict[cls] = maxi(int(merged_dict.get(cls, 0)), int(cloud_dict[cls]))
-                cfg.set_value(section, key, merged_dict)
+                var ld: Dictionary = local_val if local_val is Dictionary else {}
+                var cd: Dictionary = cloud_val if cloud_val is Dictionary else {}
+                var md := ld.duplicate()
+                for cls in cd.keys():
+                    md[cls] = maxi(int(md.get(cls, 0)), int(cd[cls]))
+                cfg.set_value(section, key, md)
                 continue
 
-            # ── Never regress earned currency or pack inventory ───────────────
-            if section == "economy" and key in ["gold", "dust", "packs"]:
-                cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
+            # ── collection.owned: {card_id: count}, max per key ───────────────
+            # NEVER reduce a card count — union with cloud by taking the higher value.
+            if section == "collection" and key == "owned":
+                var ld: Dictionary = local_val if local_val is Dictionary else {}
+                var cd: Dictionary = cloud_val if cloud_val is Dictionary else {}
+                var md := ld.duplicate()
+                for card_id in cd.keys():
+                    md[card_id] = maxi(int(md.get(card_id, 0)), int(cd[card_id]))
+                cfg.set_value(section, key, md)
+                print("APPLY collection.owned  : local=%d  cloud=%d  merged=%d" % [
+                    ld.size(), cd.size(), md.size()])
                 continue
 
-            # ── Pity counters: keep whichever is higher (more progress) ───────
-            if section == "packs" and key in ["platinum_pity", "legendary_pity"]:
-                cfg.set_value(section, key, maxi(int(local_val if local_val != null else 0), int(cloud_val)))
+            # ── trials.cleared: {trial_key: bool}, union ──────────────────────
+            # Never un-clear a trial that either side considers cleared.
+            if section == "trials" and key == "cleared":
+                var ld: Dictionary = local_val if local_val is Dictionary else {}
+                var cd: Dictionary = cloud_val if cloud_val is Dictionary else {}
+                var md := ld.duplicate()
+                for trial_key in cd.keys():
+                    if _safe_bool(cd[trial_key]):
+                        md[trial_key] = true
+                cfg.set_value(section, key, md)
+                print("APPLY trials.cleared    : local=%d  cloud=%d  merged=%d" % [
+                    ld.size(), cd.size(), md.size()])
                 continue
 
-            # ── Never regress array progress (union of both) ──────────────────
+            # ── deck_slots.slots: cloud wins wholesale ─────────────────────────
+            if section == "deck_slots" and key == "slots":
+                if cloud_val is Array:
+                    cfg.set_value(section, key, cloud_val)
+                continue
+
+            # ── deck.cards / decks.by_class: cloud wins ONLY if non-empty ─────
+            # An empty cloud deck must NOT erase a valid local deck.  This covers
+            # the partial-overwrite failure mode where a default local save was
+            # previously uploaded, setting deck.cards=[] in Supabase.
+            if section == "deck" and key == "cards":
+                var cloud_nonempty := cloud_val is Array and not (cloud_val as Array).is_empty()
+                if cloud_nonempty:
+                    cfg.set_value(section, key, cloud_val)
+                print("APPLY deck.cards        : cloud_cards=%d  %s" % [
+                    (cloud_val as Array).size() if cloud_val is Array else 0,
+                    "APPLIED" if cloud_nonempty else "KEPT LOCAL (cloud empty)"])
+                continue
+
+            if section == "decks" and key == "by_class":
+                if cloud_val is Dictionary:
+                    var cloud_has_any := false
+                    for cls_key in (cloud_val as Dictionary).keys():
+                        var v: Variant = (cloud_val as Dictionary)[cls_key]
+                        if v is Array and not (v as Array).is_empty():
+                            cloud_has_any = true
+                            break
+                    if cloud_has_any:
+                        cfg.set_value(section, key, cloud_val)
+                    print("APPLY decks.by_class    : cloud_has_content=%s  %s" % [
+                        str(cloud_has_any), "APPLIED" if cloud_has_any else "KEPT LOCAL (cloud empty)"])
+                continue
+
+            # ── Other Array fields: union ──────────────────────────────────────
             if cloud_val is Array:
                 var merged: Array = (local_val.duplicate() if local_val is Array else [])
                 for entry in cloud_val:
@@ -1153,63 +1439,149 @@ func _apply_cloud_profile(data: Dictionary) -> bool:
                 cfg.set_value(section, key, merged)
                 continue
 
-            # ── Deck slots: cloud wins wholesale (most-recent edit from any device) ──
-            if section == "deck_slots" and key == "slots" and cloud_val is Array:
-                cfg.set_value(section, key, cloud_val)
-                continue
-            # ── All other fields: cloud wins (deck config, daily state, etc.) ─
+            # ── All other fields: cloud wins ───────────────────────────────────
             cfg.set_value(section, key, cloud_val)
+
+    # ── Apply pending_rewards if present in cloud save ────────────────────────
+    # pending_rewards = {gold: int, vials: int, packs: int}
+    # Applied once here then must be cleared from Supabase by the caller.
+    if data.has("pending_rewards"):
+        var pr: Variant = data["pending_rewards"]
+        if pr is Dictionary:
+            var pg := int(pr.get("gold", 0))
+            var pv := int(pr.get("vials", 0))
+            var pp := int(pr.get("packs", 0))
+            if pg > 0 or pv > 0 or pp > 0:
+                print("APPLY pending_rewards   : +gold=%d  +vials=%d  +packs=%d" % [pg, pv, pp])
+                cfg.set_value("economy", "gold",  int(cfg.get_value("economy", "gold",  0)) + pg)
+                cfg.set_value("economy", "dust",  int(cfg.get_value("economy", "dust",  0)) + pv)
+                cfg.set_value("economy", "packs", int(cfg.get_value("economy", "packs", 0)) + pp)
 
     var save_err := cfg.save(SAVE_PATH)
     if save_err != OK:
-        push_error("CLOUD MERGE: cfg.save() failed with error %d — local file unchanged, aborting upload" % save_err)
+        push_error("CLOUD MERGE: cfg.save() failed (error %d) — upload aborted" % save_err)
         return false
 
-    print("CLOUD MERGE: merged save data successfully (progress-safe)")
+    # ── Per-section summary ────────────────────────────────────────────────────
+    var aft := ConfigFile.new(); aft.load(SAVE_PATH)
+    print("APPLY economy          : gold=%d  vials=%d  packs=%d" % [
+        int(aft.get_value("economy", "gold", 0)),
+        int(aft.get_value("economy", "dust", 0)),
+        int(aft.get_value("economy", "packs", 0))])
+    print("APPLY academy          : complete=%s  step=%d  reward_claimed=%s" % [
+        str(_safe_bool(aft.get_value("academy", "complete", false))),
+        int(aft.get_value("academy", "step", 0)),
+        str(_safe_bool(aft.get_value("academy", "reward_claimed", false)))])
+    print("APPLY decks            : deck.cards=%d" % (aft.get_value("deck", "cards", []) as Array).size())
+    print("CLOUD MERGE            : SUCCESS")
     return true
 
-func _on_cloud_save_loaded(data: Dictionary) -> void:
-    # ── Log local save state before any merge ─────────────────────────────────
-    print("CLOUD SYNC ── local  : gold=%d vials=%d packs=%d cards=%d trials=%d challenge=%d academy=%s" % [
+
+func _on_cloud_save_loaded(data: Dictionary, fetch_ok: bool) -> void:
+    # ── Snapshot local state before any merge ─────────────────────────────────
+    print("CLOUD SYNC ── LOCAL BEFORE MERGE : gold=%d vials=%d packs=%d cards=%d trials=%d challenge=%d academy=%s" % [
         gold_balance, dust_balance, pack_inventory, collection_owned.size(),
-        trials_cleared.size(), recovery_challenge_progress.size(), academy_complete])
-    print("CLOUD SYNC ── remote : %s" % ("EMPTY (no cloud save found)" if data.is_empty()
-        else "%d sections" % data.size()))
+        trials_cleared.size(), recovery_challenge_progress.size(), str(academy_complete)])
+    var _db_packs: int = ((data.get("economy", {}) as Dictionary).get("packs", -1)) if data is Dictionary else -1
+    print("CLOUD SYNC ── FETCH RESULT       : fetch_ok=%s  sections=%d  db_packs=%d  recovery_vials=%d  pending_packs=%d" % [
+        str(fetch_ok), data.size(), _db_packs, NetworkManager.fetched_recovery_vials, NetworkManager.fetched_pending_packs])
+
+    # ── Guard: never upload when the network fetch itself failed ──────────────
+    if not fetch_ok:
+        _cloud_safe_to_upload = false
+        push_error("CLOUD SYNC ── FETCH FAILED — upload gate locked. Cloud data is unknown; local save will NOT be uploaded.")
+        if is_instance_valid(launch_status):
+            launch_status.text = "Cloud save could not be loaded. Progress preserved — try restarting."
+            launch_status.add_theme_color_override("font_color", Color(1.0, 0.65, 0.35))
+        return
 
     if data.is_empty():
-        # No remote save was found. Before uploading local data, check that
-        # there is something worth uploading — a completely fresh install has
-        # gold=0, cards=0, etc. and uploading that would overwrite real progress
-        # on the server if the save_data fetch failed silently.
+        # Fetch succeeded but no save_data exists yet (new account or genuinely
+        # null). Only upload local data if there is real progress worth keeping.
         var local_has_progress := (gold_balance > 0 or dust_balance > 0
             or pack_inventory > 1 or collection_owned.size() > 0
             or academy_complete or trials_cleared.size() > 0)
         if not NetworkManager.user_id.is_empty() and local_has_progress:
+            print("CLOUD SYNC ── ACTION : first sync — local has progress, uploading to Supabase")
+            _cloud_safe_to_upload = true
             _queue_cloud_upload.call_deferred()
-            print("CLOUD SYNC ── action : local has progress — uploading to Supabase (first sync)")
         elif not NetworkManager.user_id.is_empty():
-            print("CLOUD SYNC ── action : local save is empty — NOT uploading (avoids overwriting real server data)")
+            print("CLOUD SYNC ── ACTION : local save is empty — NOT uploading (protects any future cloud data)")
         else:
-            print("CLOUD SYNC ── action : guest session — skipping upload")
+            print("CLOUD SYNC ── ACTION : guest session — skipping upload")
+        # Apply any admin-granted column rewards even on a fresh/empty save.
+        # If rewards were granted, we know the server state is empty — safe to upload.
+        var had_grants := NetworkManager.fetched_recovery_vials > 0 or NetworkManager.fetched_pending_packs > 0
+        if had_grants and not NetworkManager.user_id.is_empty():
+            _cloud_safe_to_upload = true
+            print("CLOUD SYNC ── UPLOAD GATE unlocked by pending column rewards on empty save")
+        _apply_pending_column_rewards()
         return
 
-    # Remote save found — merge with local, local wins on all progress fields.
-    print("CLOUD SYNC ── action : applying cloud save (local wins on progress)")
+    # ── Remote save found — store snapshot for integrity checks, then merge ─────
+    _last_cloud_snapshot = data.duplicate(true)
+    print("CLOUD SYNC ── ACTION : applying cloud save (%d sections, local wins on progress)" % data.size())
     var merge_ok := _apply_cloud_profile(data)
     if not merge_ok:
-        push_error("CLOUD SYNC: merge failed — upload ABORTED to protect cloud data")
-        print("CLOUD SYNC ── UPLOAD BLOCKED: merge error, cloud data preserved unchanged")
+        _cloud_safe_to_upload = false
+        push_error("CLOUD SYNC ── MERGE FAILED — upload gate locked. Cloud data preserved unchanged.")
+        if is_instance_valid(launch_status):
+            launch_status.text = "Cloud save could not be applied safely. Progress preserved — try restarting."
+            launch_status.add_theme_color_override("font_color", Color(1.0, 0.65, 0.35))
         return
-    load_profile() # Re-read merged result from disk into memory.
-    print("CLOUD SYNC ── after  : gold=%d vials=%d packs=%d cards=%d trials=%d" % [
-        gold_balance, dust_balance, pack_inventory, collection_owned.size(),
-        trials_cleared.size()])
+
+    load_profile()  # Re-read merged result from disk into memory.
+    print("CLOUD SYNC ── AFTER MERGE : gold=%d vials=%d packs=%d cards=%d trials=%d" % [
+        gold_balance, dust_balance, pack_inventory, collection_owned.size(), trials_cleared.size()])
+    print("CLOUD SYNC ── IN-MEMORY packs after merge = %d" % pack_inventory)
+
+    # Unlock upload gate BEFORE applying rewards so the save inside
+    # _apply_pending_column_rewards() can upload with the correct pack count.
+    _cloud_safe_to_upload = true
+    # Apply any admin-granted column rewards on top of the merged state.
+    _apply_pending_column_rewards()
+
     _queue_cloud_upload.call_deferred()
-    print("CLOUD SYNC ── re-uploading merged state to Supabase")
-    # Refresh the home screen if it is already visible (e.g. a viewport-size
-    # change fired show_home() before this callback completed).
+    print("CLOUD SYNC ── re-uploading merged + reward-applied state to Supabase")
+
+    # Refresh the home screen only if we are no longer on the launch screen
+    # (e.g. a viewport-size change fired show_home() before this callback ran).
     if not launch_screen_active:
         show_home()
+
+## Apply admin-granted column rewards (recovery_vials + pending_packs) from the
+## Supabase player_profiles row. Called after every cloud profile apply/merge.
+## Each field is zeroed on the server immediately after being applied so it is
+## claimed exactly once, even if the client crashes before a full cloud upload.
+func _apply_pending_column_rewards() -> void:
+    var granted_vials := NetworkManager.fetched_recovery_vials
+    var granted_packs := NetworkManager.fetched_pending_packs
+    if granted_vials <= 0 and granted_packs <= 0:
+        return
+
+    print("CLOUD SYNC ── PENDING COLUMN REWARDS : vials=%d  packs=%d  current_vials=%d  current_packs=%d" % [
+        granted_vials, granted_packs, dust_balance, pack_inventory])
+
+    # Apply in-memory
+    if granted_vials > 0:
+        dust_balance  += granted_vials
+        NetworkManager.fetched_recovery_vials = 0  # Prevent double-apply this session
+    if granted_packs > 0:
+        pack_inventory += granted_packs
+        NetworkManager.fetched_pending_packs  = 0  # Prevent double-apply this session
+
+    print("CLOUD SYNC ── IN-MEMORY AFTER REWARD : vials=%d  packs=%d" % [dust_balance, pack_inventory])
+
+    # Persist locally and upload (upload gate must be true before this call).
+    save_profile()
+    print("CLOUD SYNC ── REWARD APPLIED AND SAVED : vials=%d  packs=%d" % [dust_balance, pack_inventory])
+
+    # Zero the columns on the server so the next login doesn't re-apply.
+    if not NetworkManager.user_id.is_empty() and not NetworkManager.access_token.is_empty():
+        if granted_vials > 0:
+            NetworkManager.clear_recovery_vials.call_deferred()
+        if granted_packs > 0:
+            NetworkManager.clear_pending_packs.call_deferred()
 
 func clear_screen() -> void:
     for child in get_children(): child.queue_free()
@@ -1322,7 +1694,7 @@ func show_home() -> void:
     var top := Panel.new()
     top.position = Vector2(16, 12)
     top.size = Vector2(1248, 64)
-    top.add_theme_stylebox_override("panel", style(Color(0.38, 0.30, 0.17), 12))
+    top.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.13), 12))
     root_layer.add_child(top)
 
     var avatar := TextureRect.new()
@@ -1334,14 +1706,15 @@ func show_home() -> void:
     avatar.clip_contents = true
     top.add_child(avatar)
     label("WALKING FREE CCG", Vector2(70, 8), Vector2(330, 28), 21, top).add_theme_color_override("font_color", GOLD_COLOR)
-    label("Journey's Dawn  •  " + active_class + " Leader", Vector2(70, 35), Vector2(390, 21), 13, top)
+    # Subtitle: always shows class, appends gamer ID when set so player knows who's signed in.
+    var _dn := str(NetworkManager.account_profile.get("display_name", "")).strip_edges()
+    var _subtitle := "Journey's Dawn  •  " + active_class + " Leader" + ("  •  " + _dn if _dn != "" else "")
+    label(_subtitle, Vector2(70, 35), Vector2(560, 21), 13, top)
+    print("SHOW_HOME ── DISPLAYED : gold=%d  vials=%d  packs=%d" % [gold_balance, dust_balance, pack_inventory])
     var wallet := label("GOLD %d     VIALS %d     PACKS %d" % [gold_balance, dust_balance, pack_inventory], Vector2(750, 17), Vector2(375, 30), 16, top)
     wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     button("SUPPORT", Vector2(500, 10), Vector2(110, 44), show_contact_support, top)
-    button("SIGN IN", Vector2(622, 10), Vector2(110, 44), func():
-        NetworkManager.sign_out_account()
-        show_launch_screen()
-    , top)
+    button("ACCOUNT", Vector2(622, 10), Vector2(110, 44), show_account_panel, top)
     button("SETTINGS", Vector2(1140, 10), Vector2(96, 44), show_test_tools if AccessManager.role_at_least(AccessManager.ROLE_TESTER) else show_launch_screen, top)
 
     maybe_show_whats_new()
@@ -1349,7 +1722,7 @@ func show_home() -> void:
     var nav := Panel.new()
     nav.position = Vector2(16, 88)
     nav.size = Vector2(218, 616)
-    nav.add_theme_stylebox_override("panel", style(Color(0.24, 0.20, 0.14), 14))
+    nav.add_theme_stylebox_override("panel", style(Color(0.05, 0.07, 0.14), 14))
     root_layer.add_child(nav)
     var brand := centered_label("JOURNEY'S\nDAWN", Vector2(14, 20), Vector2(190, 72), 27, nav)
     brand.add_theme_color_override("font_color", GOLD_COLOR)
@@ -1407,123 +1780,225 @@ func show_home() -> void:
     var main := Panel.new()
     main.position = Vector2(248, 88)
     main.size = Vector2(1016, 616)
-    main.add_theme_stylebox_override("panel", style(Color(0.17, 0.24, 0.34), 16))
+    main.add_theme_stylebox_override("panel", style(Color(0.06, 0.09, 0.17), 16))
     root_layer.add_child(main)
 
-    centered_label("CHOOSE YOUR LEADER", Vector2(20, 10), Vector2(976, 34), 22, main).add_theme_color_override("font_color", GOLD_COLOR)
+    # Leader portrait selector cards — shows each class's actual face so
+    # the player picks by recognising the character, not just reading a word.
     var order := ["Hope", "Purpose", "Serenity", "Courage"]
     for i in range(order.size()):
         var c: String = order[i]
-        var tab := Button.new()
-        tab.position = Vector2(24 + i * 241, 50)
-        tab.size = Vector2(224, 48)
-        tab.text = c.to_upper()
-        tab.add_theme_font_size_override("font_size", ui_font_size(15))
-        var tab_style := style(class_color(c), 10)
-        tab_style.bg_color = Color(0.025, 0.04, 0.075, 0.96)
-        tab_style.set_border_width_all(4 if c == active_class else 2)
-        tab.add_theme_stylebox_override("normal", tab_style)
-        tab.add_theme_stylebox_override("hover", tab_style)
-        tab.add_theme_stylebox_override("pressed", tab_style)
-        tab.add_theme_color_override("font_color", Color(0.96, 0.97, 1.0))
-        tab.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
-        tab.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 1.0))
-        tab.pressed.connect(func():
+        var cc := class_color(c)
+        var is_active := (c == active_class)
+
+        # Card container — Panel for visual + clipping, transparent Button
+        # overlay on top for click handling. Using Panel keeps clip_contents
+        # rectangular so portrait art doesn't bleed past the border edges.
+        var card_panel := Panel.new()
+        card_panel.position = Vector2(12 + i * 249, 10)
+        card_panel.size = Vector2(236, 88)
+        card_panel.clip_contents = true
+        var card_bg := StyleBoxFlat.new()
+        card_bg.bg_color = cc.darkened(0.55) if is_active else Color(0.02, 0.03, 0.07)
+        card_bg.border_color = cc
+        card_bg.set_border_width_all(4 if is_active else 1)
+        card_bg.set_corner_radius_all(0)
+        card_bg.shadow_color = Color(cc, 0.50 if is_active else 0.0)
+        card_bg.shadow_size  = 12 if is_active else 0
+        card_panel.add_theme_stylebox_override("panel", card_bg)
+        main.add_child(card_panel)
+
+        # Portrait thumbnail fills top 66px of the card
+        var thumb := TextureRect.new()
+        thumb.texture = current_leader_texture(c)
+        thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        thumb.position = Vector2(0, 0)
+        thumb.size = Vector2(236, 66)
+        thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        card_panel.add_child(thumb)
+
+        # Bottom nameplate strip
+        var nameplate := ColorRect.new()
+        nameplate.color = cc.darkened(0.42) if is_active else Color(0.04, 0.06, 0.12, 0.96)
+        nameplate.position = Vector2(0, 66); nameplate.size = Vector2(236, 22)
+        nameplate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        card_panel.add_child(nameplate)
+
+        var name_lbl := centered_label(c.to_upper(), Vector2(0, 66), Vector2(236, 22), 13, card_panel)
+        name_lbl.add_theme_color_override("font_color", cc.lightened(0.3) if is_active else Color(0.88, 0.90, 0.98))
+        name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+        # Active indicator line along the top
+        if is_active:
+            var ind := ColorRect.new(); ind.color = cc
+            ind.position = Vector2.ZERO; ind.size = Vector2(236, 4)
+            ind.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            card_panel.add_child(ind)
+
+        # Transparent full-card Button on top for input — styled invisible
+        var card := Button.new()
+        card.position = Vector2.ZERO; card.size = Vector2(236, 88)
+        var invisible := StyleBoxEmpty.new()
+        card.add_theme_stylebox_override("normal",  invisible)
+        card.add_theme_stylebox_override("hover",   invisible)
+        card.add_theme_stylebox_override("pressed", invisible)
+        card.pressed.connect(func():
             selected_class = c
             selected_deck_class = c
             save_profile()
             show_home()
         )
-        main.add_child(tab)
+        card_panel.add_child(card)
 
-    # Frameless hero showcase. The leader is presented as character art, not as a card.
+    # Hero showcase — full portrait fill with dramatic glow border.
     var showcase := Panel.new()
-    showcase.position = Vector2(24, 114)
-    showcase.size = Vector2(548, 430)
+    showcase.position = Vector2(24, 108)
+    showcase.size = Vector2(548, 494)
     var showcase_style := StyleBoxFlat.new()
-    showcase_style.bg_color = Color(0.015, 0.025, 0.05, 0.60)
+    showcase_style.bg_color = Color(0.008, 0.012, 0.025)
     showcase_style.border_color = class_color(active_class)
-    showcase_style.set_border_width_all(2)
+    showcase_style.set_border_width_all(5)
     showcase_style.set_corner_radius_all(18)
-    showcase_style.shadow_color = Color(class_color(active_class), 0.28)
-    showcase_style.shadow_size = 10
+    showcase_style.shadow_color = Color(class_color(active_class), 0.65)
+    showcase_style.shadow_size = 28
     showcase.add_theme_stylebox_override("panel", showcase_style)
     main.add_child(showcase)
-
-    # Dedicated clipped viewport for the leader art. This prevents the texture from
-    # drawing below or outside the showcase on different display scales.
     showcase.clip_contents = true
 
+    # Inner glow lines — 2 thin accent rects along top and left inside edge
+    var glow_top := ColorRect.new(); glow_top.color = Color(class_color(active_class), 0.55)
+    glow_top.position = Vector2(5, 5); glow_top.size = Vector2(538, 2)
+    glow_top.mouse_filter = Control.MOUSE_FILTER_IGNORE; showcase.add_child(glow_top)
+    var glow_left := ColorRect.new(); glow_left.color = Color(class_color(active_class), 0.35)
+    glow_left.position = Vector2(5, 5); glow_left.size = Vector2(2, 484)
+    glow_left.mouse_filter = Control.MOUSE_FILTER_IGNORE; showcase.add_child(glow_left)
+
     var art_frame := Panel.new()
-    art_frame.position = Vector2(8, 8)
-    art_frame.size = Vector2(532, 344)
+    art_frame.position = Vector2(6, 6)
+    art_frame.size = Vector2(536, 482)
     art_frame.clip_contents = true
-    var art_frame_style := StyleBoxFlat.new()
-    art_frame_style.bg_color = Color(0.008, 0.014, 0.028, 1.0)
-    art_frame_style.set_corner_radius_all(14)
-    art_frame.add_theme_stylebox_override("panel", art_frame_style)
+    art_frame.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
     showcase.add_child(art_frame)
 
     var art := TextureRect.new()
     art.texture = current_leader_texture(active_class)
-    art.position = Vector2.ZERO
-    art.size = art_frame.size
+    var _focal_x := float(LEADER_FOCAL_PX.get(active_class.to_lower(), 0))
+    art.position = Vector2(_focal_x, 0.0)
+    art.size = Vector2(art_frame.size.x + absf(_focal_x), art_frame.size.y)
     art.custom_minimum_size = Vector2.ZERO
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    # COVERED, not CENTERED: this frame (532x344) is much wider than the
-    # square 512x512 source art. CENTERED left large empty bars down both
-    # sides; COVERED fills the whole frame with the portrait.
     art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     art.clip_contents = true
     art_frame.add_child(art)
 
+    # Portrait breathing animation
+    var art_tween := create_tween().set_loops()
+    art_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    art_tween.tween_property(art, "position:y", -8.0, 3.0)
+    art_tween.tween_property(art, "position:y",  0.0, 3.0)
+
+    # Deep bottom scrim so the class nameplate is readable over any portrait
+    var scrim := ColorRect.new()
+    scrim.color = Color(0.0, 0.0, 0.0, 0.0)
+    scrim.position = Vector2(0, art_frame.size.y * 0.55)
+    scrim.size = Vector2(art_frame.size.x, art_frame.size.y * 0.45)
+    scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    art_frame.add_child(scrim)
+    # Fade scrim in via tween so it feels atmospheric rather than hard-cut
+    var scrim_t := create_tween()
+    scrim_t.tween_property(scrim, "color:a", 0.78, 0.6)
+
+    # Large class nameplate overlaid at the bottom of the portrait
+    var nameplate_bg := ColorRect.new()
+    nameplate_bg.color = Color(class_color(active_class), 0.18)
+    nameplate_bg.position = Vector2(0, art_frame.size.y - 72)
+    nameplate_bg.size = Vector2(art_frame.size.x, 72)
+    nameplate_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    art_frame.add_child(nameplate_bg)
+
+    # Bright class-color line above the nameplate
+    var nameplate_line := ColorRect.new()
+    nameplate_line.color = class_color(active_class)
+    nameplate_line.position = Vector2(0, art_frame.size.y - 74)
+    nameplate_line.size = Vector2(art_frame.size.x, 3)
+    nameplate_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    art_frame.add_child(nameplate_line)
+
+    var np_name := label(active_class.to_upper(), Vector2(20, art_frame.size.y - 68), Vector2(320, 44), 36, art_frame)
+    np_name.add_theme_color_override("font_color", class_color(active_class).lightened(0.3))
+    np_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+    var np_desc := label(class_description(active_class), Vector2(20, art_frame.size.y - 28), Vector2(440, 22), 13, art_frame)
+    np_desc.add_theme_color_override("font_color", Color(0.88, 0.91, 0.98))
+    np_desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+    # Pulsing class-color glow overlay
+    var glow_overlay := ColorRect.new()
+    glow_overlay.color = Color(class_color(active_class), 0.0)
+    glow_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    glow_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    art_frame.add_child(glow_overlay)
+    var glow_tween := create_tween().set_loops()
+    glow_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    glow_tween.tween_property(glow_overlay, "color:a", 0.12, 2.2)
+    glow_tween.tween_property(glow_overlay, "color:a", 0.02, 2.2)
+
     if sponsor_leader_unlocked:
         var skin_toggle := button(
             "SPONSOR SKIN: ON" if selected_leader_skin == "sponsor" else "SPONSOR SKIN: OFF",
-            Vector2(16, 16), Vector2(186, 34), toggle_sponsor_skin, showcase)
+            Vector2(16, 16), Vector2(186, 30), toggle_sponsor_skin, showcase)
         skin_toggle.add_theme_font_size_override("font_size", ui_font_size(11))
 
-    var info_strip := Panel.new()
-    info_strip.position = Vector2(8, 356)
-    info_strip.size = Vector2(532, 66)
-    var info_style := StyleBoxFlat.new()
-    info_style.bg_color = Color(0.015, 0.025, 0.05, 0.94)
-    info_style.border_color = Color(class_color(active_class), 0.85)
-    info_style.set_border_width_all(1)
-    info_style.set_corner_radius_all(12)
-    info_strip.add_theme_stylebox_override("panel", info_style)
-    showcase.add_child(info_strip)
-
-    var leader_name := label(active_class.to_upper(), Vector2(16, 7), Vector2(180, 28), 21, info_strip)
-    leader_name.add_theme_color_override("font_color", class_color(active_class))
-    var desc := label(class_description(active_class), Vector2(202, 7), Vector2(214, 48), 12, info_strip)
-    desc.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    var preview_button := button("PREVIEW", Vector2(326, 9), Vector2(94, 46), show_deck_preview, info_strip)
+    # PREVIEW / DECKS buttons now sit at the bottom of the showcase panel (below portrait)
+    var preview_button := button("PREVIEW", Vector2(40, 460), Vector2(216, 26), show_deck_preview, showcase)
     preview_button.add_theme_font_size_override("font_size", ui_font_size(13))
-    var decks_button := button("DECKS", Vector2(426, 9), Vector2(94, 46), show_deck_builder, info_strip)
-    decks_button.add_theme_font_size_override("font_size", ui_font_size(15))
+    var decks_button := button("DECKS", Vector2(292, 460), Vector2(216, 26), show_deck_builder, showcase)
+    decks_button.add_theme_font_size_override("font_size", ui_font_size(13))
 
-    # Right-side actions have their own reserved region and cannot overlap the art.
+    # Right-side actions — matches new taller showcase height
     var right := Panel.new()
-    right.position = Vector2(590, 114)
-    right.size = Vector2(402, 430)
-    right.add_theme_stylebox_override("panel", style(Color(0.30, 0.24, 0.18), 14))
+    right.position = Vector2(590, 108)
+    right.size = Vector2(402, 494)
+    right.add_theme_stylebox_override("panel", style(Color(0.06, 0.09, 0.17), 14))
     main.add_child(right)
+    # Class accent header bar
+    var accent_bar_r := ColorRect.new(); accent_bar_r.position = Vector2(0, 0); accent_bar_r.size = Vector2(402, 4); accent_bar_r.color = class_color(active_class); right.add_child(accent_bar_r)
+
     label("RECOVERY CHALLENGE", Vector2(20, 18), Vector2(362, 32), 20, right).add_theme_color_override("font_color", GOLD_COLOR)
-    label("Win 3 matches with " + active_class + ".", Vector2(20, 58), Vector2(362, 30), 15, right)
     var challenge_progress := int(recovery_challenge_progress.get(active_class, 0))
-    var progress_bg := ColorRect.new(); progress_bg.position = Vector2(20, 98); progress_bg.size = Vector2(362, 12); progress_bg.color = Color(0.05,0.06,0.09); right.add_child(progress_bg)
-    var progress := ColorRect.new(); progress.position = Vector2(20, 98); progress.size = Vector2(362.0 * (float(challenge_progress) / 3.0), 12); progress.color = class_color(active_class); right.add_child(progress)
-    label("%d / 3" % challenge_progress, Vector2(20, 116), Vector2(362, 24), 13, right).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    label("DAILY REFLECTION", Vector2(20, 160), Vector2(362, 30), 18, right).add_theme_color_override("font_color", GOLD_COLOR)
-    var reflection := label("Progress begins with one honest choice. Keep moving forward.", Vector2(20, 198), Vector2(362, 76), 15, right)
+    var wins_remaining := 3 - challenge_progress
+    var challenge_line := label("Win %d more match%s with %s to complete this week's challenge." % [wins_remaining, "es" if wins_remaining != 1 else "", active_class], Vector2(20, 54), Vector2(362, 36), 14, right)
+    challenge_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    var progress_bg := ColorRect.new(); progress_bg.position = Vector2(20, 98); progress_bg.size = Vector2(362, 14); progress_bg.color = Color(0.05,0.06,0.09); right.add_child(progress_bg)
+    var progress := ColorRect.new(); progress.position = Vector2(20, 98); progress.size = Vector2(362.0 * (float(challenge_progress) / 3.0), 14); progress.color = class_color(active_class); right.add_child(progress)
+    # Progress pip markers
+    for pip in range(1, 3):
+        var pip_mark := ColorRect.new(); pip_mark.position = Vector2(20 + 362.0 * pip / 3.0 - 1, 96); pip_mark.size = Vector2(2, 18); pip_mark.color = Color(0.08, 0.11, 0.20); right.add_child(pip_mark)
+    label("%d / 3 wins" % challenge_progress, Vector2(20, 118), Vector2(362, 22), 12, right).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
+    # Thin separator
+    var sep := ColorRect.new(); sep.position = Vector2(16, 150); sep.size = Vector2(370, 1); sep.color = Color(class_color(active_class), 0.25); right.add_child(sep)
+
+    label("DAILY REFLECTION", Vector2(20, 162), Vector2(362, 28), 16, right).add_theme_color_override("font_color", GOLD_COLOR)
+    var reflection := label("Progress begins with one honest choice. Keep moving forward.", Vector2(20, 196), Vector2(362, 72), 14, right)
+    reflection.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     reflection.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    var enter := button("ENTER BATTLE", Vector2(20, 300), Vector2(362, 64), start_battle, right)
-    enter.add_theme_font_size_override("font_size", ui_font_size(22))
-    enter.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 14))
-    enter.add_theme_color_override("font_color", Color(0.04, 0.06, 0.10))
-    var trials_cta := button("THE TRIALS", Vector2(20, 372), Vector2(362, 50), show_trials, right)
+    var enter := button("ENTER BATTLE", Vector2(20, 316), Vector2(362, 72), start_battle, right)
+    enter.add_theme_font_size_override("font_size", ui_font_size(24))
+    enter.add_theme_stylebox_override("normal",  solid_style(GOLD_COLOR, 14))
+    enter.add_theme_stylebox_override("hover",   solid_style(GOLD_COLOR.lightened(0.2), 14))
+    enter.add_theme_stylebox_override("pressed", solid_style(GOLD_COLOR.darkened(0.15), 14))
+    enter.add_theme_color_override("font_color",       Color(0.04, 0.03, 0.01))
+    enter.add_theme_color_override("font_hover_color", Color(0.04, 0.03, 0.01))
+    # Pulsing scale animation — draws the eye unmistakably to the main CTA
+    var btn_tween := create_tween().set_loops()
+    btn_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    btn_tween.tween_property(enter, "modulate", Color(1.15, 1.10, 0.85), 1.1)
+    btn_tween.tween_property(enter, "modulate", Color(1.0,  1.0,  1.0),  1.1)
+
+    var trials_cta := button("THE TRIALS", Vector2(20, 398), Vector2(362, 50), show_trials, right)
     trials_cta.add_theme_font_size_override("font_size", ui_font_size(18))
 
     centered_label(BUILD_NAME, Vector2(20, 566), Vector2(976, 28), 12, main).modulate = Color(0.72, 0.78, 0.86)
@@ -1531,6 +2006,104 @@ func show_home() -> void:
 # ---------------------------------------------------------------------------
 # Contact & Support
 # ---------------------------------------------------------------------------
+func show_account_panel() -> void:
+    # Overlay panel — does NOT clear the home screen behind it.
+    var overlay := ColorRect.new()
+    overlay.color = Color(0.0, 0.0, 0.0, 0.0)
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 600
+    overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+    root_layer.add_child(overlay)
+    # Fade in
+    var fade := create_tween()
+    fade.tween_property(overlay, "color:a", 0.55, 0.15)
+
+    var panel := Panel.new()
+    panel.size = Vector2(520, 360)
+    panel.position = Vector2(640 - 260, 360 - 180)
+    panel.z_index = 610
+    panel.add_theme_stylebox_override("panel", style(Color(0.06, 0.09, 0.18), 16))
+    root_layer.add_child(panel)
+
+    # Close when clicking outside the panel
+    overlay.gui_input.connect(func(ev):
+        if ev is InputEventMouseButton and ev.pressed:
+            if not panel.get_rect().has_point(overlay.get_local_mouse_position()):
+                overlay.queue_free(); panel.queue_free()
+    )
+
+    centered_label("MY ACCOUNT", Vector2(20, 18), Vector2(480, 28), 22, panel).add_theme_color_override("font_color", GOLD_COLOR)
+
+    # ── Sign-in status ─────────────────────────────────────────────────────────
+    var is_signed_in := not NetworkManager.user_id.is_empty()
+    var status_text := "Signed in" if is_signed_in else "Not signed in"
+    var status_color := Color(0.45, 1.0, 0.60) if is_signed_in else Color(1.0, 0.55, 0.35)
+    var status_lbl := centered_label(status_text, Vector2(20, 54), Vector2(480, 24), 14, panel)
+    status_lbl.add_theme_color_override("font_color", status_color)
+
+    # ── Gamer ID row ───────────────────────────────────────────────────────────
+    label("GAMER ID", Vector2(30, 100), Vector2(200, 22), 13, panel).add_theme_color_override("font_color", Color(0.72, 0.78, 0.90))
+    label("Shown to other players and in your header.", Vector2(30, 120), Vector2(460, 20), 12, panel).add_theme_color_override("font_color", Color(0.55, 0.60, 0.70))
+
+    var name_input := LineEdit.new()
+    var current_name := str(NetworkManager.account_profile.get("display_name", "")).strip_edges()
+    name_input.text = current_name
+    name_input.placeholder_text = "Choose a gamer ID…"
+    name_input.position = Vector2(30, 148)
+    name_input.size = Vector2(340, 44)
+    name_input.add_theme_font_size_override("font_size", ui_font_size(17))
+    panel.add_child(name_input)
+
+    var save_status := label("", Vector2(30, 284), Vector2(460, 24), 13, panel)
+    save_status.add_theme_color_override("font_color", Color(0.45, 1.0, 0.60))
+
+    var save_btn := button("SAVE ID", Vector2(382, 148), Vector2(108, 44), func():
+        var new_name := name_input.text.strip_edges()
+        if new_name.length() < 2:
+            save_status.text = "Gamer ID must be at least 2 characters."
+            save_status.add_theme_color_override("font_color", Color(1.0, 0.55, 0.35))
+            return
+        if new_name.length() > 24:
+            save_status.text = "Gamer ID must be 24 characters or fewer."
+            save_status.add_theme_color_override("font_color", Color(1.0, 0.55, 0.35))
+            return
+        save_status.text = "Saving…"
+        save_status.add_theme_color_override("font_color", Color(0.72, 0.78, 0.90))
+        var ok := await NetworkManager.update_display_name(new_name)
+        if ok:
+            save_status.text = "Gamer ID saved! ✓"
+            save_status.add_theme_color_override("font_color", Color(0.45, 1.0, 0.60))
+            # Refresh the home screen header to show the new name immediately.
+            await get_tree().create_timer(0.8).timeout
+            overlay.queue_free(); panel.queue_free()
+            show_home()
+        else:
+            save_status.text = "Save failed — check your connection and try again."
+            save_status.add_theme_color_override("font_color", Color(1.0, 0.55, 0.35))
+    , panel)
+    save_btn.add_theme_font_size_override("font_size", ui_font_size(14))
+
+    # ── Divider ────────────────────────────────────────────────────────────────
+    var div := ColorRect.new()
+    div.color = Color(0.20, 0.25, 0.38)
+    div.position = Vector2(30, 220)
+    div.size = Vector2(460, 1)
+    panel.add_child(div)
+
+    # ── Sign out ───────────────────────────────────────────────────────────────
+    label("Want to switch accounts or sign in on a different device?", Vector2(30, 232), Vector2(460, 20), 12, panel).add_theme_color_override("font_color", Color(0.55, 0.60, 0.70))
+
+    var signout_btn := button("RETURN TO SIGN IN", Vector2(30, 258), Vector2(220, 44), func():
+        overlay.queue_free(); panel.queue_free()
+        NetworkManager.sign_out_account()
+        show_launch_screen()
+    , panel)
+    signout_btn.add_theme_font_size_override("font_size", ui_font_size(13))
+
+    button("CLOSE", Vector2(268, 258), Vector2(100, 44), func():
+        overlay.queue_free(); panel.queue_free()
+    , panel)
+
 func show_contact_support() -> void:
     clear_screen(); add_background(0.72)
     header("CONTACT & SUPPORT", "Questions, concerns, or a bug to report? We read every message.")
@@ -3509,110 +4082,751 @@ func _battle_preview_stats(class_name_value: String, mode_value: String) -> Dict
     }
 
 func show_match_deck_selection() -> void:
+    # ── Defaults ──────────────────────────────────────────────────────────────
     if battle_select_class == "":
         battle_select_class = selected_class if selected_class != "" else "Hope"
     if battle_opponent_class == "":
         battle_opponent_class = "Courage"
-    if battle_select_mode != "custom" and not AccessManager.role_at_least(AccessManager.ROLE_OWNER):
+    if battle_select_mode in ["meta", "final_boss"] and not AccessManager.role_at_least(AccessManager.ROLE_OWNER):
         battle_select_mode = "custom"
     battle_opponent_mode = "prebuilt"
+    if battle_select_mode == "custom" and last_battle_deck_idx < 0 and deck_slots.size() > 0:
+        last_battle_deck_idx = 0
+        battle_select_class = str(deck_slots[0].get("class", "Hope"))
 
     clear_screen()
-    add_background(0.78)
-    header("BATTLE PREPARATION", "Choose leaders and decks, preview them, then begin battle.")
+    add_background(0.88)
+    header("BATTLE PREPARATION", "Choose your champion and deck, then face your opponent.")
 
+    # Shell height = 608 so bottom of screen (100+608=708) stays within 720.
+    # This keeps both BEGIN BATTLE and PRACTICE MODE visible without scrolling.
     var shell := Panel.new()
-    shell.position = Vector2(28, 108)
-    shell.size = Vector2(1224, 566)
-    shell.add_theme_stylebox_override("panel", style(Color(0.20, 0.31, 0.48), 18))
+    shell.position = Vector2(6, 100)
+    shell.size = Vector2(1268, 608)
+    shell.clip_contents = false
+    shell.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.10), 0))
     root_layer.add_child(shell)
 
-    # Class selectors stay above their own side and never overlap portraits.
-    centered_label("YOUR LEADER", Vector2(28, 12), Vector2(340, 28), 18, shell).add_theme_color_override("font_color", GOLD_COLOR)
-    centered_label("OPPONENT", Vector2(856, 12), Vector2(340, 28), 18, shell).add_theme_color_override("font_color", GOLD_COLOR)
-    for i in range(CLASSES.size()):
-        var c: String = CLASSES[i]
-        var left_b := Button.new()
-        left_b.position = Vector2(28 + (i % 2) * 164, 46 + (i / 2) * 44)
-        left_b.size = Vector2(154, 38)
-        left_b.text = c.to_upper()
-        left_b.add_theme_font_size_override("font_size", ui_font_size(12))
-        left_b.add_theme_stylebox_override("normal", style(class_color(c).lightened(0.10) if c == battle_select_class else Color(0.08,0.12,0.19), 8))
-        left_b.add_theme_color_override("font_color", Color.WHITE)
-        left_b.pressed.connect(func(): _battle_selection_set_class(c))
-        shell.add_child(left_b)
+    # Left panel: all deck categories (MY DECKS / STARTER / OWNER)
+    var left_p := Panel.new()
+    left_p.position = Vector2(0, 0)
+    left_p.size = Vector2(268, 608)
+    left_p.add_theme_stylebox_override("panel", style(Color(0.05, 0.08, 0.14), 0))
+    shell.add_child(left_p)
+    _bp_build_deck_list(left_p)
 
-        var right_b := Button.new()
-        right_b.position = Vector2(868 + (i % 2) * 164, 46 + (i / 2) * 44)
-        right_b.size = Vector2(154, 38)
-        right_b.text = c.to_upper()
-        right_b.add_theme_font_size_override("font_size", ui_font_size(12))
-        right_b.add_theme_stylebox_override("normal", style(class_color(c).lightened(0.10) if c == battle_opponent_class else Color(0.08,0.12,0.19), 8))
-        right_b.add_theme_color_override("font_color", Color.WHITE)
-        right_b.pressed.connect(func(): _battle_selection_set_opponent_class(c))
-        shell.add_child(right_b)
+    # Battle stage: cinematic MY LEADER vs OPPONENT display
+    var stage := Panel.new()
+    stage.position = Vector2(270, 0)
+    stage.size = Vector2(998, 608)
+    stage.clip_contents = true
+    stage.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.10), 0))
+    shell.add_child(stage)
+    _bp_build_battle_stage(stage)
 
-    _build_battle_leader_panel(battle_select_class, "YOUR LEADER", Vector2(28, 142), shell, false)
-    _build_battle_leader_panel(battle_opponent_class, "COMPUTER", Vector2(868, 142), shell, true)
 
-    var center := Panel.new()
-    center.position = Vector2(386, 20)
-    center.size = Vector2(452, 466)
-    center.add_theme_stylebox_override("panel", style(Color(0.30, 0.43, 0.66), 16))
-    shell.add_child(center)
-    centered_label("VS", Vector2(176, 8), Vector2(100, 44), 30, center).add_theme_color_override("font_color", GOLD_COLOR)
+func _bp_get_selected_ids() -> Array:
+    if last_battle_deck_idx >= 0 and last_battle_deck_idx < deck_slots.size():
+        return Array(deck_slots[last_battle_deck_idx].get("cards", [])).duplicate()
+    # meta, final_boss, and prebuilt all route through the existing helper
+    return _battle_preview_deck_ids(battle_select_class, battle_select_mode if battle_select_mode in ["meta","final_boss","prebuilt"] else "prebuilt")
 
-    var your_stats: Dictionary = _battle_preview_stats(battle_select_class, battle_select_mode)
-    var opp_stats: Dictionary = _battle_preview_stats(battle_opponent_class, "prebuilt")
+## Class for the currently-selected battle deck.
+func _bp_get_selected_class() -> String:
+    if last_battle_deck_idx >= 0 and last_battle_deck_idx < deck_slots.size():
+        return str(deck_slots[last_battle_deck_idx].get("class", "Hope"))
+    # For final_boss mode the class is fixed; for meta/prebuilt use battle_select_class
+    if battle_select_mode == "final_boss":
+        return selected_class if selected_class != "" else "Purpose"
+    return battle_select_class
 
-    centered_label("YOUR DECK", Vector2(18, 58), Vector2(198, 28), 16, center)
-    centered_label("AI DECK", Vector2(236, 58), Vector2(198, 28), 16, center)
+## Validates a deck slot. Returns "VALID" or a short reason string.
+func _bp_slot_validation(slot: Dictionary) -> String:
+    var slot_class := str(slot.get("class", ""))
+    var cards_arr: Array = Array(slot.get("cards", []))
+    if cards_arr.size() != 40:
+        return "%d/40 cards" % cards_arr.size()
+    var counts: Dictionary = {}
+    for card_id in cards_arr:
+        counts[str(card_id)] = int(counts.get(str(card_id), 0)) + 1
+    for card_id in counts.keys():
+        var cd := card_by_id(str(card_id))
+        if cd.is_empty(): continue
+        var limit := int(COPY_LIMITS.get(str(cd.get("rarity", "Bronze")), 3))
+        if int(counts[str(card_id)]) > limit:
+            return "Too many: %s" % str(cd.get("name", card_id))
+        var cc := str(cd.get("class", ""))
+        if cc != slot_class and cc != "Neutral":
+            return "Wrong class: %s" % str(cd.get("name", card_id))
+    return "VALID"
 
-    var your_modes: Array = [{"id":"custom", "label":"MY DECK"}]
+## Deck statistics computed directly from a card ID array.
+func _bp_stats_from_ids(ids: Array) -> Dictionary:
+    var total_cost := 0; var followers := 0; var skills := 0
+    var curve: Array = [0,0,0,0,0,0,0,0,0]
+    for card_id in ids:
+        var cd := card_by_id(str(card_id))
+        if cd.is_empty(): continue
+        var cv := int(cd.get("cost", 0))
+        total_cost += cv
+        curve[mini(cv, 8)] = int(curve[mini(cv, 8)]) + 1
+        var tt := str(cd.get("type", "")).to_lower()
+        var eff := str(cd.get("effect", "")).to_lower()
+        if "amulet" in tt or "recovery skill" in tt or "recovery skill" in eff:
+            skills += 1
+        elif not ("spell" in tt or (int(cd.get("attack", 0)) == 0 and int(cd.get("health", 0)) == 0)):
+            followers += 1
+    var n := maxi(ids.size(), 1)
+    return {"count": ids.size(), "average": float(total_cost) / float(n),
+            "followers": followers, "skills": skills, "curve": curve}
+
+# ── Helpers: state changes ────────────────────────────────────────────────────
+
+## Select a custom slot and refresh.
+func _bp_select_slot(idx: int) -> void:
+    last_battle_deck_idx = idx
+    if idx >= 0 and idx < deck_slots.size():
+        battle_select_class = str(deck_slots[idx].get("class", "Hope"))
+    show_match_deck_selection()
+
+## Select a prebuilt starter deck and refresh.
+func _bp_select_prebuilt(cls: String) -> void:
+    last_battle_deck_idx = -1
+    battle_select_class = cls
+    show_match_deck_selection()
+
+## Launch the battle (or practice mode) using the selected deck.
+func _bp_start_battle(practice: bool) -> void:
+    # Owner-mode guard: meta and final_boss are developer-only
+    if battle_select_mode in ["meta", "final_boss"] and not AccessManager.role_at_least(AccessManager.ROLE_OWNER):
+        return
+    var sel_class := _bp_get_selected_class()
+    battle_select_class = sel_class
+    if last_battle_deck_idx >= 0 and last_battle_deck_idx < deck_slots.size():
+        var slot_cards: Array = Array(deck_slots[last_battle_deck_idx].get("cards", []))
+        saved_decks[sel_class] = slot_cards.duplicate()
+        selected_deck_class = sel_class
+        saved_deck = slot_cards.duplicate()
+        battle_select_mode = "custom"
+    # meta and final_boss keep their mode as-is; prebuilt is default fallback
+    elif battle_select_mode not in ["meta","final_boss"]:
+        battle_select_mode = "prebuilt"
+    if practice:
+        launch_selected_battle(battle_select_class, battle_select_mode, battle_opponent_class, "prebuilt", "practice")
+    else:
+        launch_selected_battle(battle_select_class, battle_select_mode, battle_opponent_class, "prebuilt")
+
+## Duplicate the selected custom slot.
+func _bp_duplicate_slot() -> void:
+    if last_battle_deck_idx < 0 or last_battle_deck_idx >= deck_slots.size():
+        return
+    if deck_slots.size() >= MAX_DECK_SLOTS:
+        return
+    var orig: Dictionary = Dictionary(deck_slots[last_battle_deck_idx])
+    deck_slots.append({
+        "name": str(orig.get("name", "Deck")) + " (Copy)",
+        "class": str(orig.get("class", "Hope")),
+        "cards": Array(orig.get("cards", [])).duplicate()
+    })
+    last_battle_deck_idx = deck_slots.size() - 1
+    save_profile()
+    show_match_deck_selection()
+
+## Copy a prebuilt recipe into a new custom slot.
+func _bp_copy_prebuilt(cls: String) -> void:
+    if deck_slots.size() >= MAX_DECK_SLOTS:
+        return
+    var ids := _battle_preview_deck_ids(cls, "prebuilt")
+    deck_slots.append({"name": cls + " Starter", "class": cls, "cards": ids.duplicate()})
+    last_battle_deck_idx = deck_slots.size() - 1
+    save_profile()
+    show_match_deck_selection()
+
+## Show a delete-confirmation overlay for the selected slot.
+func _bp_confirm_delete() -> void:
+    if last_battle_deck_idx < 0 or last_battle_deck_idx >= deck_slots.size():
+        return
+    var slot_name := str(deck_slots[last_battle_deck_idx].get("name", "Deck"))
+    var overlay := ColorRect.new()
+    overlay.color = Color(0, 0, 0, 0.72)
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 400
+    root_layer.add_child(overlay)
+    var box := Panel.new()
+    box.position = Vector2(390, 280)
+    box.size = Vector2(500, 210)
+    box.add_theme_stylebox_override("panel", style(Color(0.12, 0.18, 0.28), 16))
+    overlay.add_child(box)
+    centered_label("DELETE DECK?", Vector2(20, 18), Vector2(460, 36), 22, box).add_theme_color_override("font_color", GOLD_COLOR)
+    var msg := centered_label("Delete \"%s\"? This cannot be undone." % slot_name,
+        Vector2(20, 66), Vector2(460, 28), 15, box)
+    msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    var cb := button("CANCEL", Vector2(30, 142), Vector2(196, 46),
+        func(): overlay.queue_free(), box)
+    cb.add_theme_stylebox_override("normal", style(Color(0.20, 0.30, 0.45), 10))
+    var db := button("DELETE", Vector2(274, 142), Vector2(196, 46), func():
+        overlay.queue_free()
+        deck_slots.remove_at(last_battle_deck_idx)
+        last_battle_deck_idx = mini(last_battle_deck_idx, deck_slots.size() - 1)
+        save_profile()
+        show_match_deck_selection()
+    , box)
+    db.add_theme_stylebox_override("normal", solid_style(Color(0.65, 0.22, 0.22), 10))
+    db.add_theme_color_override("font_color", Color.WHITE)
+
+## Show a rename overlay for the selected slot.
+func _bp_rename_overlay() -> void:
+    if last_battle_deck_idx < 0 or last_battle_deck_idx >= deck_slots.size():
+        return
+    var current_name := str(deck_slots[last_battle_deck_idx].get("name", "Deck"))
+    var overlay := ColorRect.new()
+    overlay.color = Color(0, 0, 0, 0.72)
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 400
+    root_layer.add_child(overlay)
+    var box := Panel.new()
+    box.position = Vector2(390, 270)
+    box.size = Vector2(500, 220)
+    box.add_theme_stylebox_override("panel", style(Color(0.12, 0.18, 0.28), 16))
+    overlay.add_child(box)
+    centered_label("RENAME DECK", Vector2(20, 18), Vector2(460, 36), 22, box).add_theme_color_override("font_color", GOLD_COLOR)
+    var name_input := LineEdit.new()
+    name_input.position = Vector2(30, 72)
+    name_input.size = Vector2(440, 48)
+    name_input.text = current_name
+    name_input.select_all_on_focus = true
+    name_input.add_theme_font_size_override("font_size", 20)
+    box.add_child(name_input)
+    name_input.grab_focus()
+    var cb2 := button("CANCEL", Vector2(30, 150), Vector2(196, 46),
+        func(): overlay.queue_free(), box)
+    cb2.add_theme_stylebox_override("normal", style(Color(0.20, 0.30, 0.45), 10))
+    var rb := button("RENAME", Vector2(274, 150), Vector2(196, 46), func():
+        var new_name := name_input.text.strip_edges()
+        if new_name == "": return
+        deck_slots[last_battle_deck_idx]["name"] = new_name
+        save_profile()
+        overlay.queue_free()
+        show_match_deck_selection()
+    , box)
+    rb.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 10))
+    rb.add_theme_color_override("font_color", Color(0.04, 0.06, 0.10))
+    name_input.text_submitted.connect(func(_t: String): rb.pressed.emit())
+
+## Open the deck builder to create a new slot.
+func _bp_open_deck_builder_new() -> void:
+    editing_deck_slot_idx = deck_slots.size()
+    _show_create_slot_overlay()
+
+## Open the deck builder to edit the selected slot.
+func _bp_open_deck_builder_edit() -> void:
+    if last_battle_deck_idx < 0 or last_battle_deck_idx >= deck_slots.size():
+        return
+    editing_deck_slot_idx = last_battle_deck_idx
+    var slot: Dictionary = Dictionary(deck_slots[last_battle_deck_idx])
+    selected_deck_class = str(slot.get("class", "Hope"))
+    saved_deck = Array(slot.get("cards", [])).duplicate()
+    saved_decks[selected_deck_class] = saved_deck.duplicate()
+    show_deck_builder()
+
+# ── Helpers: panel builders ───────────────────────────────────────────────────
+
+## Section header label for the deck list scroll.
+func _bp_section_hdr(text: String, vbox: VBoxContainer, col: Color) -> void:
+    var lbl := Label.new()
+    lbl.text = text
+    lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    lbl.add_theme_font_size_override("font_size", ui_font_size(10))
+    lbl.add_theme_color_override("font_color", col)
+    lbl.custom_minimum_size = Vector2(292, 24)
+    vbox.add_child(lbl)
+
+## Adds a gold selection ring overlay to a Panel when is_sel is true.
+func _bp_sel_ring(panel: Panel, is_sel: bool) -> void:
+    if not is_sel: return
+    var ring := Panel.new()
+    ring.position = Vector2.ZERO
+    var _rsz := panel.custom_minimum_size if panel.custom_minimum_size.x > 0.0 else panel.size
+    ring.size = _rsz
+    ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var rs := StyleBoxFlat.new()
+    rs.bg_color = Color.TRANSPARENT
+    rs.border_color = GOLD_COLOR; rs.set_border_width_all(2)
+    rs.set_corner_radius_all(9)
+    ring.add_theme_stylebox_override("panel", rs)
+    panel.add_child(ring)
+
+## Creates a transparent full-size tap Button child of parent.
+func _bp_tap(sz: Vector2, parent: Control) -> Button:
+    var b := Button.new(); b.flat = true
+    b.focus_mode = Control.FOCUS_NONE
+    b.position = Vector2.ZERO; b.size = sz
+    b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    parent.add_child(b)
+    return b
+
+## Select a dev-only mode (meta / final_boss) and refresh.
+func _bp_select_mode(mode: String, cls: String) -> void:
+    if not AccessManager.role_at_least(AccessManager.ROLE_OWNER): return
+    battle_select_mode = mode
+    battle_select_class = cls
+    last_battle_deck_idx = -1
+    show_match_deck_selection()
+
+func _bp_build_deck_list(parent: Panel) -> void:
+    centered_label("SELECT DECK", Vector2(8, 10), Vector2(300, 26), 15, parent).add_theme_color_override("font_color", GOLD_COLOR)
+
+    var scroll := ScrollContainer.new()
+    scroll.position = Vector2(4, 42)
+    scroll.size = Vector2(308, 592)
+    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    parent.add_child(scroll)
+
+    var vbox := VBoxContainer.new()
+    vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    vbox.add_theme_constant_override("separation", 5)
+    scroll.add_child(vbox)
+
+    # ─────── OWNER / DEVELOPER sections — shown first so no scrolling needed ──
     if AccessManager.role_at_least(AccessManager.ROLE_OWNER):
-        your_modes.append({"id":"meta", "label":"DEV META"})
-        your_modes.append({"id":"final_boss", "label":"FINAL BOSS"})
-    for i in range(your_modes.size()):
-        var option: Dictionary = Dictionary(your_modes[i])
-        var mode_id := str(option.get("id", "custom"))
-        var b := Button.new()
-        b.position = Vector2(18, 92 + i * 45)
-        b.size = Vector2(198, 38)
-        b.text = str(option.get("label", "DECK"))
-        b.add_theme_font_size_override("font_size", ui_font_size(11))
-        if mode_id == battle_select_mode:
-            b.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 8))
-            b.add_theme_color_override("font_color", Color(0.04,0.06,0.10))
-        else:
-            b.add_theme_stylebox_override("normal", style(Color(0.20,0.30,0.48), 8))
-        b.pressed.connect(func(): _battle_selection_set_mode(mode_id))
-        center.add_child(b)
+        _bp_section_hdr("OWNER  •  FINAL BOSS DECK", vbox, Color(1.0, 0.72, 0.20))
 
-    var ai_badge := Button.new()
-    ai_badge.position = Vector2(236, 92)
-    ai_badge.size = Vector2(198, 38)
-    ai_badge.text = "LEGAL PREBUILT"
-    ai_badge.disabled = true
-    ai_badge.add_theme_stylebox_override("disabled", style(Color(0.18,0.28,0.44), 8))
-    center.add_child(ai_badge)
+        var is_fb_sel: bool = (battle_select_mode == "final_boss")
+        var fb := Panel.new()
+        fb.custom_minimum_size = Vector2(292, 44)
+        fb.add_theme_stylebox_override("panel", style(
+            Color(0.52, 0.08, 0.08) if is_fb_sel else Color(0.12, 0.05, 0.05), 8))
+        vbox.add_child(fb)
 
-    centered_label("%s • %d CARDS" % [battle_select_class.to_upper(), int(your_stats.get("count",0))], Vector2(18, 236), Vector2(198, 26), 13, center).add_theme_color_override("font_color", class_color(battle_select_class).lightened(0.25))
-    centered_label("%s • %d CARDS" % [battle_opponent_class.to_upper(), int(opp_stats.get("count",0))], Vector2(236, 236), Vector2(198, 26), 13, center).add_theme_color_override("font_color", class_color(battle_opponent_class).lightened(0.25))
-    centered_label("AVG %.1f  •  F %d  •  S %d" % [float(your_stats.get("average",0.0)), int(your_stats.get("followers",0)), int(your_stats.get("skills",0))], Vector2(14, 268), Vector2(206, 24), 11, center)
-    centered_label("AVG %.1f  •  F %d  •  S %d" % [float(opp_stats.get("average",0.0)), int(opp_stats.get("followers",0)), int(opp_stats.get("skills",0))], Vector2(232, 268), Vector2(206, 24), 11, center)
-    _draw_curve(center, Array(your_stats.get("curve", [])), Vector2(18, 320), class_color(battle_select_class), 198)
-    _draw_curve(center, Array(opp_stats.get("curve", [])), Vector2(236, 320), class_color(battle_opponent_class), 198)
-    button("PREVIEW YOUR DECK", Vector2(18, 414), Vector2(198, 38), func(): _show_battle_deck_preview(battle_select_class, battle_select_mode, false), center)
-    button("PREVIEW OPPONENT", Vector2(236, 414), Vector2(198, 38), func(): _show_battle_deck_preview(battle_opponent_class, "prebuilt", true), center)
+        label("The Sponsor — Final Boss", Vector2(11, 6), Vector2(270, 18), 13, fb)
+        var fb_sub := label("ALL CLASSES  •  DEVELOPER ONLY", Vector2(11, 25), Vector2(270, 13), 9, fb)
+        fb_sub.add_theme_color_override("font_color", Color(1.0, 0.72, 0.20))
 
-    button("BACK", Vector2(28, 498), Vector2(180, 54), show_home, shell)
-    var begin := button("BEGIN BATTLE", Vector2(306, 498), Vector2(500, 54), _battle_selection_start, shell)
-    begin.add_theme_font_size_override("font_size", ui_font_size(20))
-    begin.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 14))
-    begin.add_theme_color_override("font_color", Color(0.04,0.06,0.10))
-    var practice_begin := button("PRACTICE\n(long timer, no rewards)", Vector2(820, 498), Vector2(376, 54), _battle_selection_start_practice, shell)
-    practice_begin.add_theme_font_size_override("font_size", ui_font_size(13))
-    practice_begin.add_theme_stylebox_override("normal", style(Color(0.30, 0.55, 0.38), 14))
+        _bp_sel_ring(fb, is_fb_sel)
+
+        var fbtap := _bp_tap(fb.custom_minimum_size, fb)
+        fbtap.pressed.connect(func(): _bp_select_mode("final_boss", selected_class if selected_class != "" else "Purpose"))
+
+        _bp_section_hdr("OWNER  •  DEV META DECKS", vbox, Color(1.0, 0.72, 0.20))
+
+        for cls in CLASSES:
+            var is_meta_sel: bool = (battle_select_mode == "meta" and battle_select_class == cls)
+            var mb := Panel.new()
+            mb.custom_minimum_size = Vector2(292, 44)
+            mb.add_theme_stylebox_override("panel", style(
+                class_color(cls).darkened(0.35) if is_meta_sel else Color(0.12, 0.09, 0.04), 8))
+            vbox.add_child(mb)
+
+            var mbbar := ColorRect.new()
+            mbbar.color = class_color(cls); mbbar.position = Vector2(0, 0)
+            mbbar.size = Vector2(4, 44); mbbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            mb.add_child(mbbar)
+
+            label(cls + " — Dev Meta", Vector2(11, 6), Vector2(210, 18), 12, mb)
+            var m_sub := label("DEVELOPER ONLY", Vector2(11, 25), Vector2(210, 13), 9, mb)
+            m_sub.add_theme_color_override("font_color", Color(1.0, 0.72, 0.20))
+
+            _bp_sel_ring(mb, is_meta_sel)
+
+            var mtap := _bp_tap(mb.custom_minimum_size, mb)
+            var mcls: String = str(cls)
+            mtap.pressed.connect(func(): _bp_select_mode("meta", mcls))
+
+    # ─────────────────────────── PLAYER: MY DECKS ────────────────────────────
+    _bp_section_hdr("PLAYER  •  MY DECKS", vbox, Color(0.55, 0.72, 0.95))
+
+    if deck_slots.is_empty():
+        var empty_lbl := Label.new()
+        empty_lbl.text = "No custom decks yet.\nBuild one below or copy a starter."
+        empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        empty_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        empty_lbl.add_theme_font_size_override("font_size", ui_font_size(12))
+        empty_lbl.add_theme_color_override("font_color", Color(0.50, 0.56, 0.68))
+        empty_lbl.custom_minimum_size = Vector2(292, 50)
+        vbox.add_child(empty_lbl)
+    else:
+        for i in range(deck_slots.size()):
+            var slot: Dictionary = Dictionary(deck_slots[i])
+            var slot_class := str(slot.get("class", ""))
+            var slot_name  := str(slot.get("name",  "Deck %d" % (i + 1)))
+            var slot_cards: Array = Array(slot.get("cards", []))
+            var validation := _bp_slot_validation(slot)
+            var valid      := validation == "VALID"
+            var is_sel: bool = (last_battle_deck_idx == i and battle_select_mode == "custom")
+
+            var entry := Panel.new()
+            entry.custom_minimum_size = Vector2(292, 66)
+            entry.add_theme_stylebox_override("panel", style(
+                class_color(slot_class).darkened(0.48) if is_sel else Color(0.07, 0.11, 0.19), 9))
+            vbox.add_child(entry)
+
+            var cbar := ColorRect.new()
+            cbar.color = class_color(slot_class)
+            cbar.position = Vector2(0, 0); cbar.size = Vector2(4, 66)
+            cbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            entry.add_child(cbar)
+
+            label(slot_name, Vector2(11, 7), Vector2(200, 20), 13, entry)
+            var cls_lbl := label(slot_class.to_upper(), Vector2(11, 27), Vector2(130, 16), 10, entry)
+            cls_lbl.add_theme_color_override("font_color", class_color(slot_class).lightened(0.38))
+
+            var cc_col := Color(0.38, 0.78, 0.50) if slot_cards.size() == 40 else Color(0.85, 0.65, 0.30)
+            centered_label("%d/40" % slot_cards.size(), Vector2(178, 6), Vector2(56, 18), 12, entry).add_theme_color_override("font_color", cc_col)
+            var badge_col := Color(0.28, 0.72, 0.42) if valid else Color(0.82, 0.32, 0.32)
+            centered_label("\u2713 VALID" if valid else "\u2717 INVALID", Vector2(178, 25), Vector2(106, 16), 10, entry).add_theme_color_override("font_color", badge_col)
+            if not valid:
+                var rl := label(validation, Vector2(11, 48), Vector2(268, 13), 9, entry)
+                rl.add_theme_color_override("font_color", Color(0.80, 0.52, 0.52))
+                rl.clip_text = true
+
+            _bp_sel_ring(entry, is_sel)
+
+            var ci := i
+            var tap := _bp_tap(entry.custom_minimum_size, entry)
+            tap.pressed.connect(func(): _bp_select_slot(ci))
+
+    if deck_slots.size() < MAX_DECK_SLOTS:
+        var nb := Button.new()
+        nb.text = "+  CREATE NEW DECK"
+        nb.custom_minimum_size = Vector2(292, 34)
+        nb.add_theme_font_size_override("font_size", ui_font_size(11))
+        nb.add_theme_stylebox_override("normal", style(Color(0.11, 0.18, 0.30), 8))
+        nb.pressed.connect(_bp_open_deck_builder_new)
+        vbox.add_child(nb)
+
+    # ──────────────────────── STARTER: PREBUILT DECKS ────────────────────────
+    _bp_section_hdr("STARTER  •  PREBUILT DECKS", vbox, Color(0.55, 0.72, 0.95))
+
+    for cls in CLASSES:
+        var is_pb_sel: bool = (last_battle_deck_idx == -1 and battle_select_class == cls and battle_select_mode == "prebuilt")
+        var pb := Panel.new()
+        pb.custom_minimum_size = Vector2(292, 48)
+        pb.add_theme_stylebox_override("panel", style(
+            class_color(cls).darkened(0.50) if is_pb_sel else Color(0.07, 0.11, 0.19), 8))
+        vbox.add_child(pb)
+
+        var pbbar := ColorRect.new()
+        pbbar.color = class_color(cls); pbbar.position = Vector2(0, 0)
+        pbbar.size = Vector2(4, 48); pbbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        pb.add_child(pbbar)
+
+        label(cls + " Starter", Vector2(11, 8), Vector2(185, 18), 13, pb)
+        var sub_lbl := label("40 cards  \u2713  PREBUILT", Vector2(11, 28), Vector2(185, 14), 9, pb)
+        sub_lbl.add_theme_color_override("font_color", Color(0.42, 0.78, 0.50))
+
+        _bp_sel_ring(pb, is_pb_sel)
+
+        # Left side: tap to select prebuilt
+        var pbtap := _bp_tap(Vector2(230, 48), pb)
+        var ccls: String = str(cls)
+        pbtap.pressed.connect(func(): _bp_select_prebuilt(ccls))
+
+        # Right side: COPY → creates a new custom slot
+        if deck_slots.size() < MAX_DECK_SLOTS:
+            var cpb := _bp_tap(Vector2(52, 48), pb)
+            cpb.position = Vector2(236, 0)
+            var ccls2: String = str(cls)
+            cpb.pressed.connect(func(): _bp_copy_prebuilt(ccls2))
+            var copy_lbl := centered_label("COPY\n\u2192", Vector2(236, 6), Vector2(52, 36), 9, pb)
+            copy_lbl.add_theme_color_override("font_color", Color(0.65, 0.78, 1.0))
+            copy_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+
+func _bp_build_battle_stage(stage: Panel) -> void:
+    var my_class  := _bp_get_selected_class()
+    var opp_class: String = str(battle_opponent_class)
+    var my_col    := class_color(my_class)
+    var opp_col   := class_color(opp_class)
+
+    # Dual tinted backgrounds — each leader's class color bleeds into their half.
+    # The stage is 998 px wide; the VS strip is centered, so both leader zones
+    # must be exactly (998 - 100) / 2 = 449 px wide.  The previous layout had
+    # a 408 px left zone and 490 px right zone, which pushed the VS text 41 px
+    # left of center and made the "who's facing who" look off-balance.
+    var bg_my := ColorRect.new()
+    bg_my.color = Color(my_col.r * 0.12, my_col.g * 0.12, my_col.b * 0.18, 1.0)
+    bg_my.position = Vector2.ZERO; bg_my.size = Vector2(449, 608)
+    bg_my.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    stage.add_child(bg_my)
+
+    var bg_vs := ColorRect.new()
+    bg_vs.color = Color(0.02, 0.03, 0.06, 1.0)
+    bg_vs.position = Vector2(449, 0); bg_vs.size = Vector2(100, 608)
+    bg_vs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    stage.add_child(bg_vs)
+
+    var bg_opp := ColorRect.new()
+    bg_opp.color = Color(opp_col.r * 0.12, opp_col.g * 0.12, opp_col.b * 0.18, 1.0)
+    bg_opp.position = Vector2(549, 0); bg_opp.size = Vector2(449, 608)
+    bg_opp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    stage.add_child(bg_opp)
+
+    _bp_build_my_leader_zone(stage, my_class, my_col)
+    _bp_build_vs_zone(stage)
+    _bp_build_opp_zone(stage, opp_class, opp_col)
+
+    # ── Full-width BEGIN BATTLE bar at the bottom ─────────────────────────────
+    var is_valid: bool = true
+    if last_battle_deck_idx >= 0 and last_battle_deck_idx < deck_slots.size():
+        is_valid = _bp_slot_validation(Dictionary(deck_slots[last_battle_deck_idx])) == "VALID"
+    elif battle_select_mode not in ["meta", "final_boss", "prebuilt"]:
+        is_valid = false
+
+    var begin_b := button("\u2694  BEGIN BATTLE", Vector2(0, 480), Vector2(998, 62),
+        func(): _bp_start_battle(false), stage)
+    begin_b.add_theme_font_size_override("font_size", ui_font_size(22))
+    if is_valid:
+        begin_b.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 0))
+        begin_b.add_theme_color_override("font_color", Color(0.04, 0.06, 0.10))
+    else:
+        begin_b.add_theme_stylebox_override("normal", style(Color(0.22, 0.16, 0.08), 0))
+        begin_b.add_theme_color_override("font_color", Color(0.50, 0.40, 0.28))
+        begin_b.disabled = true
+
+    var prac_b := button("PRACTICE MODE  \u2022  Long timer  \u2022  No ranked rewards",
+        Vector2(0, 546), Vector2(998, 50), func(): _bp_start_battle(true), stage)
+    prac_b.add_theme_font_size_override("font_size", ui_font_size(13))
+    prac_b.add_theme_stylebox_override("normal", style(Color(0.12, 0.26, 0.16), 0))
+    if not is_valid: prac_b.disabled = true
+
+## MY LEADER zone — x=0, w=449
+func _bp_build_my_leader_zone(parent: Control, my_class: String, my_col: Color) -> void:
+    var PX := 8; var PY := 8; var PW := 433; var PH := 352
+
+    # Outer zone glow (behind the framed portrait)
+    var glow := ColorRect.new()
+    glow.color = Color(my_col, 0.07)
+    glow.position = Vector2(0, 0); glow.size = Vector2(449, PY + PH + 4)
+    glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(glow)
+    var gt := glow.create_tween().set_loops()
+    gt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    gt.tween_property(glow, "color:a", 0.18, 2.2)
+    gt.tween_property(glow, "color:a", 0.03, 2.2)
+
+    # Portrait frame
+    var frame := Panel.new()
+    frame.position = Vector2(PX, PY); frame.size = Vector2(PW, PH)
+    frame.clip_contents = true
+    var fs := StyleBoxFlat.new()
+    fs.bg_color = Color(0.01, 0.015, 0.03)
+    fs.set_corner_radius_all(10)
+    fs.border_color = my_col; fs.set_border_width_all(2)
+    frame.add_theme_stylebox_override("panel", fs)
+    parent.add_child(frame)
+
+    # LeaderView: layered animated portrait (blink, hair sway, aura pulse)
+    var lv := _LeaderView.new()
+    lv.setup(my_class, Vector2(PW, PH))
+    lv.pivot_offset = Vector2(PW * 0.5, PH * 0.5)
+    frame.add_child(lv)
+
+    # Entrance scale animation on the whole view
+    lv.scale = Vector2(0.96, 0.96)
+    var at := lv.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    at.tween_property(lv, "scale", Vector2.ONE, 0.38)
+
+    # Subtle class tint overlay (sits above LeaderView, below badges)
+    var tint := ColorRect.new()
+    tint.color = Color(my_col, 0.08)
+    tint.position = Vector2.ZERO; tint.size = Vector2(PW, PH)
+    tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    frame.add_child(tint)
+
+    # "MY LEADER" badge — top-left corner of portrait
+    var badge := Panel.new()
+    badge.position = Vector2(0, 0); badge.size = Vector2(138, 28)
+    var bs := StyleBoxFlat.new(); bs.bg_color = Color(my_col.darkened(0.22), 0.92)
+    bs.corner_radius_bottom_right = 8
+    badge.add_theme_stylebox_override("panel", bs)
+    frame.add_child(badge)
+    centered_label("MY LEADER", Vector2(0, 0), Vector2(138, 28), 13, badge).add_theme_color_override("font_color", Color.WHITE)
+
+    # Class name overlay at portrait bottom
+    var grad := Panel.new()
+    grad.position = Vector2(0, PH - 54); grad.size = Vector2(PW, 54)
+    grad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var gs := StyleBoxFlat.new(); gs.bg_color = Color(0.005, 0.01, 0.02, 0.90)
+    grad.add_theme_stylebox_override("panel", gs)
+    frame.add_child(grad)
+    centered_label(my_class.to_upper(), Vector2(0, 6), Vector2(PW, 28), 22, grad).add_theme_color_override("font_color", my_col.lightened(0.35))
+
+    # ── Below portrait: deck info + actions ───────────────────────────────────
+    var ids := _bp_get_selected_ids()
+    var is_custom: bool = (last_battle_deck_idx >= 0 and last_battle_deck_idx < deck_slots.size())
+    var is_owner_mode: bool = (battle_select_mode in ["meta", "final_boss"])
+    var slot_name := ""; var val_text := ""; var valid: bool = true
+
+    if is_custom:
+        var slot: Dictionary = Dictionary(deck_slots[last_battle_deck_idx])
+        slot_name = str(slot.get("name", "Custom Deck"))
+        val_text = _bp_slot_validation(slot); valid = (val_text == "VALID")
+    elif is_owner_mode:
+        slot_name = (my_class + " Dev Meta") if battle_select_mode == "meta" else "Sponsor \u2014 Final Boss"
+        val_text = "DEVELOPER ONLY \u2014 ALWAYS VALID"; valid = true
+    else:
+        slot_name = my_class + " Starter Deck"
+        val_text = "LEGAL PREBUILT \u2014 ALWAYS VALID"; valid = true
+
+    var by := PY + PH + 8
+    label(slot_name, Vector2(PX, by), Vector2(PW, 22), 15, parent)
+    by += 25
+    var vc := Color(0.28, 0.80, 0.44) if valid else Color(0.90, 0.28, 0.28)
+    var vl := label(("\u2713  " if valid else "\u2717  ") + val_text, Vector2(PX, by), Vector2(PW, 18), 10, parent)
+    vl.add_theme_color_override("font_color", vc)
+    by += 22
+    var st := _bp_stats_from_ids(ids)
+    var sl := label("%d/40  \u2022  AVG %.1f  \u2022  %dF  \u2022  %dS" % [
+        ids.size(), float(st.get("average", 0.0)), int(st.get("followers", 0)), int(st.get("skills", 0))],
+        Vector2(PX, by), Vector2(PW, 14), 9, parent)
+    sl.add_theme_color_override("font_color", Color(0.58, 0.70, 0.94))
+    by += 20
+
+    if is_custom:
+        var ew := 88
+        var eb := button("\u270F EDIT", Vector2(PX, by), Vector2(ew, 26), _bp_open_deck_builder_edit, parent)
+        eb.add_theme_font_size_override("font_size", ui_font_size(10))
+        eb.add_theme_stylebox_override("normal", style(Color(0.15, 0.24, 0.40), 6))
+        var cb4 := button("\u2295 COPY", Vector2(PX + ew + 3, by), Vector2(ew, 26), _bp_duplicate_slot, parent)
+        cb4.add_theme_font_size_override("font_size", ui_font_size(10))
+        cb4.add_theme_stylebox_override("normal", style(Color(0.15, 0.24, 0.40), 6))
+        if deck_slots.size() >= MAX_DECK_SLOTS: cb4.disabled = true
+        var rb3 := button("\u270E NAME", Vector2(PX + (ew + 3) * 2, by), Vector2(ew, 26), _bp_rename_overlay, parent)
+        rb3.add_theme_font_size_override("font_size", ui_font_size(10))
+        rb3.add_theme_stylebox_override("normal", style(Color(0.15, 0.24, 0.40), 6))
+        var dlb := button("\u2717 DEL", Vector2(PX + (ew + 3) * 3, by), Vector2(ew, 26), _bp_confirm_delete, parent)
+        dlb.add_theme_font_size_override("font_size", ui_font_size(10))
+        dlb.add_theme_stylebox_override("normal", style(Color(0.30, 0.10, 0.10), 6))
+
+## VS divider strip — x=449, w=100
+func _bp_build_vs_zone(parent: Control) -> void:
+    var VX := 449; var VW := 100
+
+    # Vertical gold lines flanking the VS text — now centered in the 998 px stage
+    var lt := ColorRect.new()
+    lt.color = Color(GOLD_COLOR, 0.30)
+    lt.position = Vector2(VX + VW / 2 - 1, 18); lt.size = Vector2(2, 148)
+    lt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(lt)
+
+    centered_label("VS", Vector2(VX, 166), Vector2(VW, 100), 48, parent).add_theme_color_override("font_color", GOLD_COLOR)
+
+    var lb := ColorRect.new()
+    lb.color = Color(GOLD_COLOR, 0.30)
+    lb.position = Vector2(VX + VW / 2 - 1, 266); lb.size = Vector2(2, 264)
+    lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(lb)
+
+    # Vertical separators between left panel and stage
+    var left_sep := ColorRect.new()
+    left_sep.color = Color(GOLD_COLOR, 0.12)
+    left_sep.position = Vector2(0, 0); left_sep.size = Vector2(2, 534)
+    left_sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(left_sep)
+
+## OPPONENT zone — x=549, w=449
+func _bp_build_opp_zone(parent: Control, opp_class: String, opp_col: Color) -> void:
+    var OX := 549; var OW := 449
+    var PX := OX + 8; var PY := 8; var PW := 433; var PH := 352
+
+    # Pulsing aura (slightly offset phase from MY side for visual interest)
+    var glow := ColorRect.new()
+    glow.color = Color(opp_col, 0.07)
+    glow.position = Vector2(OX, 0); glow.size = Vector2(OW, PY + PH + 4)
+    glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(glow)
+    var gt := glow.create_tween().set_loops()
+    gt.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+    gt.tween_property(glow, "color:a", 0.18, 2.6)
+    gt.tween_property(glow, "color:a", 0.03, 2.6)
+
+    # Portrait frame
+    var frame := Panel.new()
+    frame.position = Vector2(PX, PY); frame.size = Vector2(PW, PH)
+    frame.clip_contents = true
+    var fs := StyleBoxFlat.new()
+    fs.bg_color = Color(0.01, 0.015, 0.03)
+    fs.set_corner_radius_all(10)
+    fs.border_color = opp_col; fs.set_border_width_all(2)
+    frame.add_theme_stylebox_override("panel", fs)
+    parent.add_child(frame)
+
+    # LeaderView: layered animated portrait (blink, hair sway, aura pulse)
+    var lv_opp := _LeaderView.new()
+    lv_opp.setup(opp_class, Vector2(PW, PH))
+    lv_opp.pivot_offset = Vector2(PW * 0.5, PH * 0.5)
+    frame.add_child(lv_opp)
+
+    # Entrance animation (slightly offset from MY side)
+    lv_opp.scale = Vector2(0.96, 0.96)
+    var at := lv_opp.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    at.tween_property(lv_opp, "scale", Vector2.ONE, 0.42)
+
+    # Subtle class tint overlay
+    var tint := ColorRect.new()
+    tint.color = Color(opp_col, 0.08)
+    tint.position = Vector2.ZERO; tint.size = Vector2(PW, PH)
+    tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    frame.add_child(tint)
+
+    # "OPPONENT" badge — top-right of portrait
+    var badge := Panel.new()
+    badge.position = Vector2(PW - 138, 0); badge.size = Vector2(138, 28)
+    var bds := StyleBoxFlat.new(); bds.bg_color = Color(opp_col.darkened(0.22), 0.92)
+    bds.corner_radius_bottom_left = 8
+    badge.add_theme_stylebox_override("panel", bds)
+    frame.add_child(badge)
+    centered_label("OPPONENT", Vector2(0, 0), Vector2(138, 28), 13, badge).add_theme_color_override("font_color", Color.WHITE)
+
+    # Class name overlay at portrait bottom
+    var grad := Panel.new()
+    grad.position = Vector2(0, PH - 54); grad.size = Vector2(PW, 54)
+    grad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var gs := StyleBoxFlat.new(); gs.bg_color = Color(0.005, 0.01, 0.02, 0.90)
+    grad.add_theme_stylebox_override("panel", gs)
+    frame.add_child(grad)
+    centered_label(opp_class.to_upper(), Vector2(0, 6), Vector2(PW, 28), 22, grad).add_theme_color_override("font_color", opp_col.lightened(0.35))
+
+    # ── Below portrait: choose opponent ──────────────────────────────────────
+    var by := PY + PH + 8
+    centered_label("CHOOSE OPPONENT", Vector2(PX, by), Vector2(PW, 18), 11, parent).add_theme_color_override("font_color", Color(0.60, 0.72, 0.96))
+    by += 24
+
+    # 2x2 class selector grid
+    var btn_w := int((PW - 8) / 2)
+    for i in range(CLASSES.size()):
+        var cls: String = str(CLASSES[i])
+        var col := i % 2; var row := i / 2
+        var bx := PX + col * (btn_w + 8)
+        var btn_y := by + row * 40
+        var ob := Panel.new()
+        ob.position = Vector2(bx, btn_y); ob.size = Vector2(btn_w, 34)
+        var is_osel: bool = (cls == opp_class)
+        ob.add_theme_stylebox_override("panel", style(
+            class_color(cls).darkened(0.22) if is_osel else Color(0.06, 0.09, 0.16), 8))
+        parent.add_child(ob)
+        _bp_sel_ring(ob, is_osel)
+        centered_label(cls.to_upper(), Vector2(4, 0), Vector2(btn_w - 8, 34), 12, ob).add_theme_color_override(
+            "font_color", class_color(cls).lightened(0.30) if is_osel else Color.WHITE)
+        var otap := _bp_tap(ob.size, ob)
+        var c_opp: String = cls
+        otap.pressed.connect(func(): battle_opponent_class = c_opp; show_match_deck_selection())
+
+    by += 82
+    # Opponent deck info + preview button
+    var opp_s := _battle_preview_stats(opp_class, "prebuilt")
+    var oi := label("Prebuilt Deck  \u2022  40 cards  \u2022  AVG %.1f" % float(opp_s.get("average", 0.0)),
+        Vector2(PX, by), Vector2(PW - 110, 14), 9, parent)
+    oi.add_theme_color_override("font_color", Color(0.55, 0.65, 0.88))
+    var c_cls: String = opp_class
+    var prev_b := button("\ud83d\udd0d  VIEW DECK", Vector2(PX + PW - 106, by - 4), Vector2(106, 24),
+        func(): _show_battle_deck_preview(c_cls, "prebuilt", true), parent)
+    prev_b.add_theme_font_size_override("font_size", ui_font_size(10))
+    prev_b.add_theme_stylebox_override("normal", style(Color(0.10, 0.18, 0.30), 6))
+    prev_b.add_theme_stylebox_override("hover",  style(Color(0.18, 0.30, 0.50), 6))
+
 
 func _show_battle_deck_preview(class_name_value: String, mode_value: String, opponent_preview: bool) -> void:
     if opponent_preview:
@@ -3867,7 +5081,7 @@ func class_leader_texture(class_name_value: String) -> Texture2D:
     var inset_h: float = base.get_height() - margin * 2.0
     var atlas := AtlasTexture.new()
     atlas.atlas = base
-    atlas.region = Rect2(margin, margin, inset_w, inset_h * 0.6)
+    atlas.region = Rect2(margin, margin, inset_w, inset_h * 0.72)
     return atlas
 
 func current_leader_texture(class_name_value: String) -> Texture2D:
@@ -5139,9 +6353,11 @@ func pack_rarity_burst(center: Vector2, rarity: String) -> void:
 func show_pack_results(pulled: Array, platinum_hit: bool) -> void:
     clear_screen(); add_background(0.80); header("PACK OPENED", "SIGNATURE PLATINUM!" if platinum_hit else "Cards added to your collection"); currency_bar()
     var backs: Array[Panel] = []
+    # 7 cards × 168 px + 6 × 10 px gap = 1,258 px — fits the 1,280 px viewport.
+    # Old step of 244 placed card 7 at x = 1,519, completely off-screen.
     for i in range(pulled.size()):
-        var pos := Vector2(55 + i * 244, 178)
-        var back := pack_card_back(pos, Vector2(220, 340))
+        var pos := Vector2(22 + i * 178, 178)
+        var back := pack_card_back(pos, Vector2(168, 300))
         root_layer.add_child(back)
         backs.append(back)
     button("OPEN ANOTHER (%d)" % pack_inventory,Vector2(255,550),Vector2(230,55),show_pack_opening)
@@ -6149,141 +7365,924 @@ func show_deck_preview() -> void:
     button("EDIT THIS DECK", Vector2(264, 656), Vector2(220, 48), show_deck_builder)
 
 func show_deck_builder() -> void:
-    clear_screen(); add_background(0.82)
-    var deck_subtitle := "Slot %d — %s" % [editing_deck_slot_idx + 1, str(deck_slots[editing_deck_slot_idx].get("name","Deck"))] if editing_deck_slot_idx >= 0 and editing_deck_slot_idx < deck_slots.size() else "Separate saved deck for every class"
-    header("DECK BUILDER", "%s • Exactly 40 cards • Class plus Neutral" % deck_subtitle)
-    currency_bar()
-    # Back button: go to deck manager if editing a slot, else home.
-    var back_cb: Callable = (func():
-        if editing_deck_slot_idx >= 0:
-            save_profile()
-            editing_deck_slot_idx = -1
-            show_deck_manager()
-        else:
-            show_home())
-    button("BACK", Vector2(28, 662), Vector2(160, 42), back_cb)
+    clear_screen()
+
+    # Full-screen dark background — no battle UI visible behind it
+    var bg := ColorRect.new()
+    bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    bg.color = Color(0.030, 0.035, 0.058, 1.0)
+    bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    root_layer.add_child(bg)
+
     if selected_class == "":
-        label("CHOOSE A CLASS FIRST",Vector2(380,245),Vector2(520,60),34).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-        label("Your class unlocks a starter deck. Pack pulls can then be added here.",Vector2(340,320),Vector2(600,70),19).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-        button("CHOOSE MY CLASS",Vector2(485,420),Vector2(310,60),show_class_choice)
+        var prompt_vb := VBoxContainer.new()
+        prompt_vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        prompt_vb.alignment = BoxContainer.ALIGNMENT_CENTER
+        prompt_vb.add_theme_constant_override("separation", 16)
+        root_layer.add_child(prompt_vb)
+        var pl := Label.new(); pl.text = "CHOOSE A CLASS FIRST"
+        pl.add_theme_font_size_override("font_size", 30)
+        pl.add_theme_color_override("font_color", GOLD_COLOR)
+        pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; prompt_vb.add_child(pl)
+        var pl2 := Label.new()
+        pl2.text = "Your class unlocks a starter deck. Pack pulls can then be added here."
+        pl2.add_theme_font_size_override("font_size", 16)
+        pl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; prompt_vb.add_child(pl2)
+        var pb := Button.new(); pb.text = "CHOOSE MY CLASS"
+        pb.custom_minimum_size = Vector2(280, 56); pb.add_theme_font_size_override("font_size", 18)
+        pb.add_theme_stylebox_override("normal", style(GOLD_COLOR, 10))
+        pb.pressed.connect(show_class_choice); prompt_vb.add_child(pb)
         return
-    # Only show class switcher when NOT editing a specific named slot
-    # (editing a slot fixes its class; switching would mutate the slot class unintentionally).
-    if editing_deck_slot_idx < 0:
-        var class_row := HBoxContainer.new(); class_row.position=Vector2(45,180); class_row.size=Vector2(500,45); root_layer.add_child(class_row)
-        for c in CLASSES:
-            var b:=Button.new()
-            b.text=str(c)
-            b.custom_minimum_size=Vector2(115,40)
-            b.pressed.connect(switch_deck_class.bind(str(c)))
-            class_row.add_child(b)
+
+    # Root layout: vertical stack
+    var root_vbox := VBoxContainer.new()
+    root_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    root_vbox.add_theme_constant_override("separation", 0)
+    root_layer.add_child(root_vbox)
+
+    _build_db_header(root_vbox)
+
+    var content := HBoxContainer.new()
+    content.size_flags_vertical = Control.SIZE_FILL | Control.SIZE_EXPAND
+    content.add_theme_constant_override("separation", 0)
+    root_vbox.add_child(content)
+
+    _build_db_filter_column(content)
+    _build_db_card_grid(content)
+    _build_db_deck_panel(content)
+
+func _build_db_header(parent: Control) -> void:
+    var hp := Panel.new()
+    hp.custom_minimum_size = Vector2(0, 72)
+    hp.size_flags_horizontal = Control.SIZE_FILL
+    var hs := StyleBoxFlat.new()
+    hs.bg_color = Color(0.018, 0.022, 0.040, 1.0)
+    hs.border_color = Color(0.22, 0.17, 0.07)
+    hs.set_border_width_all(0); hs.border_width_bottom = 2
+    hp.add_theme_stylebox_override("panel", hs)
+    parent.add_child(hp)
+
+    var back := Button.new()
+    back.text = "BACK"
+    back.position = Vector2(12, 16); back.size = Vector2(110, 40)
+    back.add_theme_font_size_override("font_size", 14)
+    back.add_theme_stylebox_override("normal", style(Color(0.55, 0.45, 0.22), 8))
+    back.add_theme_stylebox_override("hover", style(GOLD_COLOR, 8))
+    back.pressed.connect(func():
+        save_profile()
+        editing_deck_slot_idx = -1
+        show_deck_manager())
+    hp.add_child(back)
+
+    var title := Label.new()
+    title.text = "DECK BUILDER"
+    title.add_theme_font_size_override("font_size", 24)
+    title.add_theme_color_override("font_color", GOLD_COLOR)
+    title.position = Vector2(138, 8); title.size = Vector2(300, 32)
+    hp.add_child(title)
+
+    var deck_name := "Select a deck slot"
+    if editing_deck_slot_idx >= 0 and editing_deck_slot_idx < deck_slots.size():
+        deck_name = str(deck_slots[editing_deck_slot_idx].get("name", "Deck %d" % (editing_deck_slot_idx + 1)))
+    var sub := Label.new()
+    sub.text = "%s  |  40 cards  |  Class + Neutral  |  Copy limits apply" % deck_name
+    sub.add_theme_font_size_override("font_size", 12)
+    sub.add_theme_color_override("font_color", Color(0.62, 0.62, 0.74))
+    sub.position = Vector2(138, 44); sub.size = Vector2(600, 22)
+    hp.add_child(sub)
+
+    var curr := Label.new()
+    curr.text = "GOLD %d  |  VIALS %d  |  PACKS %d" % [gold_balance, dust_balance, pack_inventory]
+    curr.add_theme_font_size_override("font_size", 14)
+    curr.add_theme_color_override("font_color", Color(0.85, 0.72, 0.35))
+    curr.position = Vector2(756, 22); curr.size = Vector2(510, 28)
+    curr.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    hp.add_child(curr)
+
+func _db_sep(parent: Control) -> void:
+    var sep := HSeparator.new()
+    var ss := StyleBoxFlat.new()
+    ss.bg_color = Color(0.18, 0.18, 0.28, 0.40)
+    sep.add_theme_stylebox_override("separator", ss)
+    parent.add_child(sep)
+
+func _build_db_filter_column(parent: Control) -> void:
+    var pc := PanelContainer.new()
+    pc.custom_minimum_size = Vector2(210, 0)
+    pc.size_flags_vertical = Control.SIZE_FILL
+    var ps := StyleBoxFlat.new()
+    ps.bg_color = Color(0.024, 0.030, 0.050, 1.0)
+    ps.border_color = Color(0.12, 0.10, 0.05)
+    ps.set_border_width_all(0); ps.border_width_right = 1
+    pc.add_theme_stylebox_override("panel", ps)
+    parent.add_child(pc)
+
+    var mc := MarginContainer.new()
+    mc.add_theme_constant_override("margin_left", 10)
+    mc.add_theme_constant_override("margin_right", 10)
+    mc.add_theme_constant_override("margin_top", 10)
+    mc.add_theme_constant_override("margin_bottom", 10)
+    pc.add_child(mc)
+
+    var vb := VBoxContainer.new()
+    vb.add_theme_constant_override("separation", 8)
+    vb.size_flags_vertical = Control.SIZE_FILL
+    mc.add_child(vb)
+
+    # Header row
+    var fhdr := HBoxContainer.new(); vb.add_child(fhdr)
+    var fhdr_lbl := Label.new(); fhdr_lbl.text = "FILTERS"
+    fhdr_lbl.add_theme_font_size_override("font_size", 14)
+    fhdr_lbl.add_theme_color_override("font_color", GOLD_COLOR)
+    fhdr_lbl.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    fhdr.add_child(fhdr_lbl)
+    var clear_btn := Button.new(); clear_btn.text = "X CLEAR"
+    clear_btn.add_theme_font_size_override("font_size", 11)
+    clear_btn.custom_minimum_size = Vector2(60, 24)
+    clear_btn.add_theme_stylebox_override("normal", style(Color(0.45, 0.28, 0.18), 5))
+    clear_btn.pressed.connect(func():
+        _db_owned_only = false; _db_cost_filter = -1
+        _db_rarity_filter = ""; _db_type_filter = ""; _db_search_text = ""
+        show_deck_builder())
+    fhdr.add_child(clear_btn)
+
+    _db_sep(vb)
+
+    # Search
+    var srch_lbl := Label.new(); srch_lbl.text = "SEARCH"
+    srch_lbl.add_theme_font_size_override("font_size", 11)
+    srch_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    vb.add_child(srch_lbl)
+    var srch_row := HBoxContainer.new()
+    srch_row.add_theme_constant_override("separation", 4)
+    vb.add_child(srch_row)
+    var search_field := LineEdit.new()
+    search_field.placeholder_text = "Card name..."
+    search_field.text = _db_search_text
+    search_field.add_theme_font_size_override("font_size", 13)
+    search_field.custom_minimum_size = Vector2(0, 30)
+    search_field.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    srch_row.add_child(search_field)
+    var srch_go := Button.new(); srch_go.text = "GO"
+    srch_go.custom_minimum_size = Vector2(30, 30)
+    srch_go.add_theme_font_size_override("font_size", 12)
+    srch_go.add_theme_stylebox_override("normal", style(Color(0.35, 0.45, 0.62), 6))
+    srch_go.pressed.connect(func(): _db_search_text = search_field.text; show_deck_builder())
+    srch_row.add_child(srch_go)
+    search_field.text_submitted.connect(func(txt: String): _db_search_text = txt; show_deck_builder())
+
+    _db_sep(vb)
+
+    # Class tabs
+    var cls_lbl := Label.new(); cls_lbl.text = "CLASS"
+    cls_lbl.add_theme_font_size_override("font_size", 11)
+    cls_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    vb.add_child(cls_lbl)
+    if editing_deck_slot_idx >= 0:
+        var fixed_lbl := Label.new()
+        fixed_lbl.text = selected_deck_class.to_upper() + " (locked)"
+        fixed_lbl.add_theme_font_size_override("font_size", 13)
+        fixed_lbl.add_theme_color_override("font_color", class_color(selected_deck_class).lightened(0.25))
+        vb.add_child(fixed_lbl)
     else:
-        # Show a read-only label indicating which class deck this slot belongs to.
-        label("SLOT %d — %s CLASS DECK" % [editing_deck_slot_idx + 1, selected_deck_class.to_upper()], Vector2(45,185), Vector2(500,36), 18).add_theme_color_override("font_color", class_color(selected_deck_class).lightened(0.2))
-    var scroll := ScrollContainer.new(); scroll.position=Vector2(45,240); scroll.size=Vector2(780,400); root_layer.add_child(scroll)
-    var grid := GridContainer.new(); grid.columns=5; grid.add_theme_constant_override("h_separation",12); grid.add_theme_constant_override("v_separation",12); scroll.add_child(grid)
+        var cls_grid := GridContainer.new(); cls_grid.columns = 2
+        cls_grid.add_theme_constant_override("h_separation", 4)
+        cls_grid.add_theme_constant_override("v_separation", 4)
+        vb.add_child(cls_grid)
+        for c in CLASSES:
+            var cb := Button.new(); cb.text = str(c)
+            cb.add_theme_font_size_override("font_size", 12)
+            cb.custom_minimum_size = Vector2(82, 30)
+            if str(c) == selected_deck_class:
+                cb.add_theme_stylebox_override("normal", solid_style(class_color(str(c)).darkened(0.1), 6))
+                cb.add_theme_color_override("font_color", Color(0.05, 0.05, 0.05))
+            else:
+                cb.add_theme_stylebox_override("normal", style(class_color(str(c)).darkened(0.35), 6))
+            cb.pressed.connect(switch_deck_class.bind(str(c)))
+            cls_grid.add_child(cb)
+
+    _db_sep(vb)
+
+    # Cost filter
+    var cost_lbl := Label.new(); cost_lbl.text = "COST"
+    cost_lbl.add_theme_font_size_override("font_size", 11)
+    cost_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    vb.add_child(cost_lbl)
+    var cost_grid := GridContainer.new(); cost_grid.columns = 5
+    cost_grid.add_theme_constant_override("h_separation", 3)
+    cost_grid.add_theme_constant_override("v_separation", 3)
+    vb.add_child(cost_grid)
+    for pair in [[-1,"ALL"],[0,"0"],[1,"1"],[2,"2"],[3,"3"],[4,"4"],[5,"5"],[6,"6"],[7,"7+"]]:
+        var cv: int = pair[0]; var ct: String = str(pair[1])
+        var cb2 := Button.new(); cb2.text = ct
+        cb2.add_theme_font_size_override("font_size", 11)
+        cb2.custom_minimum_size = Vector2(28, 24)
+        if _db_cost_filter == cv:
+            cb2.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 5))
+            cb2.add_theme_color_override("font_color", Color(0.05, 0.05, 0.05))
+        else:
+            cb2.add_theme_stylebox_override("normal", style(Color(0.30, 0.24, 0.09), 5))
+        cb2.pressed.connect(func(): _db_cost_filter = cv; show_deck_builder())
+        cost_grid.add_child(cb2)
+
+    _db_sep(vb)
+
+    # Rarity filter
+    var rar_lbl := Label.new(); rar_lbl.text = "RARITY"
+    rar_lbl.add_theme_font_size_override("font_size", 11)
+    rar_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    vb.add_child(rar_lbl)
+    var rar_grid := GridContainer.new(); rar_grid.columns = 4
+    rar_grid.add_theme_constant_override("h_separation", 3)
+    rar_grid.add_theme_constant_override("v_separation", 3)
+    vb.add_child(rar_grid)
+    var rar_vals := ["","Bronze","Silver","Gold","Epic","Legendary","Signature Platinum"]
+    var rar_txts := ["ALL","BRZ","SIL","GOLD","EPIC","LEG","SIG"]
+    for i in rar_vals.size():
+        var rv: String = rar_vals[i]; var rt: String = rar_txts[i]
+        var rb := Button.new(); rb.text = rt
+        rb.add_theme_font_size_override("font_size", 10)
+        rb.custom_minimum_size = Vector2(36, 24)
+        if _db_rarity_filter == rv:
+            rb.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 5))
+            rb.add_theme_color_override("font_color", Color(0.05, 0.05, 0.05))
+        else:
+            rb.add_theme_stylebox_override("normal", style(Color(0.30, 0.24, 0.09), 5))
+        rb.pressed.connect(func(): _db_rarity_filter = rv; show_deck_builder())
+        rar_grid.add_child(rb)
+
+    _db_sep(vb)
+
+    # Type filter
+    var type_lbl := Label.new(); type_lbl.text = "TYPE"
+    type_lbl.add_theme_font_size_override("font_size", 11)
+    type_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    vb.add_child(type_lbl)
+    var type_grid := GridContainer.new(); type_grid.columns = 4
+    type_grid.add_theme_constant_override("h_separation", 3)
+    type_grid.add_theme_constant_override("v_separation", 3)
+    vb.add_child(type_grid)
+    for tpair in [["","ALL"],["Follower","FOL"],["Amulet","AMU"],["Spell","SPL"]]:
+        var tv: String = tpair[0]; var tt: String = tpair[1]
+        var tb := Button.new(); tb.text = tt
+        tb.add_theme_font_size_override("font_size", 11)
+        tb.custom_minimum_size = Vector2(36, 24)
+        if _db_type_filter == tv:
+            tb.add_theme_stylebox_override("normal", solid_style(GOLD_COLOR, 5))
+            tb.add_theme_color_override("font_color", Color(0.05, 0.05, 0.05))
+        else:
+            tb.add_theme_stylebox_override("normal", style(Color(0.30, 0.24, 0.09), 5))
+        tb.pressed.connect(func(): _db_type_filter = tv; show_deck_builder())
+        type_grid.add_child(tb)
+
+    _db_sep(vb)
+
+    # Owned-only toggle
+    var owned_btn := Button.new()
+    owned_btn.text = ("CHECK OWNED ONLY" if _db_owned_only else "CIRCLE OWNED ONLY")
+    owned_btn.text = ("%s OWNED ONLY" % ("YES" if _db_owned_only else "NO"))
+    owned_btn.add_theme_font_size_override("font_size", 12)
+    owned_btn.custom_minimum_size = Vector2(0, 32)
+    if _db_owned_only:
+        owned_btn.add_theme_stylebox_override("normal", solid_style(Color(0.28, 0.65, 0.38), 8))
+        owned_btn.add_theme_color_override("font_color", Color(0.04, 0.04, 0.04))
+    else:
+        owned_btn.add_theme_stylebox_override("normal", style(Color(0.28, 0.48, 0.28), 8))
+    owned_btn.pressed.connect(func(): _db_owned_only = !_db_owned_only; show_deck_builder())
+    vb.add_child(owned_btn)
+
+    var spacer := Control.new()
+    spacer.size_flags_vertical = Control.SIZE_FILL | Control.SIZE_EXPAND
+    vb.add_child(spacer)
+
+func _db_card_passes_filter(cd: Dictionary) -> bool:
+    var card_class := str(cd.get("class", ""))
+    var is_deck_class := (card_class == selected_deck_class)
+    var is_neutral := (card_class == "Neutral" or card_class == "Universal")
+    if not is_deck_class and not is_neutral: return false
+    var id := str(cd.get("id", ""))
+    if _db_owned_only and int(collection_owned.get(id, 0)) <= 0: return false
+    if _db_cost_filter >= 0:
+        var cv := int(cd.get("cost", 0))
+        if _db_cost_filter == 7:
+            if cv < 7: return false
+        elif cv != _db_cost_filter:
+            return false
+    if _db_rarity_filter != "" and str(cd.get("rarity", "")) != _db_rarity_filter: return false
+    if _db_type_filter != "" and str(cd.get("type", "")) != _db_type_filter: return false
+    if _db_search_text.strip_edges() != "":
+        var q := _db_search_text.strip_edges().to_lower()
+        if not str(cd.get("name", "")).to_lower().contains(q) and not str(cd.get("effect", "")).to_lower().contains(q):
+            return false
+    return true
+
+func _build_db_card_grid(parent: Control) -> void:
+    var pc := PanelContainer.new()
+    pc.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    pc.size_flags_vertical = Control.SIZE_FILL
+    var ps := StyleBoxFlat.new()
+    ps.bg_color = Color(0.022, 0.028, 0.046, 1.0)
+    ps.set_border_width_all(0)
+    pc.add_theme_stylebox_override("panel", ps)
+    parent.add_child(pc)
+
+    var mc := MarginContainer.new()
+    mc.add_theme_constant_override("margin_left", 12)
+    mc.add_theme_constant_override("margin_right", 12)
+    mc.add_theme_constant_override("margin_top", 10)
+    mc.add_theme_constant_override("margin_bottom", 10)
+    mc.size_flags_vertical = Control.SIZE_FILL
+    pc.add_child(mc)
+
+    var vb := VBoxContainer.new()
+    vb.add_theme_constant_override("separation", 8)
+    vb.size_flags_vertical = Control.SIZE_FILL
+    mc.add_child(vb)
+
+    var shown := 0
+    for cd2 in cards:
+        if _db_card_passes_filter(cd2): shown += 1
+    var cnt_lbl := Label.new()
+    cnt_lbl.text = "COLLECTION  -  %d cards shown" % shown
+    cnt_lbl.add_theme_font_size_override("font_size", 13)
+    cnt_lbl.add_theme_color_override("font_color", Color(0.52, 0.52, 0.66))
+    vb.add_child(cnt_lbl)
+
+    var scroll := ScrollContainer.new()
+    scroll.size_flags_vertical = Control.SIZE_FILL | Control.SIZE_EXPAND
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    vb.add_child(scroll)
+
+    var grid := GridContainer.new()
+    grid.columns = 4
+    grid.add_theme_constant_override("h_separation", 14)
+    grid.add_theme_constant_override("v_separation", 14)
+    scroll.add_child(grid)
+
     for cd in cards:
-        if str(cd["class"]) != selected_deck_class and str(cd["class"]) != "Neutral": continue
+        if not _db_card_passes_filter(cd): continue
         var id := str(cd["id"])
         var rarity := str(cd["rarity"])
         var owned := int(collection_owned.get(id, 0))
-        var box:=VBoxContainer.new()
-        box.custom_minimum_size=Vector2(140,235)
-        var cp := card_panel(cd,Vector2.ZERO,Vector2(135,170))
-        if owned <= 0:
-            cp.modulate = Color(0.48,0.52,0.60,0.90)
-        box.add_child(cp)
-        if owned > 0:
-            var add:=Button.new()
-            var allowed := mini(owned,int(COPY_LIMITS.get(rarity,1)))
-            add.text="ADD (%d/%d)" % [count_in_deck(id),allowed]
-            add.disabled=saved_deck.size()>=40 or count_in_deck(id)>=allowed
-            add.pressed.connect(add_card_to_deck.bind(id))
-            box.add_child(add)
-        elif CRAFT_COSTS.has(rarity):
-            var craft := Button.new()
-            var cost := int(CRAFT_COSTS[rarity])
-            craft.text = "CREATE %s" % _fmt_vial_cost(cost)
-            craft.disabled = dust_balance < cost
-            craft.pressed.connect(craft_from_deck_builder.bind(id))
-            box.add_child(craft)
-        else:
-            var locked := Label.new()
-            locked.text = "PACK ONLY"
-            locked.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-            box.add_child(locked)
-        grid.add_child(box)
-    var side:=Panel.new(); side.position=Vector2(860,180); side.size=Vector2(360,460); side.add_theme_stylebox_override("panel",style(class_color(selected_deck_class),14)); root_layer.add_child(side)
-    var deck_leader_frame := Panel.new()
-    deck_leader_frame.position = Vector2(92, 10)
-    deck_leader_frame.size = Vector2(176, 132)
-    deck_leader_frame.clip_contents = true
-    deck_leader_frame.add_theme_stylebox_override("panel", style(class_color(selected_deck_class).lightened(0.12), 12))
-    side.add_child(deck_leader_frame)
-    var deck_leader_art := TextureRect.new()
-    deck_leader_art.texture = class_leader_texture(selected_deck_class)
-    deck_leader_art.position = Vector2(6, 6)
-    deck_leader_art.size = Vector2(164, 120)
-    deck_leader_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    deck_leader_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    deck_leader_art.clip_contents = true
-    deck_leader_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    deck_leader_frame.add_child(deck_leader_art)
-    label("%s DECK" % selected_deck_class.to_upper(),Vector2(20,146),Vector2(320,28),22,side).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    var validation_label := label("%d / 40 CARDS  •  %s" % [saved_deck.size(),deck_validation_text()],Vector2(16,176),Vector2(328,36),13,side)
-    validation_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    validation_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    validation_label.add_theme_color_override("font_color", GOLD_COLOR if saved_deck.size() == 40 and deck_validation_text().begins_with("DECK VALID") else Color(1.0,0.55,0.5))
 
-    # A scrollable list of exactly what's in this deck right now -- with a
-    # per-card remove button -- replaces the old "REMOVE LAST" button, which
-    # forced players to remove cards in the reverse order they were added
-    # instead of picking the specific card they wanted out.
-    var deck_counts: Dictionary = {}
-    var deck_order: Array = []
+        var box := VBoxContainer.new()
+        box.custom_minimum_size = Vector2(152, 254)
+
+        var cp := card_panel(cd, Vector2.ZERO, Vector2(152, 210))
+        if owned <= 0:
+            cp.modulate = Color(0.44, 0.48, 0.58, 0.82)
+        var tap_btn := Button.new()
+        tap_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        tap_btn.flat = true
+        var esb := StyleBoxEmpty.new()
+        tap_btn.add_theme_stylebox_override("normal", esb)
+        tap_btn.add_theme_stylebox_override("hover", esb)
+        tap_btn.add_theme_stylebox_override("pressed", esb)
+        var captured_cd: Dictionary = cd.duplicate()
+        tap_btn.pressed.connect(func(): _show_db_card_preview(captured_cd))
+        cp.add_child(tap_btn)
+        box.add_child(cp)
+
+        if owned > 0:
+            var allowed := mini(owned, int(COPY_LIMITS.get(rarity, 1)))
+            var in_deck := count_in_deck(id)
+            var add_row := HBoxContainer.new()
+            add_row.custom_minimum_size = Vector2(152, 32)
+            add_row.add_theme_constant_override("separation", 4)
+            var chip := Label.new()
+            chip.text = "%d/%d" % [in_deck, allowed]
+            chip.add_theme_font_size_override("font_size", 12)
+            chip.add_theme_color_override("font_color", GOLD_COLOR if in_deck > 0 else Color(0.45, 0.45, 0.55))
+            chip.custom_minimum_size = Vector2(34, 30)
+            chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+            add_row.add_child(chip)
+            var add_btn := Button.new(); add_btn.text = "+ ADD"
+            add_btn.add_theme_font_size_override("font_size", 12)
+            add_btn.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+            add_btn.custom_minimum_size = Vector2(0, 30)
+            var can_add := (editing_deck_slot_idx >= 0 and saved_deck.size() < 40 and in_deck < allowed)
+            add_btn.disabled = not can_add
+            if editing_deck_slot_idx < 0:
+                add_btn.tooltip_text = "Select a deck slot first"
+            elif not can_add:
+                add_btn.tooltip_text = "Limit reached"
+            add_btn.add_theme_stylebox_override("normal", style(Color(0.22, 0.52, 0.28), 7))
+            add_btn.add_theme_stylebox_override("hover", solid_style(Color(0.28, 0.62, 0.34), 7))
+            add_btn.pressed.connect(add_card_to_deck.bind(id))
+            add_row.add_child(add_btn)
+            box.add_child(add_row)
+        elif CRAFT_COSTS.has(rarity):
+            var cost_v := int(CRAFT_COSTS[rarity])
+            var craft_btn := Button.new()
+            craft_btn.text = "CREATE %s" % _fmt_vial_cost(cost_v)
+            craft_btn.add_theme_font_size_override("font_size", 11)
+            craft_btn.custom_minimum_size = Vector2(152, 30)
+            craft_btn.disabled = dust_balance < cost_v
+            craft_btn.add_theme_stylebox_override("normal", style(Color(0.42, 0.35, 0.16), 7))
+            craft_btn.pressed.connect(craft_from_deck_builder.bind(id))
+            box.add_child(craft_btn)
+        else:
+            var locked_lbl := Label.new(); locked_lbl.text = "PACK ONLY"
+            locked_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            locked_lbl.add_theme_font_size_override("font_size", 11)
+            locked_lbl.add_theme_color_override("font_color", Color(0.42, 0.42, 0.52))
+            locked_lbl.custom_minimum_size = Vector2(152, 28)
+            box.add_child(locked_lbl)
+
+        grid.add_child(box)
+
+    if grid.get_child_count() == 0:
+        var empty_lbl := Label.new()
+        empty_lbl.text = "No cards match the current filters."
+        empty_lbl.add_theme_font_size_override("font_size", 16)
+        empty_lbl.add_theme_color_override("font_color", Color(0.48, 0.48, 0.62))
+        empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        grid.add_child(empty_lbl)
+
+func _build_db_deck_panel(parent: Control) -> void:
+    var pc := PanelContainer.new()
+    pc.custom_minimum_size = Vector2(314, 0)
+    pc.size_flags_vertical = Control.SIZE_FILL
+    var ps := StyleBoxFlat.new()
+    ps.bg_color = Color(0.020, 0.025, 0.042, 1.0)
+    ps.border_color = Color(0.12, 0.10, 0.05)
+    ps.set_border_width_all(0); ps.border_width_left = 1
+    pc.add_theme_stylebox_override("panel", ps)
+    parent.add_child(pc)
+
+    var mc := MarginContainer.new()
+    mc.add_theme_constant_override("margin_left", 10)
+    mc.add_theme_constant_override("margin_right", 10)
+    mc.add_theme_constant_override("margin_top", 10)
+    mc.add_theme_constant_override("margin_bottom", 10)
+    mc.size_flags_vertical = Control.SIZE_FILL
+    pc.add_child(mc)
+
+    var vb := VBoxContainer.new()
+    vb.add_theme_constant_override("separation", 8)
+    vb.size_flags_vertical = Control.SIZE_FILL
+    mc.add_child(vb)
+
+    _build_db_slot_strip(vb)
+    _db_sep(vb)
+
+    if editing_deck_slot_idx < 0:
+        var hint := Label.new()
+        hint.text = "Select a slot above to start building."
+        hint.add_theme_font_size_override("font_size", 14)
+        hint.add_theme_color_override("font_color", Color(0.48, 0.48, 0.64))
+        hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        vb.add_child(hint)
+        return
+
+    var slot: Dictionary = deck_slots[editing_deck_slot_idx]
+    var slot_class := str(slot.get("class", "Hope"))
+
+    var leader_row := HBoxContainer.new()
+    leader_row.custom_minimum_size = Vector2(0, 88)
+    leader_row.add_theme_constant_override("separation", 10)
+    vb.add_child(leader_row)
+
+    var lf := Panel.new()
+    lf.custom_minimum_size = Vector2(70, 86); lf.clip_contents = true
+    lf.add_theme_stylebox_override("panel", style(class_color(slot_class).darkened(0.25), 8))
+    leader_row.add_child(lf)
+    var la := TextureRect.new()
+    la.texture = class_leader_texture(slot_class)
+    la.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    la.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    la.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    la.clip_contents = true; la.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    lf.add_child(la)
+
+    var info_vb := VBoxContainer.new()
+    info_vb.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    info_vb.add_theme_constant_override("separation", 3)
+    leader_row.add_child(info_vb)
+
+    var dname_lbl := Label.new()
+    dname_lbl.text = str(slot.get("name", "Deck %d" % (editing_deck_slot_idx + 1)))
+    dname_lbl.add_theme_font_size_override("font_size", 15)
+    dname_lbl.add_theme_color_override("font_color", GOLD_COLOR)
+    dname_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    info_vb.add_child(dname_lbl)
+
+    var dclass_lbl := Label.new()
+    dclass_lbl.text = slot_class.to_upper()
+    dclass_lbl.add_theme_font_size_override("font_size", 12)
+    dclass_lbl.add_theme_color_override("font_color", class_color(slot_class).lightened(0.22))
+    info_vb.add_child(dclass_lbl)
+
+    var is_valid := deck_validation_text().begins_with("DECK VALID")
+    var valid_lbl := Label.new()
+    valid_lbl.text = "%d / 40  -  %s" % [saved_deck.size(), "VALID" if is_valid else "INVALID"]
+    valid_lbl.add_theme_font_size_override("font_size", 12)
+    valid_lbl.add_theme_color_override("font_color", GOLD_COLOR if is_valid else Color(1.0, 0.45, 0.40))
+    info_vb.add_child(valid_lbl)
+
+    var rename_btn := Button.new(); rename_btn.text = "RENAME"
+    rename_btn.add_theme_font_size_override("font_size", 11)
+    rename_btn.custom_minimum_size = Vector2(0, 24)
+    rename_btn.add_theme_stylebox_override("normal", style(Color(0.38, 0.32, 0.14), 5))
+    rename_btn.pressed.connect(func(): _show_db_rename_overlay())
+    info_vb.add_child(rename_btn)
+
+    _build_db_cost_curve(vb, saved_deck)
+    _db_sep(vb)
+
+    var dl_hdr := Label.new(); dl_hdr.text = "DECK LIST  (cost, then name)"
+    dl_hdr.add_theme_font_size_override("font_size", 11)
+    dl_hdr.add_theme_color_override("font_color", Color(0.52, 0.52, 0.66))
+    vb.add_child(dl_hdr)
+
+    var list_scroll := ScrollContainer.new()
+    list_scroll.size_flags_vertical = Control.SIZE_FILL | Control.SIZE_EXPAND
+    list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    vb.add_child(list_scroll)
+
+    var list_vb := VBoxContainer.new()
+    list_vb.add_theme_constant_override("separation", 3)
+    list_vb.size_flags_horizontal = Control.SIZE_FILL
+    list_scroll.add_child(list_vb)
+    _build_db_deck_list_entries(list_vb)
+
+    _db_sep(vb)
+
+    var act_vb := VBoxContainer.new()
+    act_vb.add_theme_constant_override("separation", 5)
+    vb.add_child(act_vb)
+    var row1 := HBoxContainer.new()
+    row1.add_theme_constant_override("separation", 5)
+    act_vb.add_child(row1)
+    var dup_btn := Button.new(); dup_btn.text = "DUPLICATE"
+    dup_btn.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    dup_btn.add_theme_font_size_override("font_size", 12)
+    dup_btn.add_theme_stylebox_override("normal", style(Color(0.28, 0.50, 0.40), 7))
+    dup_btn.pressed.connect(func():
+        _duplicate_deck_slot(editing_deck_slot_idx)
+        editing_deck_slot_idx = -1
+        show_deck_manager())
+    row1.add_child(dup_btn)
+    var del_btn := Button.new(); del_btn.text = "DELETE"
+    del_btn.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+    del_btn.add_theme_font_size_override("font_size", 12)
+    del_btn.add_theme_stylebox_override("normal", style(Color(0.62, 0.16, 0.16), 7))
+    del_btn.pressed.connect(func(): _confirm_delete_slot(editing_deck_slot_idx))
+    row1.add_child(del_btn)
+    var reset_btn := Button.new(); reset_btn.text = "RESET TO STARTER"
+    reset_btn.add_theme_font_size_override("font_size", 12)
+    reset_btn.custom_minimum_size = Vector2(0, 32)
+    reset_btn.add_theme_stylebox_override("normal", style(Color(0.42, 0.34, 0.14), 7))
+    reset_btn.pressed.connect(func(): build_starter_deck(selected_deck_class); save_profile(); show_deck_builder())
+    act_vb.add_child(reset_btn)
+
+func _build_db_slot_strip(parent: Control) -> void:
+    var hdr := Label.new()
+    hdr.text = "CUSTOM DECKS  (%d / %d)" % [deck_slots.size(), MAX_DECK_SLOTS]
+    hdr.add_theme_font_size_override("font_size", 12)
+    hdr.add_theme_color_override("font_color", GOLD_COLOR)
+    parent.add_child(hdr)
+
+    var grid := GridContainer.new(); grid.columns = 4
+    grid.add_theme_constant_override("h_separation", 4)
+    grid.add_theme_constant_override("v_separation", 4)
+    parent.add_child(grid)
+
+    for i in range(MAX_DECK_SLOTS):
+        var slot_btn := Button.new()
+        slot_btn.custom_minimum_size = Vector2(68, 46)
+        slot_btn.add_theme_font_size_override("font_size", 10)
+        var is_active := (i == editing_deck_slot_idx)
+        if i < deck_slots.size():
+            var sl: Dictionary = deck_slots[i]
+            var sl_cls := str(sl.get("class", "Hope"))
+            var sl_name := str(sl.get("name", "Deck %d" % (i + 1)))
+            var card_count := int(Array(sl.get("cards", [])).size())
+            slot_btn.text = "%d. %s\n%d/40" % [i + 1, sl_name.left(7), card_count]
+            slot_btn.tooltip_text = sl_name
+            if is_active:
+                slot_btn.add_theme_stylebox_override("normal", solid_style(class_color(sl_cls), 6))
+                slot_btn.add_theme_color_override("font_color", Color(0.04, 0.04, 0.04))
+            else:
+                slot_btn.add_theme_stylebox_override("normal", style(class_color(sl_cls).darkened(0.52), 6))
+            var ci := i
+            slot_btn.pressed.connect(func(): _open_slot_in_deck_builder(ci))
+        else:
+            slot_btn.text = "%d.\nNEW" % (i + 1)
+            slot_btn.tooltip_text = "Create new deck in slot %d" % (i + 1)
+            slot_btn.add_theme_stylebox_override("normal", style(Color(0.16, 0.20, 0.34), 6))
+            slot_btn.add_theme_color_override("font_color", Color(0.44, 0.54, 0.82))
+            slot_btn.pressed.connect(func(): _show_create_slot_overlay())
+        grid.add_child(slot_btn)
+
+func _build_db_cost_curve(parent: Control, deck: Array) -> void:
+    if deck.is_empty(): return
+    var cl := Label.new(); cl.text = "MANA CURVE"
+    cl.add_theme_font_size_override("font_size", 11)
+    cl.add_theme_color_override("font_color", Color(0.52, 0.52, 0.66))
+    parent.add_child(cl)
+
+    var buckets := [0, 0, 0, 0, 0, 0, 0, 0]
+    for id in deck:
+        var cdd := card_by_id(str(id))
+        if cdd.is_empty(): continue
+        buckets[mini(int(cdd.get("cost", 0)), 7)] += 1
+    var max_b := 1
+    for b in buckets:
+        if b > max_b: max_b = b
+
+    var hbox := HBoxContainer.new()
+    hbox.custom_minimum_size = Vector2(0, 52)
+    hbox.add_theme_constant_override("separation", 3)
+    parent.add_child(hbox)
+    for i in range(8):
+        var col := VBoxContainer.new()
+        col.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+        col.add_theme_constant_override("separation", 2)
+        hbox.add_child(col)
+        var bar_h := 28
+        var bar_bg := Panel.new(); bar_bg.custom_minimum_size = Vector2(0, bar_h)
+        bar_bg.size_flags_horizontal = Control.SIZE_FILL
+        var bg_s := StyleBoxFlat.new(); bg_s.bg_color = Color(0.08, 0.10, 0.18)
+        bg_s.set_corner_radius_all(4)
+        bar_bg.add_theme_stylebox_override("panel", bg_s); col.add_child(bar_bg)
+        if buckets[i] > 0:
+            var fill_h := int(float(buckets[i]) / float(max_b) * bar_h)
+            var fill := Panel.new()
+            fill.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+            fill.offset_top = bar_h - fill_h; fill.offset_bottom = 0
+            var fs := StyleBoxFlat.new()
+            fs.bg_color = Color(0.35, 0.50, 0.92, 0.88).lerp(GOLD_COLOR, float(i) / 7.0)
+            fs.set_corner_radius_all(3)
+            fill.add_theme_stylebox_override("panel", fs); bar_bg.add_child(fill)
+        var cnt_l := Label.new()
+        cnt_l.text = str(buckets[i]) if buckets[i] > 0 else ""
+        cnt_l.add_theme_font_size_override("font_size", 10)
+        cnt_l.add_theme_color_override("font_color", Color(0.68, 0.68, 0.82))
+        cnt_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; col.add_child(cnt_l)
+        var lbl_c := Label.new()
+        lbl_c.text = str(i) if i < 7 else "7+"
+        lbl_c.add_theme_font_size_override("font_size", 10)
+        lbl_c.add_theme_color_override("font_color", Color(0.44, 0.44, 0.54))
+        lbl_c.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; col.add_child(lbl_c)
+
+func _build_db_deck_list_entries(parent: Control) -> void:
+    if saved_deck.is_empty():
+        var el := Label.new(); el.text = "No cards added yet."
+        el.add_theme_font_size_override("font_size", 13)
+        el.add_theme_color_override("font_color", Color(0.40, 0.40, 0.52))
+        parent.add_child(el)
+        return
+    var counts: Dictionary = {}
     for id in saved_deck:
-        var key := str(id)
-        if not deck_counts.has(key):
-            deck_order.append(key)
-        deck_counts[key] = int(deck_counts.get(key, 0)) + 1
-    var list_panel := Panel.new()
-    list_panel.position = Vector2(14, 216)
-    list_panel.size = Vector2(332, 178)
-    list_panel.add_theme_stylebox_override("panel", style(Color(0.03,0.035,0.06,0.85), 8))
-    side.add_child(list_panel)
-    if deck_order.is_empty():
-        centered_label("No cards added yet.", Vector2(0,70), Vector2(332,28), 14, list_panel)
-    else:
-        var list_scroll := ScrollContainer.new()
-        list_scroll.position = Vector2(6,6); list_scroll.size = Vector2(320,166)
-        list_panel.add_child(list_scroll)
-        var list_box := VBoxContainer.new()
-        list_box.custom_minimum_size = Vector2(310,0)
-        list_box.add_theme_constant_override("separation", 4)
-        list_scroll.add_child(list_box)
-        for id in deck_order:
-            var cd := card_by_id(id)
-            if cd.is_empty(): continue
-            var row := HBoxContainer.new()
-            row.custom_minimum_size = Vector2(310,26)
-            var swatch := ColorRect.new()
-            swatch.color = class_color(str(cd.get("class","Neutral")))
-            swatch.custom_minimum_size = Vector2(6,22)
-            row.add_child(swatch)
-            var row_label := Label.new()
-            row_label.text = " x%d  %s" % [int(deck_counts[id]), str(cd.get("name","Card"))]
-            row_label.custom_minimum_size = Vector2(230,22)
-            row_label.add_theme_font_size_override("font_size", 13)
-            row_label.clip_text = true
-            row.add_child(row_label)
-            var remove_btn := Button.new()
-            remove_btn.text = "−"
-            remove_btn.custom_minimum_size = Vector2(28,24)
-            remove_btn.tooltip_text = "Remove one copy"
-            remove_btn.pressed.connect(remove_one_from_deck.bind(id))
-            row.add_child(remove_btn)
-            list_box.add_child(row)
-    button("RESET STARTER DECK",Vector2(45,402),Vector2(270,42),func(): build_starter_deck(selected_deck_class); save_profile(); show_deck_builder(),side)
+        counts[str(id)] = int(counts.get(str(id), 0)) + 1
+    var order: Array = counts.keys()
+    order.sort_custom(func(a: String, b: String) -> bool:
+        var ca := card_by_id(a); var cbb := card_by_id(b)
+        var ca_cost := int(ca.get("cost", 0)) if not ca.is_empty() else 99
+        var cb_cost := int(cbb.get("cost", 0)) if not cbb.is_empty() else 99
+        if ca_cost != cb_cost: return ca_cost < cb_cost
+        var na := str(ca.get("name", a)) if not ca.is_empty() else a
+        var nb := str(cbb.get("name", b)) if not cbb.is_empty() else b
+        return na < nb)
+    for id in order:
+        var cd := card_by_id(id)
+        if cd.is_empty(): continue
+        var row := HBoxContainer.new()
+        row.custom_minimum_size = Vector2(0, 30)
+        row.add_theme_constant_override("separation", 4)
+        var cost_p := Panel.new(); cost_p.custom_minimum_size = Vector2(24, 28)
+        var cs := StyleBoxFlat.new(); cs.bg_color = Color(0.10, 0.16, 0.30)
+        cs.set_corner_radius_all(5)
+        cost_p.add_theme_stylebox_override("panel", cs)
+        var cost_l := Label.new(); cost_l.text = str(cd.get("cost", "?"))
+        cost_l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        cost_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        cost_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        cost_l.add_theme_font_size_override("font_size", 12)
+        cost_l.add_theme_color_override("font_color", Color(0.70, 0.85, 1.0))
+        cost_p.add_child(cost_l); row.add_child(cost_p)
+        var cx := Label.new(); cx.text = "x%d" % int(counts[id])
+        cx.custom_minimum_size = Vector2(22, 28)
+        cx.add_theme_font_size_override("font_size", 12)
+        cx.add_theme_color_override("font_color", GOLD_COLOR)
+        cx.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; row.add_child(cx)
+        var sw := ColorRect.new()
+        sw.color = class_color(str(cd.get("class", "Neutral")))
+        sw.custom_minimum_size = Vector2(4, 28); row.add_child(sw)
+        var nl := Label.new(); nl.text = str(cd.get("name", id))
+        nl.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+        nl.custom_minimum_size = Vector2(0, 28)
+        nl.add_theme_font_size_override("font_size", 12)
+        nl.clip_text = true; nl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        row.add_child(nl)
+        var rb := Button.new(); rb.text = "-"
+        rb.custom_minimum_size = Vector2(26, 28)
+        rb.add_theme_font_size_override("font_size", 14)
+        rb.add_theme_stylebox_override("normal", style(Color(0.55, 0.18, 0.18), 5))
+        rb.tooltip_text = "Remove one copy"
+        rb.pressed.connect(remove_one_from_deck.bind(id))
+        row.add_child(rb)
+        parent.add_child(row)
+
+func _show_db_card_preview(card_data: Dictionary) -> void:
+    var id := str(card_data.get("id", ""))
+    var rarity := str(card_data.get("rarity", "Bronze"))
+    var owned := int(collection_owned.get(id, 0))
+    var in_deck := count_in_deck(id)
+    var allowed := mini(owned, int(COPY_LIMITS.get(rarity, 1)))
+
+    var overlay := Panel.new()
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 800
+    var ov_s := StyleBoxFlat.new(); ov_s.bg_color = Color(0.0, 0.0, 0.0, 0.70)
+    ov_s.set_border_width_all(0)
+    overlay.add_theme_stylebox_override("panel", ov_s)
+    root_layer.add_child(overlay)
+
+    var esb := StyleBoxEmpty.new()
+    var close_bg := Button.new()
+    close_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    close_bg.flat = true
+    close_bg.add_theme_stylebox_override("normal", esb)
+    close_bg.add_theme_stylebox_override("hover", esb)
+    close_bg.pressed.connect(func(): overlay.queue_free())
+    overlay.add_child(close_bg)
+
+    var pv := Panel.new()
+    pv.position = Vector2(285, 72); pv.size = Vector2(710, 576)
+    pv.z_index = 1
+    var pv_s := StyleBoxFlat.new()
+    pv_s.bg_color = Color(0.032, 0.040, 0.065, 0.97)
+    pv_s.border_color = GOLD_COLOR; pv_s.set_border_width_all(2)
+    pv_s.set_corner_radius_all(16)
+    pv_s.shadow_color = Color(0, 0, 0, 0.70); pv_s.shadow_size = 22
+    pv.add_theme_stylebox_override("panel", pv_s)
+    overlay.add_child(pv)
+
+    var eat := Button.new(); eat.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    eat.flat = true; eat.add_theme_stylebox_override("normal", esb)
+    eat.add_theme_stylebox_override("hover", esb)
+    pv.add_child(eat)
+
+    var cp2 := card_panel(card_data, Vector2(22, 22), Vector2(272, 370))
+    pv.add_child(cp2)
+
+    var ix := 312.0
+    var nl2 := label(str(card_data.get("name", "")), Vector2(ix, 22), Vector2(374, 36), 22, pv)
+    nl2.add_theme_color_override("font_color", GOLD_COLOR)
+    var cl2 := label("%s  -  %s  -  Cost %s" % [str(card_data.get("class","")), rarity, str(card_data.get("cost","?"))], Vector2(ix, 62), Vector2(374, 22), 13, pv)
+    cl2.add_theme_color_override("font_color", class_color(str(card_data.get("class","Neutral"))).lightened(0.18))
+    label("Type: %s" % str(card_data.get("type","Follower")), Vector2(ix, 88), Vector2(374, 22), 13, pv).add_theme_color_override("font_color", Color(0.60, 0.60, 0.72))
+
+    var stat_y := 116.0
+    if card_data.has("attack") and card_data.has("health"):
+        var sl2 := label("ATK %s  /  HP %s" % [str(card_data.get("attack","?")), str(card_data.get("health","?"))], Vector2(ix, stat_y), Vector2(240, 26), 16, pv)
+        sl2.add_theme_color_override("font_color", Color(0.88, 0.84, 0.62))
+        stat_y += 34.0
+
+    var eff := label(str(card_data.get("effect","No effect.")), Vector2(ix, stat_y), Vector2(376, 200), 14, pv)
+    eff.add_theme_color_override("font_color", Color(0.86, 0.86, 0.92))
+    eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+    label("Owned: %d  -  In deck: %d / %d" % [owned, in_deck, allowed], Vector2(ix, 328), Vector2(376, 22), 13, pv).add_theme_color_override("font_color", Color(0.60, 0.75, 0.60))
+
+    button("CLOSE", Vector2(ix, 368), Vector2(120, 38), func(): overlay.queue_free(), pv)
+    if editing_deck_slot_idx >= 0 and owned > 0:
+        var add_pv := button("+ ADD TO DECK", Vector2(ix + 130, 368), Vector2(210, 38),
+            func(): add_card_to_deck(id); overlay.queue_free(), pv)
+        if saved_deck.size() >= 40 or in_deck >= allowed:
+            add_pv.disabled = true
+        if in_deck > 0:
+            button("- REMOVE", Vector2(ix, 416), Vector2(160, 36),
+                func(): remove_one_from_deck(id); overlay.queue_free(), pv)
+
+func _show_create_slot_overlay() -> void:
+    if deck_slots.size() >= MAX_DECK_SLOTS: return
+
+    var overlay := Panel.new()
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 900
+    var ov_s := StyleBoxFlat.new(); ov_s.bg_color = Color(0, 0, 0, 0.70)
+    ov_s.set_border_width_all(0)
+    overlay.add_theme_stylebox_override("panel", ov_s)
+    root_layer.add_child(overlay)
+
+    var esb := StyleBoxEmpty.new()
+    var bg_btn := Button.new(); bg_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    bg_btn.flat = true; bg_btn.add_theme_stylebox_override("normal", esb)
+    bg_btn.add_theme_stylebox_override("hover", esb)
+    bg_btn.pressed.connect(func(): overlay.queue_free())
+    overlay.add_child(bg_btn)
+
+    var box := Panel.new()
+    box.position = Vector2(388, 162); box.size = Vector2(504, 396)
+    box.z_index = 1; box.add_theme_stylebox_override("panel", style(GOLD_COLOR, 16))
+    overlay.add_child(box)
+
+    var eat := Button.new(); eat.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    eat.flat = true; eat.add_theme_stylebox_override("normal", esb)
+    eat.add_theme_stylebox_override("hover", esb)
+    box.add_child(eat)
+
+    label("CREATE NEW DECK", Vector2(22, 20), Vector2(460, 36), 22, box).add_theme_color_override("font_color", GOLD_COLOR)
+    label("Choose a class and give your deck a name.", Vector2(22, 58), Vector2(460, 22), 13, box).add_theme_color_override("font_color", Color(0.62, 0.62, 0.72))
+    label("CLASS", Vector2(22, 90), Vector2(100, 22), 12, box).add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+
+    var chosen := [selected_class if selected_class != "" else "Hope"]
+    var cls_hbox := HBoxContainer.new()
+    cls_hbox.position = Vector2(22, 112); cls_hbox.size = Vector2(460, 50)
+    cls_hbox.add_theme_constant_override("separation", 8)
+    box.add_child(cls_hbox)
+
+    var cbs: Array = []
+    for c in CLASSES:
+        var cb3 := Button.new(); cb3.text = str(c)
+        cb3.custom_minimum_size = Vector2(105, 46)
+        cb3.add_theme_font_size_override("font_size", 14)
+        cbs.append(cb3); cls_hbox.add_child(cb3)
+
+    var refresh_cls: Callable
+    refresh_cls = func():
+        for i in cbs.size():
+            var c2: String = CLASSES[i]
+            if c2 == chosen[0]:
+                cbs[i].add_theme_stylebox_override("normal", solid_style(class_color(c2).darkened(0.08), 8))
+                cbs[i].add_theme_color_override("font_color", Color(0.04, 0.04, 0.04))
+            else:
+                cbs[i].add_theme_stylebox_override("normal", style(class_color(c2).darkened(0.40), 8))
+                cbs[i].remove_theme_color_override("font_color")
+    refresh_cls.call()
+    for i in cbs.size():
+        var c3: String = CLASSES[i]
+        cbs[i].pressed.connect(func(): chosen[0] = c3; refresh_cls.call())
+
+    label("DECK NAME", Vector2(22, 174), Vector2(200, 22), 12, box).add_theme_color_override("font_color", Color(0.55, 0.55, 0.68))
+    var name_edit := LineEdit.new()
+    name_edit.position = Vector2(22, 196); name_edit.size = Vector2(460, 42)
+    name_edit.placeholder_text = "My Deck"
+    name_edit.add_theme_font_size_override("font_size", 16)
+    box.add_child(name_edit)
+
+    button("CANCEL", Vector2(22, 298), Vector2(200, 50), func(): overlay.queue_free(), box)
+    button("CREATE DECK", Vector2(240, 298), Vector2(240, 50),
+        func():
+            var dname := name_edit.text.strip_edges()
+            if dname.is_empty(): dname = "My %s Deck" % chosen[0]
+            deck_slots.append({"name": dname, "class": chosen[0], "cards": []})
+            save_profile()
+            overlay.queue_free()
+            _open_slot_in_deck_builder(deck_slots.size() - 1),
+        box)
+
+func _show_db_rename_overlay() -> void:
+    if editing_deck_slot_idx < 0 or editing_deck_slot_idx >= deck_slots.size(): return
+    var cur_name := str(deck_slots[editing_deck_slot_idx].get("name", "Deck %d" % (editing_deck_slot_idx + 1)))
+
+    var overlay := Panel.new()
+    overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.z_index = 900
+    var ov_s := StyleBoxFlat.new(); ov_s.bg_color = Color(0, 0, 0, 0.65)
+    ov_s.set_border_width_all(0)
+    overlay.add_theme_stylebox_override("panel", ov_s)
+    root_layer.add_child(overlay)
+
+    var esb := StyleBoxEmpty.new()
+    var bg_btn := Button.new(); bg_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    bg_btn.flat = true; bg_btn.add_theme_stylebox_override("normal", esb)
+    bg_btn.add_theme_stylebox_override("hover", esb)
+    bg_btn.pressed.connect(func(): overlay.queue_free())
+    overlay.add_child(bg_btn)
+
+    var box := Panel.new()
+    box.position = Vector2(388, 242); box.size = Vector2(504, 236)
+    box.z_index = 1; box.add_theme_stylebox_override("panel", style(GOLD_COLOR, 16))
+    overlay.add_child(box)
+
+    var eat := Button.new(); eat.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    eat.flat = true; eat.add_theme_stylebox_override("normal", esb)
+    eat.add_theme_stylebox_override("hover", esb)
+    box.add_child(eat)
+
+    label("RENAME DECK", Vector2(22, 20), Vector2(460, 34), 20, box).add_theme_color_override("font_color", GOLD_COLOR)
+    var name_edit := LineEdit.new()
+    name_edit.position = Vector2(22, 68); name_edit.size = Vector2(460, 44)
+    name_edit.text = cur_name
+    name_edit.add_theme_font_size_override("font_size", 16)
+    box.add_child(name_edit)
+    name_edit.select_all()
+
+    button("CANCEL", Vector2(22, 132), Vector2(200, 50), func(): overlay.queue_free(), box)
+    button("SAVE NAME", Vector2(240, 132), Vector2(240, 50),
+        func():
+            var new_name := name_edit.text.strip_edges()
+            if not new_name.is_empty():
+                deck_slots[editing_deck_slot_idx]["name"] = new_name
+                save_profile()
+                overlay.queue_free()
+                show_deck_builder(),
+        box)
 
 func add_card_to_deck(id: String) -> void:
     var cd := card_by_id(id)
