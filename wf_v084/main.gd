@@ -1906,8 +1906,12 @@ func build_ui() -> void:
     # The area containers are IGNORE so they never block taps meant for cards
     # underneath — only the visible amulet holder panels inside them (STOP)
     # catch input.
-    enemy_amulet_area = Control.new(); enemy_amulet_area.position = Vector2(245, 240); enemy_amulet_area.size = Vector2(790, 54); enemy_amulet_area.z_index = 65; enemy_amulet_area.clip_contents = false; enemy_amulet_area.mouse_filter = Control.MOUSE_FILTER_IGNORE; add_child(enemy_amulet_area)
-    player_amulet_area = Control.new(); player_amulet_area.position = Vector2(245, 365); player_amulet_area.size = Vector2(790, 54); player_amulet_area.z_index = 65; player_amulet_area.clip_contents = false; player_amulet_area.mouse_filter = Control.MOUSE_FILTER_IGNORE; add_child(player_amulet_area)
+    # MOUSE_FILTER_PASS (not IGNORE) is required here.  MOUSE_FILTER_IGNORE on a
+    # parent silently prevents ALL children from receiving gui_input in Godot 4,
+    # so the amulet holder panels (MOUSE_FILTER_STOP) inside never saw taps.
+    # PASS lets events fall through to the board behind when no child catches them.
+    enemy_amulet_area = Control.new(); enemy_amulet_area.position = Vector2(245, 240); enemy_amulet_area.size = Vector2(790, 54); enemy_amulet_area.z_index = 65; enemy_amulet_area.clip_contents = false; enemy_amulet_area.mouse_filter = Control.MOUSE_FILTER_PASS; add_child(enemy_amulet_area)
+    player_amulet_area = Control.new(); player_amulet_area.position = Vector2(245, 365); player_amulet_area.size = Vector2(790, 54); player_amulet_area.z_index = 65; player_amulet_area.clip_contents = false; player_amulet_area.mouse_filter = Control.MOUSE_FILTER_PASS; add_child(player_amulet_area)
     # Keep the hand in a dedicated bottom tray so it never covers the battlefield.
     player_hand_area = Control.new(); player_hand_area.position = Vector2(150, 600); player_hand_area.size = Vector2(880, 115); player_hand_area.clip_contents = false; player_hand_area.z_index = 120; add_child(player_hand_area)
 
