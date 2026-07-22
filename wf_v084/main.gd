@@ -6705,177 +6705,228 @@ func _combine_reward_lines(rewards: Array) -> Array:
 
 func show_game_over(title_text: String, subtitle: String, player_won: bool, rewards: Array = []) -> void:
     player_turn_active = false
-    # _play_victory_sequence (the VICTORY/DEFEAT banner + sparkles + scrim) runs
-    # on its own fixed timers and can still be mid-animation when this fires --
-    # its bright banner and sparkles were competing for attention with the
-    # freshly-faded-in result buttons underneath, which is exactly why the
-    # buttons were hard to spot/click ("behind the victory screen"). Cut it off
-    # immediately so the result screen is the only thing left on screen.
-    # Invalidate any in-flight _play_victory_sequence FIRST -- this takes
-    # effect immediately, unlike is_instance_valid(finish_layer), which stays
-    # true until the end of the current frame even after queue_free(). That
-    # gap was enough for the coroutine to slip in one more banner/backdrop
-    # node on a slow frame, which is what could make the victory cinematic's
-    # own "VICTORY" banner appear to bleed into this screen underneath.
+    # Cut off any in-flight victory cinematic immediately (token wins over
+    # is_instance_valid since that stays true for one frame after queue_free).
     victory_sequence_token += 1
-    if is_instance_valid(finish_layer):
-        finish_layer.queue_free()
-    # The result screen used to be shown on the shared `overlay` node, which
-    # is also reused by mid-match modals (pass-device handoff, the strategic
-    # collapse spell choice, etc). If one of those modals was ever left
-    # active — or later toggled `overlay.visible` — it could hide or fight
-    # over the same node as the victory/defeat screen, which is exactly what
-    # "stuck on the victory screen, buttons don't do anything" looks like.
-    # Give the result screen its own dedicated, disposable layer so nothing
-    # else in the game can ever touch or hide it once it's up.
-    if is_instance_valid(game_over_layer):
-        game_over_layer.queue_free()
+    if is_instance_valid(finish_layer):  finish_layer.queue_free()
+    if is_instance_valid(game_over_layer): game_over_layer.queue_free()
+
+    # Dedicated disposable layer — nothing else in the game can touch it.
+    # z_index 4096 is Godot's actual CanvasItem maximum; anything higher
+    # silently fails and leaves it at 0 (behind the board UI).
     game_over_layer = ColorRect.new()
-    game_over_layer.color = Color(0, 0, 0, 0.68)
+    game_over_layer.color = Color(0.0, 0.0, 0.0, 0.90)
     game_over_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     game_over_layer.mouse_filter = Control.MOUSE_FILTER_STOP
-    # Was 10000 -- Godot's CanvasItem z_index is capped at 4096 (see
-    # CANVAS_ITEM_Z_MAX). Setting it out of range doesn't clamp, it fails the
-    # engine's validation and prints "Tried to set Z index to an invalid
-    # value" while silently leaving z_index at its previous/default value
-    # (0). That's the real reason the result screen kept rendering *behind*
-    # ordinary board UI (hand cards, amulet panels, popups) instead of on top
-    # of everything -- it never actually got a high z_index at all, every
-    # single time this ran. 4096 is the actual maximum, still higher than
-    # every other layer in the game so it always wins.
     game_over_layer.z_index = 4096
     game_over_layer.modulate = Color(1, 1, 1, 0)
-    if not safe_add_child(self, game_over_layer):
-        return
+    if not safe_add_child(self, game_over_layer): return
 
-    # The panel grows to fit an extra "REWARDS EARNED" section when the match
-    # actually granted something (challenge/trial gold, packs, unlocks) --
-    # empty-handed losses and practice matches keep the shorter, original
-    # layout instead of showing an empty rewards block.
+    var gold   := Color(1.0, 0.86, 0.32)
+    var accent := class_accent_color(selected_class) if player_won else Color(0.60, 0.74, 1.0)
     var has_rewards := not rewards.is_empty()
-    var panel_height := 460.0 if has_rewards else 400.0
-    var panel_y := (720.0 - panel_height) * 0.5
 
-    # A solid, high-contrast card behind the badge/title/buttons -- instead of
-    # buttons floating directly on the translucent full-screen dim -- so the
-    # result panel reads as one clear focal point instead of controls that
-    # look stranded/half-hidden against whatever was on the board underneath.
-    var card_panel := Panel.new()
-    card_panel.position = Vector2(340, panel_y)
-    card_panel.size = Vector2(600, panel_height)
-    var card_style := StyleBoxFlat.new()
-    card_style.bg_color = Color(0.035, 0.05, 0.09, 0.97)
-    card_style.border_color = Color(1.0, 0.86, 0.32) if player_won else Color(0.6, 0.74, 1.0)
-    card_style.set_border_width_all(3)
-    card_style.set_corner_radius_all(20)
-    card_style.shadow_color = Color(0, 0, 0, 0.6)
-    card_style.shadow_size = 24
-    card_panel.add_theme_stylebox_override("panel", card_style)
-    game_over_layer.add_child(card_panel)
+    # ── LEFT SECTION: animated leader portrait ─────────────────────────────────
+    var port_w := 430.0; var port_h := 720.0
 
-    var box := VBoxContainer.new()
-    box.position = Vector2(350, panel_y + 20)
-    box.size = Vector2(580, panel_height - 40)
-    box.alignment = BoxContainer.ALIGNMENT_CENTER
-    box.add_theme_constant_override("separation", 12)
-    game_over_layer.add_child(box)
+    # Soft left-side bg so the portrait has its own "stage"
+    var left_bg := ColorRect.new()
+    left_bg.color = Color(0.025, 0.035, 0.060, 0.55)
+    left_bg.position = Vector2.ZERO; left_bg.size = Vector2(port_w, port_h)
+    left_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    game_over_layer.add_child(left_bg)
 
+    # Radial glow behind the portrait — class colour for victory, muted blue for defeat
+    var glow_tex := _make_radial_glow_tex(accent if player_won else Color(0.35, 0.48, 0.72), 520, 620)
+    if glow_tex:
+        var glow := TextureRect.new()
+        glow.texture = glow_tex
+        glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        glow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        glow.size = Vector2(520, 620); glow.position = Vector2(-45, 50)
+        glow.modulate.a = 0.60; glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        glow.z_index = 1
+        game_over_layer.add_child(glow)
+
+    # Slow rotating light rays behind the portrait (victory only)
+    if player_won:
+        var ray_root := Control.new()
+        ray_root.position = Vector2(215, 360)
+        ray_root.mouse_filter = Control.MOUSE_FILTER_IGNORE; ray_root.z_index = 2
+        game_over_layer.add_child(ray_root)
+        for ri in range(10):
+            var ray := ColorRect.new()
+            ray.color = Color(accent.r, accent.g, accent.b, 0.055)
+            ray.size = Vector2(3, 560); ray.position = Vector2(-1.5, -280)
+            ray.pivot_offset = Vector2(1.5, 280)
+            ray.rotation = TAU * float(ri) / 10.0
+            ray.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            ray_root.add_child(ray)
+        var rspin := create_tween().set_loops().bind_node(ray_root)
+        rspin.tween_property(ray_root, "rotation", TAU, 24.0).set_trans(Tween.TRANS_LINEAR)
+
+    # LeaderView — full animated portrait
+    var lv := _LeaderView.new()
+    lv.position = Vector2(15, 60); lv.size = Vector2(400, 560)
+    lv.mouse_filter = Control.MOUSE_FILTER_IGNORE; lv.z_index = 3
+    game_over_layer.add_child(lv)
+    lv.setup(selected_class, Vector2(400, 560))
+    lv.set_state(_LeaderView.State.VICTORY if player_won else _LeaderView.State.DEFEAT)
+
+    # Leader name under the portrait
+    var lname := Label.new()
+    lname.text = leader_name_for(selected_class)
+    lname.position = Vector2(15, 630); lname.size = Vector2(400, 30)
+    lname.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    lname.add_theme_font_size_override("font_size", ui_font(20))
+    lname.add_theme_color_override("font_color", accent.lightened(0.30) if player_won else Color(0.70, 0.80, 1.0))
+    lname.add_theme_color_override("font_shadow_color", Color.BLACK)
+    lname.add_theme_constant_override("shadow_offset_x", 2)
+    lname.add_theme_constant_override("shadow_offset_y", 2)
+    lname.mouse_filter = Control.MOUSE_FILTER_IGNORE; lname.z_index = 3
+    game_over_layer.add_child(lname)
+
+    # ── RIGHT SECTION: result panel ────────────────────────────────────────────
+    var panel_x := port_w + 4.0; var panel_w := 1280.0 - panel_x
+
+    # Thin vertical accent stripe at the seam
+    var stripe := ColorRect.new()
+    stripe.color = accent if player_won else Color(0.45, 0.58, 0.88)
+    stripe.position = Vector2(port_w, 0); stripe.size = Vector2(4, 720)
+    stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    game_over_layer.add_child(stripe)
+
+    # Dark panel behind the text
+    var right_bg := Panel.new()
+    right_bg.position = Vector2(panel_x, 0); right_bg.size = Vector2(panel_w, 720)
+    var rbst := StyleBoxFlat.new(); rbst.bg_color = Color(0.022, 0.032, 0.055, 0.94)
+    right_bg.add_theme_stylebox_override("panel", rbst)
+    right_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    game_over_layer.add_child(right_bg)
+
+    var cx := panel_x + 60.0; var cw := panel_w - 120.0  # content bounds
+
+    # Badge — large icon above the title
     var badge := Label.new()
     badge.text = "★" if player_won else "↻"
+    badge.position = Vector2(cx, 80); badge.size = Vector2(cw, 110)
     badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    badge.add_theme_font_size_override("font_size", ui_font(64))
-    badge.add_theme_color_override("font_color", Color(1.0, 0.86, 0.32) if player_won else Color(0.64, 0.78, 1.0))
-    box.add_child(badge)
+    badge.add_theme_font_size_override("font_size", ui_font(96))
+    badge.add_theme_color_override("font_color", gold if player_won else Color(0.60, 0.76, 1.0))
+    badge.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
+    badge.add_theme_constant_override("shadow_offset_x", 4)
+    badge.add_theme_constant_override("shadow_offset_y", 4)
+    badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    game_over_layer.add_child(badge)
 
-    var title := Label.new()
-    title.text = title_text
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", ui_font(52))
-    title.add_theme_color_override("font_color", Color(0.98, 0.84, 0.34) if player_won else Color(0.82, 0.90, 1.0))
-    box.add_child(title)
+    # Title ("VICTORY" / "YOU LOSE")
+    var title_lbl := Label.new()
+    title_lbl.text = title_text
+    title_lbl.position = Vector2(cx, 198); title_lbl.size = Vector2(cw, 86)
+    title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title_lbl.add_theme_font_size_override("font_size", ui_font(72))
+    title_lbl.add_theme_color_override("font_color", gold if player_won else Color(0.78, 0.88, 1.0))
+    title_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+    title_lbl.add_theme_constant_override("shadow_offset_x", 5)
+    title_lbl.add_theme_constant_override("shadow_offset_y", 5)
+    title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    game_over_layer.add_child(title_lbl)
 
-    var sub := Label.new()
-    sub.text = subtitle
-    sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    sub.add_theme_font_size_override("font_size", ui_font(20))
-    box.add_child(sub)
+    # Subtitle / recovery quote
+    var sub_lbl := Label.new()
+    sub_lbl.text = subtitle
+    sub_lbl.position = Vector2(cx, 292); sub_lbl.size = Vector2(cw, 56)
+    sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    sub_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    sub_lbl.add_theme_font_size_override("font_size", ui_font(22))
+    sub_lbl.add_theme_color_override("font_color", Color(0.86, 0.86, 0.94))
+    sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    game_over_layer.add_child(sub_lbl)
 
+    # Separator line
+    var sep := ColorRect.new()
+    sep.color = Color(accent.r, accent.g, accent.b, 0.35) if player_won else Color(0.45, 0.58, 0.88, 0.35)
+    sep.position = Vector2(cx, 358); sep.size = Vector2(cw, 2)
+    sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    game_over_layer.add_child(sep)
+
+    # Rewards section (only when rewards were actually granted)
+    var btn_y := 384.0
     if has_rewards:
-        var rewards_panel := PanelContainer.new()
-        var rewards_style := StyleBoxFlat.new()
-        rewards_style.bg_color = Color(1.0, 0.86, 0.32, 0.10) if player_won else Color(0.6, 0.74, 1.0, 0.10)
-        rewards_style.border_color = Color(1.0, 0.86, 0.32, 0.55) if player_won else Color(0.6, 0.74, 1.0, 0.55)
-        rewards_style.set_border_width_all(1)
-        rewards_style.set_corner_radius_all(10)
-        rewards_style.content_margin_left = 18
-        rewards_style.content_margin_right = 18
-        rewards_style.content_margin_top = 10
-        rewards_style.content_margin_bottom = 10
-        rewards_panel.add_theme_stylebox_override("panel", rewards_style)
-        box.add_child(rewards_panel)
+        var rp := PanelContainer.new()
+        rp.position = Vector2(cx, btn_y); rp.size = Vector2(cw, 0)  # size set by content
+        var rpst := StyleBoxFlat.new()
+        rpst.bg_color = Color(gold.r, gold.g, gold.b, 0.08) if player_won else Color(0.60, 0.74, 1.0, 0.08)
+        rpst.border_color = Color(gold.r, gold.g, gold.b, 0.40) if player_won else Color(0.60, 0.74, 1.0, 0.40)
+        rpst.set_border_width_all(1); rpst.set_corner_radius_all(10)
+        rpst.content_margin_left = 18; rpst.content_margin_right = 18
+        rpst.content_margin_top = 10; rpst.content_margin_bottom = 10
+        rp.add_theme_stylebox_override("panel", rpst)
+        game_over_layer.add_child(rp)
+        var rbox := VBoxContainer.new()
+        rbox.alignment = BoxContainer.ALIGNMENT_CENTER
+        rbox.add_theme_constant_override("separation", 4)
+        rp.add_child(rbox)
+        var rh := Label.new(); rh.text = "REWARDS EARNED"
+        rh.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        rh.add_theme_font_size_override("font_size", ui_font(14))
+        rh.add_theme_color_override("font_color", Color(0.68, 0.74, 0.86))
+        rbox.add_child(rh)
+        for rl in rewards:
+            var rlbl := Label.new(); rlbl.text = str(rl)
+            rlbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            rlbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            rlbl.add_theme_font_size_override("font_size", ui_font(18))
+            rlbl.add_theme_color_override("font_color", Color(1.0, 0.90, 0.55) if player_won else Color(0.84, 0.90, 1.0))
+            rbox.add_child(rlbl)
+        btn_y += 90.0 + rewards.size() * 26.0
 
-        var rewards_box := VBoxContainer.new()
-        rewards_box.alignment = BoxContainer.ALIGNMENT_CENTER
-        rewards_box.add_theme_constant_override("separation", 4)
-        rewards_panel.add_child(rewards_box)
+    # ── Buttons ────────────────────────────────────────────────────────────────
+    var btn_w := cw - 80.0; var btn_h := 66.0; var btn_x := cx + 40.0
 
-        var rewards_header := Label.new()
-        rewards_header.text = "REWARDS EARNED"
-        rewards_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-        rewards_header.add_theme_font_size_override("font_size", ui_font(15))
-        rewards_header.add_theme_color_override("font_color", Color(0.7, 0.76, 0.86))
-        rewards_box.add_child(rewards_header)
+    var play_btn := Button.new()
+    play_btn.text = "PLAY AGAIN"
+    play_btn.position = Vector2(btn_x, btn_y); play_btn.size = Vector2(btn_w, btn_h)
+    play_btn.focus_mode = Control.FOCUS_NONE
+    play_btn.add_theme_font_size_override("font_size", ui_font(22))
+    var pbst := StyleBoxFlat.new()
+    pbst.bg_color = gold if player_won else Color(0.22, 0.38, 0.72)
+    pbst.set_corner_radius_all(14)
+    pbst.shadow_color = Color(gold.r, gold.g, gold.b, 0.38) if player_won else Color(0.22, 0.38, 0.72, 0.38)
+    pbst.shadow_size = 14
+    play_btn.add_theme_stylebox_override("normal",  pbst)
+    play_btn.add_theme_stylebox_override("hover",   pbst)
+    play_btn.add_theme_stylebox_override("pressed", pbst)
+    play_btn.add_theme_color_override("font_color",         Color(0.04, 0.06, 0.10) if player_won else Color.WHITE)
+    play_btn.add_theme_color_override("font_hover_color",   Color(0.04, 0.06, 0.10) if player_won else Color.WHITE)
+    play_btn.add_theme_color_override("font_pressed_color", Color(0.04, 0.06, 0.10) if player_won else Color.WHITE)
+    play_btn.pressed.connect(_restart_after_match)
+    game_over_layer.add_child(play_btn)
 
-        for reward_line in rewards:
-            var reward_label := Label.new()
-            reward_label.text = str(reward_line)
-            reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-            reward_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-            reward_label.add_theme_font_size_override("font_size", ui_font(19))
-            reward_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.55) if player_won else Color(0.86, 0.92, 1.0))
-            rewards_box.add_child(reward_label)
+    var menu_btn := Button.new()
+    menu_btn.text = "RETURN TO MAIN MENU"
+    menu_btn.position = Vector2(btn_x, btn_y + btn_h + 16.0); menu_btn.size = Vector2(btn_w, btn_h)
+    menu_btn.focus_mode = Control.FOCUS_NONE
+    menu_btn.add_theme_font_size_override("font_size", ui_font(20))
+    var mbst := StyleBoxFlat.new()
+    mbst.bg_color = Color(0.07, 0.10, 0.18, 0.95)
+    mbst.border_color = accent if player_won else Color(0.45, 0.58, 0.88)
+    mbst.set_border_width_all(2); mbst.set_corner_radius_all(14)
+    menu_btn.add_theme_stylebox_override("normal",  mbst)
+    menu_btn.add_theme_stylebox_override("hover",   mbst)
+    menu_btn.add_theme_stylebox_override("pressed", mbst)
+    menu_btn.add_theme_color_override("font_color", accent.lightened(0.20) if player_won else Color(0.75, 0.85, 1.0))
+    menu_btn.pressed.connect(_return_to_main_menu)
+    game_over_layer.add_child(menu_btn)
 
-    # Both buttons get explicit high-contrast styling. Every other button in
-    # this UI is hand-styled with a StyleBoxFlat -- leaving these two on the
-    # bare engine default made them look flat/washed out against the custom
-    # dark theme everywhere else, which is what made them so easy to miss.
-    var button := Button.new()
-    button.text = "PLAY AGAIN"
-    button.custom_minimum_size = Vector2(280, 58)
-    button.focus_mode = Control.FOCUS_NONE
-    button.add_theme_font_size_override("font_size", ui_font(19))
-    var primary_style := StyleBoxFlat.new()
-    primary_style.bg_color = Color(1.0, 0.86, 0.32)
-    primary_style.set_corner_radius_all(12)
-    button.add_theme_stylebox_override("normal", primary_style)
-    button.add_theme_stylebox_override("hover", primary_style)
-    button.add_theme_stylebox_override("pressed", primary_style)
-    button.add_theme_color_override("font_color", Color(0.04, 0.06, 0.10))
-    button.add_theme_color_override("font_hover_color", Color(0.04, 0.06, 0.10))
-    button.add_theme_color_override("font_pressed_color", Color(0.04, 0.06, 0.10))
-    button.pressed.connect(_restart_after_match)
-    box.add_child(button)
+    # Sparkle burst on victory — parented to game_over_layer so it lives above the board
+    if player_won:
+        spawn_sparkle_burst(Vector2(215, 360), 28 if CardView.graphics_quality >= 1 else 10,
+            [gold, Color.WHITE, accent.lightened(0.35)], game_over_layer, 135.0)
 
-    var home := Button.new()
-    home.text = "RETURN TO MAIN MENU"
-    home.custom_minimum_size = Vector2(280, 58)
-    home.focus_mode = Control.FOCUS_NONE
-    home.add_theme_font_size_override("font_size", ui_font(17))
-    var secondary_style := StyleBoxFlat.new()
-    secondary_style.bg_color = Color(0.12, 0.16, 0.26, 0.95)
-    secondary_style.border_color = Color(0.6, 0.74, 1.0)
-    secondary_style.set_border_width_all(2)
-    secondary_style.set_corner_radius_all(12)
-    home.add_theme_stylebox_override("normal", secondary_style)
-    home.add_theme_stylebox_override("hover", secondary_style)
-    home.add_theme_stylebox_override("pressed", secondary_style)
-    home.add_theme_color_override("font_color", Color(0.86, 0.92, 1.0))
-    home.pressed.connect(_return_to_main_menu)
-    box.add_child(home)
-
+    # Cinematic fade-in
     var fade := create_tween()
-    fade.tween_property(game_over_layer, "modulate:a", 1.0, 0.22)
+    fade.tween_property(game_over_layer, "modulate:a", 1.0, 0.32)
 
 func _restart_after_match() -> void:
     if is_instance_valid(game_over_layer):
@@ -7306,8 +7357,7 @@ func refresh_ui(animate_new: bool = false, new_index: int = -1, new_player_side:
     rebuild_hand(); rebuild_enemy_hand()
     rebuild_board(player_board_area, player_board, true, animate_new and new_player_side, new_index)
     rebuild_board(enemy_board_area, enemy_board, false, animate_new and not new_player_side, new_index)
-    rebuild_amulet_row(player_amulet_area, player_board, true)
-    rebuild_amulet_row(enemy_amulet_area, enemy_board, false)
+    # Amulets now render inline in rebuild_board — no separate amulet row needed.
 
 func rebuild_hand() -> void:
     clear_children(player_hand_area)
@@ -7544,9 +7594,6 @@ func _on_card_drag_action(card_index: int, context: String, release_global: Vect
         if is_instance_valid(player_board_area) and player_board_area.get_global_rect().has_point(release_global):
             play_card(card_index)
             return
-        if is_instance_valid(player_amulet_area) and player_amulet_area.get_global_rect().has_point(release_global):
-            play_card(card_index)
-            return
         # Dropped back onto another card still in hand: reorder instead of
         # playing it (mirrors the old "drag onto another card" convention).
         if is_instance_valid(player_hand_area):
@@ -7609,47 +7656,181 @@ func rebuild_board(area: Control, board: Array, player_side: bool, animate_new: 
     if not is_instance_valid(area):
         return
     clear_children(area)
-    # Battlefield followers use the full card layout at a reduced scale. The old
-    # compact layout could collapse visually on Android after viewport scaling.
     var gap: float = 18.0
     var available_width: float = maxf(1.0, area.size.x - 12.0)
     var desired_width: float = 5.0 * 142.0 + 4.0 * gap
     var visual_scale: float = minf(0.78, available_width / desired_width)
     visual_scale = maxf(0.58, visual_scale)
     var card_w: float = 142.0 * visual_scale
-    var followers: Array = []
-    var original_indices: Array = []
-    for board_index in range(board.size()):
-        if not bool(board[board_index].get("is_amulet", false)):
-            followers.append(board[board_index])
-            original_indices.append(board_index)
-    var total: float = float(followers.size()) * card_w + float(maxi(0, followers.size() - 1)) * gap
+    # All board entries (followers AND amulets) share the same layout row.
+    # Amulets occupy a slot visually identical in size to a follower card.
+    var total: float = float(board.size()) * card_w + float(maxi(0, board.size() - 1)) * gap
     var start_x: float = (area.size.x - total) * 0.5
-    for i in range(followers.size()):
-        var original_index: int = int(original_indices[i])
-        var view := CardView.new()
-        var inspect_card: Dictionary = followers[i].duplicate(true)
-        inspect_card["_ui_context"] = "player_board" if player_side else "enemy_board"
-        inspect_card["_ui_index"] = original_index
-        view.setup(inspect_card, original_index, false, false)
-        view.scale = Vector2(visual_scale, visual_scale)
-        view.position = Vector2(start_x + i * (card_w + gap), 0)
-        view.base_position = view.position
-        view.visible = true
-        view.modulate = Color.WHITE
-        view.z_index = 10 + i
-        view.mouse_filter = Control.MOUSE_FILTER_STOP
-        view.card_chosen.connect(func(idx: int): card_clicked(idx, player_side))
-        if player_side:
-            view.drag_action_requested.connect(_on_card_drag_action)
-            view.drag_position_updated.connect(_on_attack_drag_update)
-        view.inspect_requested.connect(show_card_details)
-        area.add_child(view)
-        view.enable_card_interactions(false, true)
-        if player_side and original_index == selected_attacker:
-            view.set_selected(true)
-        if animate_new and original_index == new_index:
-            view.summon_animation()
+    for i in range(board.size()):
+        var entry: Dictionary = board[i]
+        var slot_x: float = start_x + i * (card_w + gap)
+        if bool(entry.get("is_amulet", false)):
+            var amulet_slot := _make_board_amulet_slot(entry, i, player_side)
+            amulet_slot.scale = Vector2(visual_scale, visual_scale)
+            amulet_slot.position = Vector2(slot_x, 0)
+            amulet_slot.z_index = 10 + i
+            area.add_child(amulet_slot)
+        else:
+            var view := CardView.new()
+            var inspect_card: Dictionary = entry.duplicate(true)
+            inspect_card["_ui_context"] = "player_board" if player_side else "enemy_board"
+            inspect_card["_ui_index"] = i
+            view.setup(inspect_card, i, false, false)
+            view.scale = Vector2(visual_scale, visual_scale)
+            view.position = Vector2(slot_x, 0)
+            view.base_position = view.position
+            view.visible = true
+            view.modulate = Color.WHITE
+            view.z_index = 10 + i
+            view.mouse_filter = Control.MOUSE_FILTER_STOP
+            view.card_chosen.connect(func(idx: int): card_clicked(idx, player_side))
+            if player_side:
+                view.drag_action_requested.connect(_on_card_drag_action)
+                view.drag_position_updated.connect(_on_attack_drag_update)
+            view.inspect_requested.connect(show_card_details)
+            area.add_child(view)
+            view.enable_card_interactions(false, true)
+            if player_side and i == selected_attacker:
+                view.set_selected(true)
+            if animate_new and i == new_index:
+                view.summon_animation()
+
+## Builds a card-slot–sized Panel for an amulet on the board.
+## Sized to 142×186 (same as CardView) so it takes a full board slot.
+func _make_board_amulet_slot(am: Dictionary, board_index: int, player_side: bool) -> Control:
+    var accent := class_accent_color(str(am.get("faction", am.get("class", ""))))
+    var slot := Panel.new()
+    slot.custom_minimum_size = Vector2(142, 186)
+    slot.size = Vector2(142, 186)
+    slot.mouse_filter = Control.MOUSE_FILTER_STOP
+    var st := StyleBoxFlat.new()
+    st.bg_color = Color(0.04, 0.06, 0.11, 0.97)
+    st.border_color = accent
+    st.set_border_width_all(3)
+    st.set_corner_radius_all(11)
+    st.shadow_color = Color(accent.r * 0.6, accent.g * 0.6, accent.b * 0.6, 0.65)
+    st.shadow_size = 10
+    slot.add_theme_stylebox_override("panel", st)
+
+    # Soft radial glow behind the art
+    var glow_tex := _make_radial_glow_tex(accent, 142, 110)
+    if glow_tex:
+        var glow := TextureRect.new()
+        glow.texture = glow_tex
+        glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        glow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        glow.size = Vector2(142, 110); glow.position = Vector2(0, 0)
+        glow.modulate.a = 0.38; glow.z_index = 0
+        glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        slot.add_child(glow)
+
+    # Art — clipped to the top three-quarters of the slot
+    var art_clip := Panel.new()
+    art_clip.position = Vector2(8, 8); art_clip.size = Vector2(126, 104)
+    art_clip.clip_contents = true; art_clip.z_index = 1
+    var ac_st := StyleBoxFlat.new()
+    ac_st.bg_color = Color(0.02, 0.03, 0.06)
+    ac_st.set_corner_radius_all(7)
+    art_clip.add_theme_stylebox_override("panel", ac_st)
+    slot.add_child(art_clip)
+
+    var art := TextureRect.new()
+    art.texture = CardArt.resolve(am)
+    art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    art.size = Vector2(126, 104); art.position = Vector2.ZERO
+    art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    art_clip.add_child(art)
+
+    # Left accent stripe
+    var stripe := ColorRect.new()
+    stripe.color = accent; stripe.position = Vector2(0, 0); stripe.size = Vector2(3, 186)
+    stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    slot.add_child(stripe)
+
+    # Name
+    var name_lbl := Label.new()
+    name_lbl.text = str(am.get("name", "Amulet"))
+    name_lbl.position = Vector2(6, 116); name_lbl.size = Vector2(130, 16)
+    name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    name_lbl.add_theme_font_size_override("font_size", ui_font(11))
+    name_lbl.add_theme_color_override("font_color", Color(0.96, 0.96, 1.0))
+    name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    slot.add_child(name_lbl)
+
+    # AMULET tag in accent colour
+    var tag := Label.new()
+    tag.text = "✦  AMULET  ✦"
+    tag.position = Vector2(6, 134); tag.size = Vector2(130, 14)
+    tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    tag.add_theme_font_size_override("font_size", ui_font(8))
+    tag.add_theme_color_override("font_color", accent.lightened(0.25))
+    tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    slot.add_child(tag)
+
+    # Progress dots (progress-tracking amulets) or brief effect text
+    var ability := str(am.get("ability", ""))
+    var is_progress := ability in ["daily_progress", "standing_ground", "second_chances"]
+    if is_progress:
+        var prog_now: int = player_progress_counters if player_side else enemy_progress_counters
+        var prog_phase2 := (player_life_rebuilt if player_side else enemy_life_rebuilt) or \
+                           (player_courage_recovery_evolved if player_side else enemy_courage_recovery_evolved) or \
+                           (player_hope_recovery_evolved if player_side else enemy_hope_recovery_evolved)
+        var dot_row := HBoxContainer.new()
+        dot_row.position = Vector2(6, 152); dot_row.size = Vector2(130, 16)
+        dot_row.alignment = BoxContainer.ALIGNMENT_CENTER
+        dot_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        slot.add_child(dot_row)
+        for d in range(6):
+            var dot := Label.new()
+            dot.text = "●" if d < prog_now else "○"
+            dot.add_theme_font_size_override("font_size", ui_font(10))
+            var dc: Color
+            if d < prog_now:
+                dc = Color(0.50, 0.95, 1.0) if d >= 3 else Color(1.0, 0.84, 0.28)
+            else:
+                dc = Color(0.42, 0.46, 0.52)
+            dot.add_theme_color_override("font_color", dc)
+            dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            if d == 2:
+                var msep := Label.new(); msep.text = " ★ "
+                msep.add_theme_font_size_override("font_size", ui_font(9))
+                msep.add_theme_color_override("font_color", Color(0.78, 0.62, 0.28))
+                msep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                dot_row.add_child(dot); dot_row.add_child(msep); continue
+            dot_row.add_child(dot)
+    else:
+        var eff := str(am.get("display_text", am.get("text", "")))
+        if eff.begins_with("Amulet —"): eff = eff.substr(9).strip_edges()
+        var eff_lbl := Label.new()
+        eff_lbl.text = eff; eff_lbl.position = Vector2(6, 150); eff_lbl.size = Vector2(130, 30)
+        eff_lbl.add_theme_font_size_override("font_size", ui_font(8))
+        eff_lbl.add_theme_color_override("font_color", Color(0.70, 0.75, 0.85))
+        eff_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        eff_lbl.max_lines_visible = 2
+        eff_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        slot.add_child(eff_lbl)
+
+    # Tap to reveal full tooltip
+    var am_name := str(am.get("name", "Amulet"))
+    var am_text := str(am.get("display_text", am.get("text", "")))
+    var am_accent := accent
+    slot.gui_input.connect(func(ev: InputEvent):
+        var pressed := false
+        if ev is InputEventMouseButton and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+            pressed = (ev as InputEventMouseButton).pressed
+        elif ev is InputEventScreenTouch:
+            pressed = (ev as InputEventScreenTouch).pressed
+        if pressed:
+            _show_amulet_tooltip(slot, am_name, am_text, am_accent)
+    )
+    return slot
 
 func rebuild_amulet_row(area: Control, board: Array, player_side: bool) -> void:
     if not is_instance_valid(area):
