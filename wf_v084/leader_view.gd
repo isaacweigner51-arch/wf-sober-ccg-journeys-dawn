@@ -391,14 +391,39 @@ func _play_selected() -> void:
 	_play_idle()
 
 func _play_damaged() -> void:
-	var target := (_layer_head if has_layered_art and _layer_head else _art)
-	if target == null: target = _art
+	# Head layer is most expressive (it moves independently during idle);
+	# fall back to the flat composite when layered art isn't loaded.
+	var head   := _layer_head if (has_layered_art and _layer_head) else null
+	var body   := _layer_body if (has_layered_art and _layer_body) else null
+	var target := head if head else _art
 	if target == null: return
-	_state_tween = create_tween().set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
-	_state_tween.tween_property(target, "modulate",   Color(2.2, 2.2, 2.2), 0.06)
-	_state_tween.tween_property(target, "position:x", -20.0, 0.09)
-	_state_tween.tween_property(target, "modulate",   Color.WHITE, 0.22)
-	_state_tween.tween_property(target, "position:x",   0.0, 0.30)
+
+	# ── Flash ─────────────────────────────────────────────────────────────────
+	# Red-orange overbright — unmistakably "took a hit", not a white shimmer
+	_state_tween = create_tween()
+	_state_tween.tween_property(target, "modulate", Color(2.8, 0.38, 0.20), 0.05)
+
+	# ── Recoil ────────────────────────────────────────────────────────────────
+	# Snap back-and-up hard (the character flinches), overshoot forward
+	# (stagger), then spring-settle to rest.
+	_state_tween.tween_property(target, "position", Vector2(-30.0, -8.0), 0.07)\
+		.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	_state_tween.tween_property(target, "position", Vector2(10.0,   0.0), 0.12)\
+		.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	_state_tween.tween_property(target, "position", Vector2.ZERO,         0.24)\
+		.set_trans(Tween.TRANS_SPRING).set_ease(Tween.EASE_OUT)
+
+	# Colour recovers in parallel with the spring-back
+	var col := create_tween()
+	col.tween_property(target, "modulate", Color.WHITE, 0.42)
+
+	# Body silhouette also flushes red so the whole portrait reacts, not just
+	# the head floating above a calm torso.
+	if body:
+		var bt := create_tween()
+		bt.tween_property(body, "modulate", Color(2.0, 0.35, 0.18), 0.05)
+		bt.tween_property(body, "modulate", Color.WHITE, 0.44)
+
 	_state_tween.tween_callback(func(): animation_finished.emit(State.DAMAGED); set_state(State.IDLE))
 
 func _play_healed() -> void:

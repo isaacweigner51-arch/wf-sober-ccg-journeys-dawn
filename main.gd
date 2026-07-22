@@ -1726,6 +1726,13 @@ func leader_feedback(leader: Control, damage: int, healing: bool = false) -> voi
     if not healing and is_instance_valid(player_leader) and leader == player_leader:
         play_battle_bark(player_leader, selected_class, "damage", true, true)
     play_sfx("heal" if healing else ("hit_heavy" if damage >= 4 else "hit_light"))
+
+    # Drive the portrait's internal reaction — LeaderView handles the
+    # character-level flinch/flash/spring, independent of the container shake.
+    var _lv := leader.get_node_or_null("LeaderPortrait")
+    if _lv != null:
+        _lv.set_state(_LeaderView.State.HEALED if healing else _LeaderView.State.DAMAGED)
+
     var start := leader.position
     var tween := create_tween()
     if healing:
