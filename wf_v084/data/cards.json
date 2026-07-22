@@ -2281,7 +2281,9 @@
     "type": "Follower",
     "description": "On Play: Give your leader the Dawn Sequence for the rest of the match (non-stackable). 1st restore \u2192 +1/+1 to all allied followers. 2nd restore \u2192 deal 1 damage to all enemy followers. 3rd restore \u2192 summon a Newcomer with +2/+2 and Ward.",
     "flavor": "She carried the dawn in her eyes long before the sun remembered to rise.",
-    "max_copies": 2
+    "max_copies": 2,
+    "ability": "dawn_sequence",
+    "effect": "On Play: Give your leader the Dawn Sequence for the rest of the match (non-stackable). 1st restore: +1/+1 to all allied followers. 2nd restore: 1 damage to all enemy followers. 3rd restore: summon a Newcomer with +2/+2 and Ward."
   },
   {
     "id": "JD-076",
