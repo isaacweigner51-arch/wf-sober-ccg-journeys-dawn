@@ -1863,8 +1863,8 @@ func build_ui() -> void:
     battlefield_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     battlefield_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     battlefield_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    battlefield_background.texture = load("res://assets/ui/battlefield.png") as Texture2D
     add_child(battlefield_background)
-    # SVG arena is applied in refresh_battlefield_theme() once selected_class is known
 
     # Class-tinted shade — updated by refresh_battlefield_theme() each match
     _battle_class_shade = ColorRect.new()
@@ -7777,14 +7777,10 @@ func svg_texture(svg: String) -> Texture2D:
     var image := Image.new(); image.load_svg_from_string(svg, 1.0); return ImageTexture.create_from_image(image)
 
 func refresh_battlefield_theme() -> void:
+    # Only update the class-tint shade overlay — the background PNG is fixed.
     var ac := class_accent_color(selected_class)
     if is_instance_valid(_battle_class_shade):
         _battle_class_shade.color = Color(ac.r * 0.10, ac.g * 0.10, ac.b * 0.16, 0.28)
-    if is_instance_valid(battlefield_background):
-        var svg := battlefield_svg()
-        var img := Image.new()
-        if img.load_svg_from_buffer(svg.to_utf8_buffer()) == OK:
-            battlefield_background.texture = ImageTexture.create_from_image(img)
 
 func battlefield_svg() -> String:
     # Strongly differentiated host arenas. The active player's selected deck class

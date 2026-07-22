@@ -243,24 +243,27 @@ func _add_keyword_badges(frame: Control) -> void:
     var keywords := _card_keywords()
     if keywords.is_empty():
         return
+    var _bf_badge := (display_mode == DisplayMode.BATTLEFIELD)
+    var use_compact := compact or _bf_badge
     var badge_row := HBoxContainer.new()
-    badge_row.position = Vector2(8, 88 if not compact else 67)
-    badge_row.size = Vector2(custom_minimum_size.x - 16, 24)
+    # BATTLEFIELD: small icon badges sit below the stat row (y≈164)
+    badge_row.position = Vector2(8, 162 if _bf_badge else (88 if not compact else 67))
+    badge_row.size = Vector2(custom_minimum_size.x - 16, 22 if use_compact else 24)
     badge_row.alignment = BoxContainer.ALIGNMENT_CENTER
     badge_row.add_theme_constant_override("separation", 3)
     badge_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
     badge_row.z_index = 90
     frame.add_child(badge_row)
-    var max_badges := mini(2 if not compact else 4, keywords.size())
+    var max_badges := mini(4 if use_compact else 2, keywords.size())
     for i in range(max_badges):
         var definition: Dictionary = keywords[i]
         var badge := Label.new()
-        badge.text = str(definition.get("icon", "•")) if compact else str(definition.get("label", "ABILITY"))
+        badge.text = str(definition.get("icon", "•")) if use_compact else str(definition.get("label", "ABILITY"))
         badge.tooltip_text = str(definition.get("label", "ABILITY"))
-        badge.custom_minimum_size = Vector2(24, 22) if compact else Vector2(92, 24)
+        badge.custom_minimum_size = Vector2(24, 20) if use_compact else Vector2(92, 24)
         badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-        badge.add_theme_font_size_override("font_size", card_font(13 if not compact else 11))
+        badge.add_theme_font_size_override("font_size", card_font(11 if use_compact else 13))
         badge.add_theme_color_override("font_color", Color.WHITE)
         badge.add_theme_color_override("font_shadow_color", Color.BLACK)
         badge.add_theme_constant_override("shadow_offset_x", 1)
@@ -293,15 +296,23 @@ func _build() -> void:
     # Other modes: original compact art window with room for ability text.
     var _bf: bool  = (display_mode == DisplayMode.BATTLEFIELD) and not hidden_card
     var art_top: float = 24.0 if not compact else 20.0
-    var art_x: float   = 0.0  if _bf else 8.0
-    var art_w: float   = custom_minimum_size.x if _bf else (custom_minimum_size.x - 16.0)
-    var art_h: float   = (custom_minimum_size.y - art_top - 38.0) if _bf else (82.0 if not compact else 64.0)
+    # BATTLEFIELD: 124×124 circle portrait centred in the card.
+    # Other modes: original compact rect with room for ability text below.
+    var art_x: float = (custom_minimum_size.x - 124.0) * 0.5 if _bf else 8.0
+    var art_w: float = 124.0 if _bf else (custom_minimum_size.x - 16.0)
+    var art_h: float = 124.0 if _bf else (82.0 if not compact else 64.0)
     art_clip = Panel.new()
-    art_clip.position = Vector2(art_x, art_top)
+    art_clip.position = Vector2(art_x, 6.0 if _bf else art_top)
     art_clip.size = Vector2(art_w, art_h)
     art_clip.clip_contents = true
     art_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    art_clip.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+    if _bf:
+        var circle_st := StyleBoxFlat.new()
+        circle_st.bg_color = Color(0.04, 0.06, 0.10)
+        circle_st.set_corner_radius_all(62)   # radius = half of 124 → full circle
+        art_clip.add_theme_stylebox_override("panel", circle_st)
+    else:
+        art_clip.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
     frame.add_child(art_clip)
 
     art_rect = TextureRect.new()
@@ -338,9 +349,17 @@ func _build() -> void:
         frame.add_child(evolved_label)
 
     living_glow = Panel.new()
-    living_glow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    if _bf and not hidden_card:
+        # In portrait mode the rarity glow wraps the circle, not the outer frame
+        living_glow.position = art_clip.position
+        living_glow.size     = art_clip.size
+        var lg_st := _living_glow_style()
+        lg_st.set_corner_radius_all(62)
+        living_glow.add_theme_stylebox_override("panel", lg_st)
+    else:
+        living_glow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        living_glow.add_theme_stylebox_override("panel", _living_glow_style())
     living_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    living_glow.add_theme_stylebox_override("panel", _living_glow_style())
     frame.add_child(living_glow)
 
     shine_strip = ColorRect.new()
@@ -389,6 +408,7 @@ func _build() -> void:
     name_label.add_theme_color_override("font_color", Color(0.97, 0.95, 0.86))
     name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    name_label.visible = not _bf   # hidden in portrait mode — no room at small scale
     frame.add_child(name_label)
 
     if not hidden_card:
@@ -418,45 +438,42 @@ func _build() -> void:
 
     if not hidden_card:
         if _bf and not bool(data.get("is_amulet", false)):
-            # ── Battlefield: full-art card — dark footer, corner stat panels ──
-            var footer := ColorRect.new()
-            footer.position = Vector2(0, custom_minimum_size.y - 38)
-            footer.size = Vector2(custom_minimum_size.x, 38)
-            footer.color = Color(0.0, 0.0, 0.0, 0.74)
-            footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-            frame.add_child(footer)
+            # ── Battlefield portrait: circle art, stat badges below ───────────
+            var stat_y := art_clip.position.y + art_clip.size.y + 4.0
 
-            # Attack — bottom left
+            # Attack badge — bottom left
             var atk_bg := StyleBoxFlat.new()
-            atk_bg.bg_color = Color(0.55, 0.18, 0.06, 0.92)
-            atk_bg.border_color = Color(1.0, 0.68, 0.32); atk_bg.set_border_width_all(2); atk_bg.set_corner_radius_all(6)
+            atk_bg.bg_color = Color(0.42, 0.13, 0.04, 0.94)
+            atk_bg.border_color = Color(1.0, 0.72, 0.30)
+            atk_bg.set_border_width_all(2); atk_bg.set_corner_radius_all(8)
             var atk_pan := Panel.new()
-            atk_pan.position = Vector2(2, custom_minimum_size.y - 36)
-            atk_pan.size = Vector2(54, 34); atk_pan.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            atk_pan.position = Vector2(2, stat_y)
+            atk_pan.size = Vector2(58, 30); atk_pan.mouse_filter = Control.MOUSE_FILTER_IGNORE
             atk_pan.add_theme_stylebox_override("panel", atk_bg); frame.add_child(atk_pan)
             stats_label = Label.new()
             stats_label.text = "⚔ %d" % int(data.get("attack", 0))
-            stats_label.position = Vector2(0, 4); stats_label.size = Vector2(54, 26)
+            stats_label.position = Vector2(0, 3); stats_label.size = Vector2(58, 24)
             stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-            stats_label.add_theme_font_size_override("font_size", card_font(16))
-            stats_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.62))
+            stats_label.add_theme_font_size_override("font_size", card_font(14))
+            stats_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.60))
             stats_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
             atk_pan.add_child(stats_label)
 
-            # Health — bottom right
+            # Health badge — bottom right
             var hp_bg := StyleBoxFlat.new()
-            hp_bg.bg_color = Color(0.50, 0.07, 0.10, 0.92)
-            hp_bg.border_color = Color(1.0, 0.42, 0.42); hp_bg.set_border_width_all(2); hp_bg.set_corner_radius_all(6)
+            hp_bg.bg_color = Color(0.40, 0.06, 0.08, 0.94)
+            hp_bg.border_color = Color(1.0, 0.42, 0.42)
+            hp_bg.set_border_width_all(2); hp_bg.set_corner_radius_all(8)
             var hp_pan := Panel.new()
-            hp_pan.position = Vector2(custom_minimum_size.x - 56, custom_minimum_size.y - 36)
-            hp_pan.size = Vector2(54, 34); hp_pan.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            hp_pan.position = Vector2(custom_minimum_size.x - 60, stat_y)
+            hp_pan.size = Vector2(58, 30); hp_pan.mouse_filter = Control.MOUSE_FILTER_IGNORE
             hp_pan.add_theme_stylebox_override("panel", hp_bg); frame.add_child(hp_pan)
             var hp_lbl := Label.new()
             hp_lbl.text = "♥ %d" % int(data.get("health", 0))
-            hp_lbl.position = Vector2(0, 4); hp_lbl.size = Vector2(54, 26)
+            hp_lbl.position = Vector2(0, 3); hp_lbl.size = Vector2(58, 24)
             hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-            hp_lbl.add_theme_font_size_override("font_size", card_font(16))
-            hp_lbl.add_theme_color_override("font_color", Color(1.0, 0.60, 0.62))
+            hp_lbl.add_theme_font_size_override("font_size", card_font(14))
+            hp_lbl.add_theme_color_override("font_color", Color(1.0, 0.58, 0.60))
             hp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
             hp_pan.add_child(hp_lbl)
 
@@ -876,6 +893,12 @@ func _living_glow_style() -> StyleBoxFlat:
     return style
 
 func _frame_style() -> StyleBoxFlat:
+    # BATTLEFIELD portrait mode — the circle carries all visual identity.
+    # Return a fully transparent frame so no rectangle shows behind the circle.
+    if display_mode == DisplayMode.BATTLEFIELD and not hidden_card:
+        var bf := StyleBoxFlat.new()
+        bf.bg_color = Color(0, 0, 0, 0)
+        return bf
     var style := StyleBoxFlat.new()
     var faction := str(data.get("faction", "Fellowship"))
     var base := Color(0.15, 0.18, 0.24)
