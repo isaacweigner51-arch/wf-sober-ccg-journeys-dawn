@@ -3826,9 +3826,11 @@ func _show_battle_intro(player_class_name: String, opponent_class_name: String) 
     title.add_theme_color_override("font_color", GOLD_COLOR)
     intro.add_child(title)
 
+    # Portrait block raised so the VS screen sits in the upper-middle of the
+    # viewport rather than drifting toward the bottom edge.
     var left_art := TextureRect.new()
     left_art.texture = class_leader_texture(player_class_name)
-    left_art.position = Vector2(105, 165)
+    left_art.position = Vector2(105, 110)
     left_art.size = Vector2(390, 390)
     left_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     left_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -3838,7 +3840,7 @@ func _show_battle_intro(player_class_name: String, opponent_class_name: String) 
 
     var right_art := TextureRect.new()
     right_art.texture = class_leader_texture(opponent_class_name)
-    right_art.position = Vector2(785, 165)
+    right_art.position = Vector2(785, 110)
     right_art.size = Vector2(390, 390)
     right_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     right_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -3847,12 +3849,13 @@ func _show_battle_intro(player_class_name: String, opponent_class_name: String) 
     right_art.modulate = Color(1,1,1,0)
     intro.add_child(right_art)
 
-    # Name labels centered directly beneath their respective portraits (portrait x + portrait w)
-    var left_name := centered_label(player_class_name.to_upper(), Vector2(155, 575), Vector2(390, 44), 25, intro)
+    # Name labels centered directly beneath their respective portraits
+    var left_name := centered_label(player_class_name.to_upper(), Vector2(155, 512), Vector2(390, 44), 25, intro)
     left_name.add_theme_color_override("font_color", class_color(player_class_name).lightened(0.25))
-    var right_name := centered_label(opponent_class_name.to_upper(), Vector2(735, 575), Vector2(390, 44), 25, intro)
+    var right_name := centered_label(opponent_class_name.to_upper(), Vector2(735, 512), Vector2(390, 44), 25, intro)
     right_name.add_theme_color_override("font_color", class_color(opponent_class_name).lightened(0.25))
-    var vs := centered_label("VS", Vector2(540, 290), Vector2(200, 100), 64, intro)
+    # VS centred at portrait midpoint (110 + 195 = 305)
+    var vs := centered_label("VS", Vector2(540, 255), Vector2(200, 100), 64, intro)
     vs.add_theme_color_override("font_color", GOLD_COLOR)
     vs.scale = Vector2(0.35, 0.35)
     vs.pivot_offset = vs.size * 0.5
@@ -4109,26 +4112,22 @@ func show_match_deck_selection() -> void:
     shell.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.10), 0))
     root_layer.add_child(shell)
 
-    # Battle stage fills the full shell so the VS strip lands dead-center on
-    # screen.  The deck list floats above it as a z_index overlay so the left
-    # leader's class-color background bleeds all the way to the screen edge.
+    # Left panel: all deck categories (MY DECKS / STARTER / OWNER)
+    var left_p := Panel.new()
+    left_p.position = Vector2(0, 0)
+    left_p.size = Vector2(268, 608)
+    left_p.add_theme_stylebox_override("panel", style(Color(0.05, 0.08, 0.14), 0))
+    shell.add_child(left_p)
+    _bp_build_deck_list(left_p)
+
+    # Battle stage: cinematic MY LEADER vs OPPONENT display
     var stage := Panel.new()
-    stage.position = Vector2(0, 0)
-    stage.size = Vector2(1268, 608)
+    stage.position = Vector2(270, 0)
+    stage.size = Vector2(998, 608)
     stage.clip_contents = true
     stage.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.10), 0))
     shell.add_child(stage)
     _bp_build_battle_stage(stage)
-
-    # Left panel: all deck categories — rendered on top of the stage so the
-    # leader zone colour shows through behind it (feels integrated).
-    var left_p := Panel.new()
-    left_p.position = Vector2(0, 0)
-    left_p.size = Vector2(268, 608)
-    left_p.z_index = 5
-    left_p.add_theme_stylebox_override("panel", style(Color(0.05, 0.08, 0.14), 0))
-    shell.add_child(left_p)
-    _bp_build_deck_list(left_p)
 
 
 func _bp_get_selected_ids() -> Array:
@@ -4546,26 +4545,24 @@ func _bp_build_battle_stage(stage: Panel) -> void:
     var my_col    := class_color(my_class)
     var opp_col   := class_color(opp_class)
 
-    # Stage is now 1268 px (full shell).  VS strip at x=584 puts its centre at
-    # x=634 in shell coords → x=640 on the 1280-px screen (shell starts at x=6).
-    # Left zone: 584 px — deck list panel overlays x=0..268 of it, so the
-    # leader portrait is placed at x=272 (right of deck panel).
-    # Right zone: 584 px — full portrait starts at x=692 (OX+8).
+    # Dual tinted backgrounds — each leader's class color bleeds into their half.
+    # The stage is 998 px wide; the VS strip is centered, so both leader zones
+    # must be exactly (998 - 100) / 2 = 449 px wide.
     var bg_my := ColorRect.new()
     bg_my.color = Color(my_col.r * 0.12, my_col.g * 0.12, my_col.b * 0.18, 1.0)
-    bg_my.position = Vector2.ZERO; bg_my.size = Vector2(584, 608)
+    bg_my.position = Vector2.ZERO; bg_my.size = Vector2(449, 608)
     bg_my.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_my)
 
     var bg_vs := ColorRect.new()
     bg_vs.color = Color(0.02, 0.03, 0.06, 1.0)
-    bg_vs.position = Vector2(584, 0); bg_vs.size = Vector2(100, 608)
+    bg_vs.position = Vector2(449, 0); bg_vs.size = Vector2(100, 608)
     bg_vs.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_vs)
 
     var bg_opp := ColorRect.new()
     bg_opp.color = Color(opp_col.r * 0.12, opp_col.g * 0.12, opp_col.b * 0.18, 1.0)
-    bg_opp.position = Vector2(684, 0); bg_opp.size = Vector2(584, 608)
+    bg_opp.position = Vector2(549, 0); bg_opp.size = Vector2(449, 608)
     bg_opp.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_opp)
 
@@ -4580,7 +4577,7 @@ func _bp_build_battle_stage(stage: Panel) -> void:
     elif battle_select_mode not in ["meta", "final_boss", "prebuilt"]:
         is_valid = false
 
-    var begin_b := button("\u2694  BEGIN BATTLE", Vector2(0, 480), Vector2(1268, 62),
+    var begin_b := button("\u2694  BEGIN BATTLE", Vector2(0, 480), Vector2(998, 62),
         func(): _bp_start_battle(false), stage)
     begin_b.add_theme_font_size_override("font_size", ui_font_size(22))
     if is_valid:
@@ -4592,19 +4589,19 @@ func _bp_build_battle_stage(stage: Panel) -> void:
         begin_b.disabled = true
 
     var prac_b := button("PRACTICE MODE  \u2022  Long timer  \u2022  No ranked rewards",
-        Vector2(0, 546), Vector2(1268, 50), func(): _bp_start_battle(true), stage)
+        Vector2(0, 546), Vector2(998, 50), func(): _bp_start_battle(true), stage)
     prac_b.add_theme_font_size_override("font_size", ui_font_size(13))
     prac_b.add_theme_stylebox_override("normal", style(Color(0.12, 0.26, 0.16), 0))
     if not is_valid: prac_b.disabled = true
 
-## MY LEADER zone — x=0, w=584 (deck panel overlays x=0..268, portrait at x=272)
+## MY LEADER zone — x=0, w=449
 func _bp_build_my_leader_zone(parent: Control, my_class: String, my_col: Color) -> void:
-    var PX := 272; var PY := 8; var PW := 304; var PH := 352
+    var PX := 8; var PY := 8; var PW := 433; var PH := 352
 
     # Outer zone glow (behind the framed portrait)
     var glow := ColorRect.new()
     glow.color = Color(my_col, 0.07)
-    glow.position = Vector2(0, 0); glow.size = Vector2(584, PY + PH + 4)
+    glow.position = Vector2(0, 0); glow.size = Vector2(449, PY + PH + 4)
     glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
     parent.add_child(glow)
     var gt := glow.create_tween().set_loops()
@@ -4691,8 +4688,7 @@ func _bp_build_my_leader_zone(parent: Control, my_class: String, my_col: Color) 
     by += 20
 
     if is_custom:
-        # PW is now 304 px (narrower zone). Fit 4 buttons: (304 - 9) / 4 = 74 px each.
-        var ew := 73
+        var ew := 88
         var eb := button("\u270F EDIT", Vector2(PX, by), Vector2(ew, 26), _bp_open_deck_builder_edit, parent)
         eb.add_theme_font_size_override("font_size", ui_font_size(10))
         eb.add_theme_stylebox_override("normal", style(Color(0.15, 0.24, 0.40), 6))
@@ -4709,9 +4705,9 @@ func _bp_build_my_leader_zone(parent: Control, my_class: String, my_col: Color) 
 
 ## VS divider strip — x=449, w=100
 func _bp_build_vs_zone(parent: Control) -> void:
-    # VX=584 → VS centre at 634 in shell coords → 640 on the 1280-px screen.
-    var VX := 584; var VW := 100
+    var VX := 449; var VW := 100
 
+    # Vertical gold lines flanking the VS text — centered in the 998 px stage
     var lt := ColorRect.new()
     lt.color = Color(GOLD_COLOR, 0.30)
     lt.position = Vector2(VX + VW / 2 - 1, 18); lt.size = Vector2(2, 148)
@@ -4726,9 +4722,16 @@ func _bp_build_vs_zone(parent: Control) -> void:
     lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
     parent.add_child(lb)
 
-## OPPONENT zone — x=684, w=584
+    # Vertical separator between left deck panel and stage
+    var left_sep := ColorRect.new()
+    left_sep.color = Color(GOLD_COLOR, 0.12)
+    left_sep.position = Vector2(0, 0); left_sep.size = Vector2(2, 534)
+    left_sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(left_sep)
+
+## OPPONENT zone — x=549, w=449
 func _bp_build_opp_zone(parent: Control, opp_class: String, opp_col: Color) -> void:
-    var OX := 684; var OW := 584
+    var OX := 549; var OW := 449
     var PX := OX + 8; var PY := 8; var PW := 433; var PH := 352
 
     # Pulsing aura (slightly offset phase from MY side for visual interest)
