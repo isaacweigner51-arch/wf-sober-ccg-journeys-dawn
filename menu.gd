@@ -7717,9 +7717,9 @@ func _build_db_card_grid(parent: Control) -> void:
     vb.add_child(scroll)
 
     var grid := GridContainer.new()
-    grid.columns = 4
-    grid.add_theme_constant_override("h_separation", 14)
-    grid.add_theme_constant_override("v_separation", 14)
+    grid.columns = 6
+    grid.add_theme_constant_override("h_separation", 8)
+    grid.add_theme_constant_override("v_separation", 8)
     scroll.add_child(grid)
 
     for cd in cards:
@@ -7729,9 +7729,9 @@ func _build_db_card_grid(parent: Control) -> void:
         var owned := int(collection_owned.get(id, 0))
 
         var box := VBoxContainer.new()
-        box.custom_minimum_size = Vector2(152, 254)
+        box.custom_minimum_size = Vector2(112, 196)
 
-        var cp := card_panel(cd, Vector2.ZERO, Vector2(152, 210))
+        var cp := card_panel(cd, Vector2.ZERO, Vector2(112, 158))
         if owned <= 0:
             cp.modulate = Color(0.44, 0.48, 0.58, 0.82)
         var tap_btn := Button.new()
@@ -7750,28 +7750,28 @@ func _build_db_card_grid(parent: Control) -> void:
             var allowed := mini(owned, int(COPY_LIMITS.get(rarity, 1)))
             var in_deck := count_in_deck(id)
             var add_row := HBoxContainer.new()
-            add_row.custom_minimum_size = Vector2(152, 32)
-            add_row.add_theme_constant_override("separation", 4)
+            add_row.custom_minimum_size = Vector2(112, 28)
+            add_row.add_theme_constant_override("separation", 2)
             var chip := Label.new()
             chip.text = "%d/%d" % [in_deck, allowed]
-            chip.add_theme_font_size_override("font_size", 12)
+            chip.add_theme_font_size_override("font_size", 10)
             chip.add_theme_color_override("font_color", GOLD_COLOR if in_deck > 0 else Color(0.45, 0.45, 0.55))
-            chip.custom_minimum_size = Vector2(34, 30)
+            chip.custom_minimum_size = Vector2(28, 26)
             chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
             chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
             add_row.add_child(chip)
             var add_btn := Button.new(); add_btn.text = "+ ADD"
-            add_btn.add_theme_font_size_override("font_size", 12)
+            add_btn.add_theme_font_size_override("font_size", 10)
             add_btn.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
-            add_btn.custom_minimum_size = Vector2(0, 30)
+            add_btn.custom_minimum_size = Vector2(0, 26)
             var can_add := (editing_deck_slot_idx >= 0 and saved_deck.size() < 40 and in_deck < allowed)
             add_btn.disabled = not can_add
             if editing_deck_slot_idx < 0:
                 add_btn.tooltip_text = "Select a deck slot first"
             elif not can_add:
                 add_btn.tooltip_text = "Limit reached"
-            add_btn.add_theme_stylebox_override("normal", style(Color(0.22, 0.52, 0.28), 7))
-            add_btn.add_theme_stylebox_override("hover", solid_style(Color(0.28, 0.62, 0.34), 7))
+            add_btn.add_theme_stylebox_override("normal", style(Color(0.22, 0.52, 0.28), 5))
+            add_btn.add_theme_stylebox_override("hover", solid_style(Color(0.28, 0.62, 0.34), 5))
             add_btn.pressed.connect(add_card_to_deck.bind(id))
             add_row.add_child(add_btn)
             box.add_child(add_row)
@@ -7779,18 +7779,18 @@ func _build_db_card_grid(parent: Control) -> void:
             var cost_v := int(CRAFT_COSTS[rarity])
             var craft_btn := Button.new()
             craft_btn.text = "CREATE %s" % _fmt_vial_cost(cost_v)
-            craft_btn.add_theme_font_size_override("font_size", 11)
-            craft_btn.custom_minimum_size = Vector2(152, 30)
+            craft_btn.add_theme_font_size_override("font_size", 9)
+            craft_btn.custom_minimum_size = Vector2(112, 26)
             craft_btn.disabled = dust_balance < cost_v
-            craft_btn.add_theme_stylebox_override("normal", style(Color(0.42, 0.35, 0.16), 7))
+            craft_btn.add_theme_stylebox_override("normal", style(Color(0.42, 0.35, 0.16), 5))
             craft_btn.pressed.connect(craft_from_deck_builder.bind(id))
             box.add_child(craft_btn)
         else:
             var locked_lbl := Label.new(); locked_lbl.text = "PACK ONLY"
             locked_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-            locked_lbl.add_theme_font_size_override("font_size", 11)
+            locked_lbl.add_theme_font_size_override("font_size", 9)
             locked_lbl.add_theme_color_override("font_color", Color(0.42, 0.42, 0.52))
-            locked_lbl.custom_minimum_size = Vector2(152, 28)
+            locked_lbl.custom_minimum_size = Vector2(112, 24)
             box.add_child(locked_lbl)
 
         grid.add_child(box)

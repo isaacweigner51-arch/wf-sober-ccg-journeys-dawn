@@ -2216,5 +2216,17 @@
     "description": "On Play: Restore 3 Defense. Whenever any follower is healed or restored this match, give all allied followers +1/+0 permanently (once per turn).",
     "flavor": "She carried the dawn in her eyes long before the sun remembered to rise.",
     "max_copies": 2
+  },
+  {
+    "id": "JD-076",
+    "name": "Renewed Resolve",
+    "class": "Universal",
+    "rarity": "Legendary",
+    "cost": 6,
+    "attack": 5,
+    "health": 6,
+    "type": "Follower",
+    "description": "On Play: Recover a follower from the Relapse Zone; it gains +2/+2.",
+    "max_copies": 2
   }
 ]

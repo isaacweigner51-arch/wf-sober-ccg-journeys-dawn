@@ -476,7 +476,7 @@ func build_class_cards(faction_name: String) -> Array:
             card("Worldshaper",7,8,8,faction_name,"Legendary","progress_power",0,"Arrival: Gain +1/+1 for each bonus maximum PP earned this match.","hands"),
             card("Turning Point",3,2,4,faction_name,"Legendary","turning_point",0,"On Play: If your leader has less defense than the enemy, draw 2 cards and gain 1 maximum PP.","road","jd-138"),
             card("Strategic Collapse",8,0,0,faction_name,"Epic","strategic_collapse",0,"Spell — Choose One: Deal 5 damage to all enemy followers, or return all enemy followers with 5 or less Attack to their owner's hand. Draw a card.","star"),
-            card("Walking Free",10,6,8,faction_name,"Platinum","walking_free",0,"SIGNATURE PLATINUM — Evolve for free. Give Purpose followers remaining in your deck +1/+1, recover 2 PP, draw 2, and grant a sequencing leader effect.","star"),
+            card("Walking Free",6,6,8,faction_name,"Platinum","walking_free",0,"SIGNATURE PLATINUM — Evolve for free. Give Purpose followers remaining in your deck +1/+1, recover 2 PP, draw 2, and grant a sequencing leader effect.","star"),
             card("Purpose Eternal",9,9,10,faction_name,"Epic","charge_storm",0,"Charge. Storm. Breakthrough — cuts through even a full board.","star","jd-129")]
     return [
         card("Dawnwing Messenger",1,1,2,"Hope","Bronze","draw",1,"On Play: Draw a card.","road"),
@@ -511,7 +511,7 @@ func build_universal_cards() -> Array:
         card("Service Work",4,3,5,"Universal","Gold","buff_all",1,"On Play: Give all other allies +1/+1.","hands"),
         card("Recovery Meeting",4,3,6,"Universal","Gold","heal_draw",2,"On Play: Restore 2 defense and draw a card.","hands"),
         card("Fresh Perspective",5,4,6,"Universal","Gold","bounce",0,"On Play: Return the strongest enemy follower to its owner's hand.","star"),
-        card("Renewed Resolve",6,5,6,"Universal","Legendary","revive_buff",2,"On Play: Recover a follower; it gains +2/+2.","star"),
+        card("Renewed Resolve",6,5,6,"Universal","Legendary","revive_buff",2,"On Play: Recover a follower; it gains +2/+2.","star","JD-076"),
         card("Rock Bottom",7,4,7,"Universal","Legendary","board_clear_draw",0,"On Play: Send every other follower to the Relapse Zone. Both players draw 2.","flame"),
         card("The Sponsor",8,5,9,"Universal","Platinum","sponsor",0,"SIGNATURE PLATINUM — Arrival: Summon 2 Sponsees. End of your turn: Summon another Sponsee. Sponsees are 3/3 and carry your class path's strength.","star")]
 
@@ -4364,7 +4364,7 @@ func prepare_training_hand() -> void:
             add_training_card_to_hand(card("Quiet Renewal", 2, 2, 3, "Serenity", "Training", "heal_leader", 3, "Arrival: Restore 3 Defense.", "hands", "jd-137"))
         _:
             add_training_card_to_hand(_find_card_by_name(build_class_cards("Purpose"), "Daily Progress"))
-            add_training_card_to_hand(card("Walking Free", 10, 6, 8, "Purpose", "Platinum", "walking_free", 0, "Purpose Platinum. Reward for a completed Progress journey.", "star"))
+            add_training_card_to_hand(card("Walking Free", 6, 6, 8, "Purpose", "Platinum", "walking_free", 0, "Purpose Platinum. Reward for a completed Progress journey.", "star"))
 
 func second_chance_momentum(card_count: int) -> int:
     if card_count <= 1:
