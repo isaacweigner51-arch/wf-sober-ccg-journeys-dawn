@@ -710,6 +710,8 @@ var challenge_week_key: String = ""  # ISO week bucket; resets progress when the
 var trials_cleared: Dictionary = {}
 var sponsor_leader_unlocked := false
 var sponsor_sleeve_unlocked := false
+var owned_sleeves: Array = []   # Array of sleeve IDs earned from packs/purchases
+var equipped_sleeve: String = ""  # Active sleeve ID; "" = class default
 var sponsor_defeated := false
 var selected_leader_skin := "" # "" (normal) or "sponsor"
 var trial_select_class := "Hope"
@@ -1096,6 +1098,8 @@ func load_profile() -> void:
         sponsor_leader_unlocked = bool(cfg.get_value("trials", "sponsor_leader_unlocked", false))
         sponsor_sleeve_unlocked = bool(cfg.get_value("trials", "sponsor_sleeve_unlocked", false))
         sponsor_defeated = bool(cfg.get_value("trials", "sponsor_defeated", false))
+        owned_sleeves = Array(cfg.get_value("cosmetics", "owned_sleeves", []))
+        equipped_sleeve = str(cfg.get_value("cosmetics", "equipped_sleeve", ""))
         selected_leader_skin = str(cfg.get_value("trials", "selected_leader_skin", ""))
         last_seen_whats_new_version = str(cfg.get_value("meta", "last_seen_whats_new_version", ""))
         deck_slots = cfg.get_value("deck_slots", "slots", [])
@@ -1172,6 +1176,8 @@ func save_profile() -> void:
     cfg.set_value("trials", "sponsor_leader_unlocked", sponsor_leader_unlocked)
     cfg.set_value("trials", "sponsor_sleeve_unlocked", sponsor_sleeve_unlocked)
     cfg.set_value("trials", "sponsor_defeated", sponsor_defeated)
+    cfg.set_value("cosmetics", "owned_sleeves", owned_sleeves)
+    cfg.set_value("cosmetics", "equipped_sleeve", equipped_sleeve)
     cfg.set_value("trials", "selected_leader_skin", selected_leader_skin)
     cfg.set_value("meta", "last_seen_whats_new_version", last_seen_whats_new_version)
     # Multi-deck slots — sync the currently-editing slot before writing.
@@ -5696,8 +5702,9 @@ func show_store() -> void:
     button("80 PACKS\n%s" % BillingManager.formatted_price("wf_sober_packs_80", "$39.99"),Vector2(875,120),Vector2(190,92),func(): buy_cash("wf_sober_packs_80"),p)
     button("OPEN OWNED PACKS",Vector2(185,265),Vector2(280,58),show_pack_opening,p)
     button("BUILD A DECK",Vector2(485,265),Vector2(220,58),show_deck_builder,p)
-    button("CHECK PURCHASES",Vector2(725,265),Vector2(220,58),BillingManager.restore_pending_purchases,p)
-    button("PULL ODDS",Vector2(945,265),Vector2(105,58),func(): show_pack_odds(show_store),p)
+    button("SLEEVES",Vector2(725,265),Vector2(100,58),show_sleeves,p)
+    button("CHECK PURCHASES",Vector2(835,265),Vector2(165,58),BillingManager.restore_pending_purchases,p)
+    button("PULL ODDS",Vector2(1010,265),Vector2(65,58),func(): show_pack_odds(show_store),p)
     var billing_text := "Google Play Billing connected" if BillingManager.is_available() else "Cash purchases activate in an installed Google Play test/release build"
     label(billing_text,Vector2(150,345),Vector2(800,34),16,p).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     status_label = label("Next guaranteed Signature Platinum: %d packs" % (80-platinum_pity),Vector2(300,610),Vector2(680,44),20); status_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
@@ -6053,12 +6060,19 @@ func _roll_one_pack() -> Dictionary:
         pulled.append(pulled_cd)
     # Reset pity whenever a Platinum lands, whether random or pity-triggered.
     if got_platinum: platinum_pity = 0
-    return {"pulled": pulled, "platinum_hit": got_platinum}
+    # 5% chance per pack to also drop a pullable sleeve the player doesn't own yet.
+    var sleeve_pulled := ""
+    var pullable := _sleeve_catalog().filter(func(s): return s.get("pullable", false) and not sleeve_owned(s["id"]))
+    if not pullable.is_empty() and randf() < 0.05:
+        var chosen: Dictionary = pullable[randi() % pullable.size()]
+        sleeve_pulled = chosen["id"]
+        owned_sleeves.append(sleeve_pulled)
+    return {"pulled": pulled, "platinum_hit": got_platinum, "sleeve_pulled": sleeve_pulled}
 
 func open_pack() -> void:
     if pack_inventory <= 0: return
     var result := _roll_one_pack()
-    save_profile(); show_pack_results(result["pulled"], result["platinum_hit"])
+    save_profile(); show_pack_results(result["pulled"], result["platinum_hit"], result.get("sleeve_pulled", ""))
 
 func open_packs_bulk(requested: int) -> void:
     # requested == -1 means "open everything owned". Rolls all packs upfront
@@ -6428,13 +6442,26 @@ func pack_rarity_burst(center: Vector2, rarity: String) -> void:
     burst_tween.tween_property(glow, "color:a", 0.0, 0.42)
     burst_tween.chain().tween_callback(glow.queue_free)
 
-func show_pack_results(pulled: Array, platinum_hit: bool) -> void:
-    clear_screen(); add_background(0.80); header("PACK OPENED", "SIGNATURE PLATINUM!" if platinum_hit else "Cards added to your collection"); currency_bar()
+func show_pack_results(pulled: Array, platinum_hit: bool, sleeve_pulled: String = "") -> void:
+    clear_screen(); add_background(0.80)
+    var subtitle := "SIGNATURE PLATINUM!" if platinum_hit else "Cards added to your collection"
+    if sleeve_pulled != "":
+        var sname := _sleeve_name_for_id(sleeve_pulled)
+        subtitle = ("SIGNATURE PLATINUM!  +  " if platinum_hit else "") + "✦ SLEEVE UNLOCKED: %s ✦" % sname
+    header("PACK OPENED", subtitle); currency_bar()
+    if sleeve_pulled != "":
+        var banner := Panel.new()
+        banner.position = Vector2(340, 130); banner.size = Vector2(600, 36)
+        var bs := StyleBoxFlat.new()
+        bs.bg_color = Color(0.12, 0.08, 0.22, 0.92)
+        bs.border_color = Color(0.85, 0.72, 0.25, 0.9); bs.set_border_width_all(2); bs.set_corner_radius_all(10)
+        banner.add_theme_stylebox_override("panel", bs); root_layer.add_child(banner)
+        label("✦ New sleeve added to your collection — equip it in the Store ✦", Vector2(0, 6), Vector2(600, 24), 14, banner).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     var backs: Array[Panel] = []
     # 7 cards × 168 px + 6 × 10 px gap = 1,258 px — fits the 1,280 px viewport.
     # Old step of 244 placed card 7 at x = 1,519, completely off-screen.
     for i in range(pulled.size()):
-        var pos := Vector2(22 + i * 178, 178)
+        var pos := Vector2(22 + i * 178, 186 if sleeve_pulled != "" else 178)
         var back := pack_card_back(pos, Vector2(168, 300))
         root_layer.add_child(back)
         backs.append(back)
@@ -8794,3 +8821,171 @@ func show_mobile_info() -> void:
     centered_label(checklist, Vector2(55, 245), Vector2(390, 175), 16, panel)
 
     button("BACK TO TEST TOOLS", Vector2(310, 435), Vector2(320, 42), show_test_tools, panel)
+
+# ── Sleeve system ─────────────────────────────────────────────────────────────
+
+func _sleeve_catalog() -> Array:
+    return [
+        {"id":"hope_dawn",      "name":"Dawn's Promise",    "class":"Hope",      "rarity":"Standard", "cost":0,   "pullable":false, "desc":"The original Hope sleeve."},
+        {"id":"courage_flame",  "name":"Flame Unbound",     "class":"Courage",   "rarity":"Standard", "cost":0,   "pullable":false, "desc":"The original Courage sleeve."},
+        {"id":"serenity_wave",  "name":"Still Waters",      "class":"Serenity",  "rarity":"Standard", "cost":0,   "pullable":false, "desc":"The original Serenity sleeve."},
+        {"id":"purpose_compass","name":"True North",        "class":"Purpose",   "rarity":"Standard", "cost":0,   "pullable":false, "desc":"The original Purpose sleeve."},
+        {"id":"hope_midnight",  "name":"Midnight Star",     "class":"Hope",      "rarity":"Rare",     "cost":750, "pullable":true,  "desc":"A moonlit variant for Hope leaders."},
+        {"id":"courage_storm",  "name":"Storm's Eye",       "class":"Courage",   "rarity":"Rare",     "cost":750, "pullable":true,  "desc":"Electric fury for Courage leaders."},
+        {"id":"serenity_jade",  "name":"Jade Tranquil",     "class":"Serenity",  "rarity":"Rare",     "cost":750, "pullable":true,  "desc":"Nature's peace for Serenity leaders."},
+        {"id":"purpose_sovereign","name":"Sovereign Seal",  "class":"Purpose",   "rarity":"Rare",     "cost":750, "pullable":true,  "desc":"Ornate gold for Purpose leaders."},
+        {"id":"dawn_unity",     "name":"Unity of Dawn",     "class":"Universal", "rarity":"Legendary","cost":0,   "pullable":true,  "desc":"All four classes united. Pack-exclusive."},
+        {"id":"sponsor",        "name":"The Sponsor's Shadow","class":"Universal","rarity":"Legendary","cost":0,  "pullable":false, "desc":"Earned by defeating The Sponsor in Trials."},
+    ]
+
+func sleeve_owned(sleeve_id: String) -> bool:
+    match sleeve_id:
+        "hope_dawn", "courage_flame", "serenity_wave", "purpose_compass":
+            return true  # Default class sleeves are always free.
+        "sponsor":
+            return sponsor_sleeve_unlocked
+    return owned_sleeves.has(sleeve_id)
+
+func _sleeve_name_for_id(sleeve_id: String) -> String:
+    for s in _sleeve_catalog():
+        if s["id"] == sleeve_id:
+            return s["name"]
+    return sleeve_id
+
+func _sleeve_class_color(sleeve_class: String) -> Color:
+    match sleeve_class:
+        "Hope":      return Color(0.72, 0.45, 1.0)
+        "Courage":   return Color(1.0,  0.34, 0.20)
+        "Serenity":  return Color(0.26, 0.78, 0.94)
+        "Purpose":   return Color(0.95, 0.68, 0.22)
+        "Universal": return Color(0.88, 0.88, 0.88)
+    return Color(0.55, 0.82, 0.58)
+
+func _sleeve_rarity_color(rarity: String) -> Color:
+    match rarity:
+        "Legendary": return Color(0.95, 0.78, 0.20)
+        "Rare":      return Color(0.45, 0.72, 1.0)
+    return Color(0.72, 0.72, 0.72)
+
+func show_sleeves() -> void:
+    clear_screen(); add_background(0.80)
+    header("CARD SLEEVES", "Equip a sleeve — it appears on your deck pile and enemy eyes it in battle")
+    currency_bar()
+
+    var catalog := _sleeve_catalog()
+    var cols := 5
+    var cell_w := 202.0
+    var cell_h := 258.0
+    var pad_x := (1280.0 - cols * cell_w) * 0.5
+    var pad_y := 150.0
+
+    for si in range(catalog.size()):
+        var slv: Dictionary = catalog[si]
+        var col := si % cols
+        var row := si / cols
+        var cx := pad_x + col * cell_w
+        var cy := pad_y + row * cell_h
+
+        var owned := sleeve_owned(slv["id"])
+        var is_equipped: bool = equipped_sleeve == str(slv["id"]) or (equipped_sleeve == "" and str(slv["id"]) == _default_sleeve_for_class())
+        var ac := _sleeve_class_color(slv.get("class", "Universal"))
+        var rc := _sleeve_rarity_color(slv.get("rarity", "Standard"))
+
+        # Cell background
+        var cell := Panel.new()
+        cell.position = Vector2(cx, cy); cell.size = Vector2(cell_w - 8, cell_h - 8)
+        var cs := StyleBoxFlat.new()
+        cs.bg_color = Color(ac.r * 0.06, ac.g * 0.06, ac.b * 0.10, 0.95)
+        cs.border_color = rc if is_equipped else Color(ac.r * 0.55, ac.g * 0.55, ac.b * 0.70, 0.75)
+        cs.set_border_width_all(2 if not is_equipped else 3)
+        cs.set_corner_radius_all(10)
+        cell.add_theme_stylebox_override("panel", cs)
+        root_layer.add_child(cell)
+
+        # Sleeve preview using CardView
+        var preview := CardView.new()
+        preview.setup({}, 0, false, true, slv["id"])
+        preview.scale = Vector2(0.52, 0.52)
+        preview.position = Vector2(((cell_w - 8) - 142.0 * 0.52) * 0.5, 8)
+        preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        if not owned:
+            preview.modulate = Color(1, 1, 1, 0.38)
+        cell.add_child(preview)
+
+        # Rarity badge
+        var rarity_lbl := Label.new()
+        rarity_lbl.text = slv.get("rarity", "Standard").to_upper()
+        rarity_lbl.position = Vector2(0, 108); rarity_lbl.size = Vector2(cell_w - 8, 18)
+        rarity_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        rarity_lbl.add_theme_font_size_override("font_size", 11)
+        rarity_lbl.add_theme_color_override("font_color", rc)
+        cell.add_child(rarity_lbl)
+
+        # Sleeve name
+        var name_lbl := Label.new()
+        name_lbl.text = slv["name"]
+        name_lbl.position = Vector2(4, 126); name_lbl.size = Vector2(cell_w - 16, 22)
+        name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        name_lbl.add_theme_font_size_override("font_size", 13)
+        name_lbl.add_theme_color_override("font_color", Color.WHITE if owned else Color(0.55, 0.55, 0.55))
+        cell.add_child(name_lbl)
+
+        # Class label
+        var class_lbl := Label.new()
+        class_lbl.text = slv.get("class", "Universal")
+        class_lbl.position = Vector2(4, 146); class_lbl.size = Vector2(cell_w - 16, 18)
+        class_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        class_lbl.add_theme_font_size_override("font_size", 11)
+        class_lbl.add_theme_color_override("font_color", ac)
+        cell.add_child(class_lbl)
+
+        # Action button
+        var btn_y := 170.0
+        var btn_h := 34.0
+        var btn_w := cell_w - 24.0
+        var btn_x := 8.0
+        if is_equipped:
+            var eq_lbl := Label.new()
+            eq_lbl.text = "✓ EQUIPPED"
+            eq_lbl.position = Vector2(btn_x, btn_y); eq_lbl.size = Vector2(btn_w, btn_h)
+            eq_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            eq_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+            eq_lbl.add_theme_font_size_override("font_size", 13)
+            eq_lbl.add_theme_color_override("font_color", Color(0.55, 1.0, 0.55))
+            cell.add_child(eq_lbl)
+        elif owned:
+            var equip_id: String = str(slv["id"])
+            var btn := button("EQUIP", Vector2(cx + btn_x, cy + btn_y), Vector2(btn_w, btn_h), func():
+                equipped_sleeve = equip_id; save_profile(); show_sleeves())
+            btn.reparent(root_layer)
+            btn.position = Vector2(cx + btn_x, cy + btn_y)
+        elif slv.get("cost", 0) > 0:
+            var cost: int = slv["cost"]
+            var buy_id: String = str(slv["id"])
+            var can_buy: bool = gold_balance >= cost
+            var btn := button("%d GOLD" % cost, Vector2(cx + btn_x, cy + btn_y), Vector2(btn_w, btn_h), func():
+                if gold_balance < cost: return
+                gold_balance -= cost; owned_sleeves.append(buy_id); save_profile(); show_sleeves())
+            btn.reparent(root_layer)
+            btn.position = Vector2(cx + btn_x, cy + btn_y)
+            if not can_buy:
+                btn.modulate = Color(0.55, 0.55, 0.55)
+        else:
+            var locked_lbl := Label.new()
+            locked_lbl.text = "PACK ONLY" if slv.get("pullable", false) else "TRIAL REWARD"
+            locked_lbl.position = Vector2(btn_x, btn_y); locked_lbl.size = Vector2(btn_w, btn_h)
+            locked_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            locked_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+            locked_lbl.add_theme_font_size_override("font_size", 11)
+            locked_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
+            cell.add_child(locked_lbl)
+
+    button("BACK", Vector2(20, 670), Vector2(120, 38), show_store)
+
+func _default_sleeve_for_class() -> String:
+    match selected_class:
+        "Hope":     return "hope_dawn"
+        "Courage":  return "courage_flame"
+        "Serenity": return "serenity_wave"
+        "Purpose":  return "purpose_compass"
+    return ""

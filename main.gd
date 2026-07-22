@@ -56,6 +56,8 @@ var phoenix_pending_enemy := false
 var phoenix_tier_player := 1
 var phoenix_tier_enemy := 1
 
+var player_sleeve_id: String = ""
+var _player_deck_count_label: Label
 var player_hand_area: Control
 var player_board_area: Control
 var enemy_board_area: Control
@@ -232,6 +234,7 @@ var tutorial_heading_label: Label
 var battle_setup_loaded := false
 var battlefield_background: TextureRect
 var _battle_class_shade: ColorRect
+var _battle_atmosphere: TextureRect
 
 func safe_set_text(node: Object, value: String) -> void:
     if node != null and is_instance_valid(node) and "text" in node:
@@ -380,6 +383,10 @@ func load_battle_setup() -> void:
         battle_setup_loaded = false
         hotseat_mode = false
         online_mode = false
+    # Read the player's equipped sleeve from the save profile.
+    var _scfg := ConfigFile.new()
+    if _scfg.load("user://journeys_dawn_profile.cfg") == OK:
+        player_sleeve_id = str(_scfg.get_value("cosmetics", "equipped_sleeve", ""))
 
 func _process(delta: float) -> void:
     if not player_turn_active or game_over or is_instance_valid(class_overlay) or overlay.visible:
@@ -1871,9 +1878,18 @@ func build_ui() -> void:
     _battle_class_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     _battle_class_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(_battle_class_shade)
-    # Apply initial tint (will be overwritten when selected_class is known)
+
+    # Per-class SVG atmosphere overlay (vignette + coloured glow from below)
+    _battle_atmosphere = TextureRect.new()
+    _battle_atmosphere.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    _battle_atmosphere.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    _battle_atmosphere.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    _battle_atmosphere.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(_battle_atmosphere)
+
+    # Apply initial tint (overwritten once selected_class is known)
     var _init_ac := class_accent_color(selected_class if selected_class != "" else "Hope")
-    _battle_class_shade.color = Color(_init_ac.r * 0.10, _init_ac.g * 0.10, _init_ac.b * 0.16, 0.28)
+    _battle_class_shade.color = Color(_init_ac.r * 0.16, _init_ac.g * 0.16, _init_ac.b * 0.22, 0.38)
 
     # A slim header bar grounds the title and HOME/RESTART controls instead of
     # leaving them floating loose over the battlefield artwork.
@@ -1930,6 +1946,33 @@ func build_ui() -> void:
     player_amulet_area = Control.new(); player_amulet_area.position = Vector2(245, 360); player_amulet_area.size = Vector2(790, 92); player_amulet_area.z_index = 65; player_amulet_area.clip_contents = false; player_amulet_area.mouse_filter = Control.MOUSE_FILTER_PASS; add_child(player_amulet_area)
     # Keep the hand in a dedicated bottom tray so it never covers the battlefield.
     player_hand_area = Control.new(); player_hand_area.position = Vector2(150, 600); player_hand_area.size = Vector2(880, 115); player_hand_area.clip_contents = false; player_hand_area.z_index = 120; add_child(player_hand_area)
+
+    # ── Player deck pile ──────────────────────────────────────────────────────
+    # A small stack of face-down cards showing the player's equipped sleeve.
+    # Positioned left of the hand tray so it's always visible during play.
+    var deck_pile_node := Control.new()
+    deck_pile_node.position = Vector2(6, 590)
+    deck_pile_node.size = Vector2(84, 120)
+    deck_pile_node.z_index = 115
+    add_child(deck_pile_node)
+    # Three stacked cards with slight offsets for the "pile" illusion.
+    var sleeve_key := player_sleeve_id if player_sleeve_id != "" else selected_class
+    for si in range(3):
+        var dc := CardView.new()
+        dc.setup({}, si, false, true, sleeve_key)
+        dc.scale = Vector2(0.44, 0.44)
+        dc.position = Vector2(float(2 - si) * 2.0, float(2 - si) * 2.0)
+        dc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        deck_pile_node.add_child(dc)
+    # Deck count label beneath the pile.
+    _player_deck_count_label = Label.new()
+    _player_deck_count_label.position = Vector2(6, 708)
+    _player_deck_count_label.size = Vector2(80, 22)
+    _player_deck_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _player_deck_count_label.add_theme_font_size_override("font_size", ui_font(12))
+    _player_deck_count_label.add_theme_color_override("font_color", Color(0.78, 0.88, 1.0, 0.85))
+    _player_deck_count_label.z_index = 115
+    add_child(_player_deck_count_label)
 
     enemy_leader = make_leader("OPPONENT", Vector2(24, 92), false)
     enemy_leader.pressed.connect(func(): leader_clicked(false))
@@ -7159,6 +7202,7 @@ func refresh_ui(animate_new: bool = false, new_index: int = -1, new_player_side:
         pip.add_theme_stylebox_override("panel", pst)
     safe_set_text(turn_label, "TURN %d" % turn_number)
     safe_set_text(hand_count_label, "HAND  %d/%d" % [player_hand.size(), MAX_HAND])
+    safe_set_text(_player_deck_count_label, "DECK  %d" % player_deck.size())
     var evolutions_left := 0
     for used in player_evolutions_used:
         if not used:
@@ -7777,10 +7821,62 @@ func svg_texture(svg: String) -> Texture2D:
     var image := Image.new(); image.load_svg_from_string(svg, 1.0); return ImageTexture.create_from_image(image)
 
 func refresh_battlefield_theme() -> void:
-    # Only update the class-tint shade overlay — the background PNG is fixed.
+    # Strengthen the class shade and apply the per-class atmosphere overlay.
     var ac := class_accent_color(selected_class)
     if is_instance_valid(_battle_class_shade):
-        _battle_class_shade.color = Color(ac.r * 0.10, ac.g * 0.10, ac.b * 0.16, 0.28)
+        _battle_class_shade.color = Color(ac.r * 0.16, ac.g * 0.16, ac.b * 0.22, 0.38)
+    if is_instance_valid(_battle_atmosphere):
+        var svg  := _class_atmosphere_svg(selected_class)
+        var img  := Image.new()
+        if img.load_svg_from_buffer(svg.to_utf8_buffer()) == OK:
+            _battle_atmosphere.texture = ImageTexture.create_from_image(img)
+
+## Per-class full-screen atmosphere overlay — sits between battlefield.png and
+## the game UI. Vignette + class-coloured glow from below. Keeps the original
+## background fully visible while giving each leader a distinct mood.
+func _class_atmosphere_svg(cls: String) -> String:
+    match cls:
+        "Hope":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='720'>
+<defs>
+<radialGradient id='v' cx='50%' cy='50%' r='72%'><stop stop-color='#000' stop-opacity='0'/><stop offset='1' stop-color='#0a0010' stop-opacity='.55'/></radialGradient>
+<radialGradient id='g' cx='50%' cy='100%' r='65%'><stop stop-color='#7b36d4' stop-opacity='.24'/><stop offset='1' stop-color='#2a0f4e' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='1280' height='720' fill='url(#v)'/><rect width='1280' height='720' fill='url(#g)'/>
+<ellipse cx='640' cy='720' rx='500' ry='190' fill='#6b28c4' opacity='.16'/>
+</svg>"""
+        "Courage":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='720'>
+<defs>
+<radialGradient id='v' cx='50%' cy='50%' r='72%'><stop stop-color='#000' stop-opacity='0'/><stop offset='1' stop-color='#0f0000' stop-opacity='.60'/></radialGradient>
+<radialGradient id='g' cx='50%' cy='100%' r='58%'><stop stop-color='#c42a12' stop-opacity='.22'/><stop offset='1' stop-color='#3d0a08' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='1280' height='720' fill='url(#v)'/><rect width='1280' height='720' fill='url(#g)'/>
+<ellipse cx='640' cy='720' rx='420' ry='150' fill='#e03010' opacity='.14'/>
+</svg>"""
+        "Serenity":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='720'>
+<defs>
+<radialGradient id='v' cx='50%' cy='50%' r='72%'><stop stop-color='#000' stop-opacity='0'/><stop offset='1' stop-color='#000d12' stop-opacity='.52'/></radialGradient>
+<radialGradient id='g' cx='50%' cy='58%' r='62%'><stop stop-color='#1ab5cc' stop-opacity='.14'/><stop offset='1' stop-color='#073040' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='1280' height='720' fill='url(#v)'/><rect width='1280' height='720' fill='url(#g)'/>
+<ellipse cx='640' cy='500' rx='540' ry='210' fill='#0a4558' opacity='.20'/>
+</svg>"""
+        "Purpose":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='720'>
+<defs>
+<radialGradient id='v' cx='50%' cy='50%' r='72%'><stop stop-color='#000' stop-opacity='0'/><stop offset='1' stop-color='#080400' stop-opacity='.56'/></radialGradient>
+<radialGradient id='g' cx='50%' cy='62%' r='58%'><stop stop-color='#c47a12' stop-opacity='.17'/><stop offset='1' stop-color='#2e1c04' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='1280' height='720' fill='url(#v)'/><rect width='1280' height='720' fill='url(#g)'/>
+<rect x='0' y='0' width='1280' height='720' fill='none' stroke='#f0c44a' stroke-width='8' opacity='.07'/>
+</svg>"""
+        _:
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='720'>
+<defs><radialGradient id='v' cx='50%' cy='50%' r='72%'><stop stop-color='#000' stop-opacity='0'/><stop offset='1' stop-color='#000' stop-opacity='.45'/></radialGradient></defs>
+<rect width='1280' height='720' fill='url(#v)'/>
+</svg>"""
 
 func battlefield_svg() -> String:
     # Strongly differentiated host arenas. The active player's selected deck class

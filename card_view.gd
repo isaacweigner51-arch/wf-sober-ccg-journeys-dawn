@@ -328,8 +328,7 @@ func _build() -> void:
     art_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
     if hidden_card:
         if sleeve_class != "":
-            var sleeve_path := "res://assets/leaders/%s.png" % sleeve_class.to_lower()
-            art_rect.texture = load(sleeve_path)
+            art_rect.texture = _svg_texture(_class_card_back_svg(sleeve_class))
         else:
             art_rect.texture = _svg_texture(_card_back_svg())
     else:
@@ -1079,11 +1078,235 @@ func _art_texture() -> Texture2D:
     return _svg_texture(_art_svg())
 
 func _card_back_svg() -> String:
-    return """<svg xmlns='http://www.w3.org/2000/svg' width='240' height='150'>
-    <defs><radialGradient id='g'><stop stop-color='#2e8496'/><stop offset='1' stop-color='#081b2b'/></radialGradient></defs>
-    <rect width='240' height='150' rx='12' fill='url(#g)'/><circle cx='120' cy='75' r='49' fill='none' stroke='#e7c96b' stroke-width='5'/>
-    <path d='M120 30 L139 62 L176 69 L149 96 L155 132 L120 114 L85 132 L91 96 L64 69 L101 62 Z' fill='#e7c96b' opacity='.86'/>
-    </svg>"""
+    return _class_card_back_svg("")
+
+## Per-class sleeve designs. Each class has unique colours and a signature motif.
+func _class_card_back_svg(cls: String) -> String:
+    match cls:
+        "Hope":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='142' height='186'>
+<defs>
+<radialGradient id='a' cx='50%' cy='100%' r='130%'><stop stop-color='#2a0f4e'/><stop offset='1' stop-color='#050209'/></radialGradient>
+<radialGradient id='b' cx='50%' cy='55%' r='45%'><stop stop-color='#7b36d4' stop-opacity='.5'/><stop offset='1' stop-color='#2a0f4e' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='142' height='186' rx='9' fill='url(#a)'/><rect width='142' height='186' rx='9' fill='url(#b)'/>
+<ellipse cx='71' cy='190' rx='75' ry='40' fill='#8b3cf7' opacity='.25'/>
+<rect x='5' y='5' width='132' height='176' rx='7' fill='none' stroke='#e7c96b' stroke-width='1.5' opacity='.65'/>
+<rect x='9' y='9' width='124' height='168' rx='5' fill='none' stroke='#9b5de5' stroke-width='.75' opacity='.4'/>
+<path d='M71 62 L75.5 74 L88 74 L78 82 L81 95 L71 87 L61 95 L64 82 L54 74 L66.5 74 Z' fill='#e7c96b' opacity='.9'/>
+<line x1='71' y1='78' x2='71' y2='32' stroke='#b58af5' stroke-width='.7' opacity='.5'/>
+<line x1='71' y1='78' x2='34' y2='42' stroke='#b58af5' stroke-width='.6' opacity='.35'/>
+<line x1='71' y1='78' x2='108' y2='42' stroke='#b58af5' stroke-width='.6' opacity='.35'/>
+<line x1='71' y1='78' x2='21' y2='78' stroke='#b58af5' stroke-width='.6' opacity='.3'/>
+<line x1='71' y1='78' x2='121' y2='78' stroke='#b58af5' stroke-width='.6' opacity='.3'/>
+<circle cx='22' cy='25' r='3' fill='#e7c96b' opacity='.4'/><circle cx='120' cy='25' r='3' fill='#e7c96b' opacity='.4'/>
+<circle cx='22' cy='164' r='3' fill='#e7c96b' opacity='.4'/><circle cx='120' cy='164' r='3' fill='#e7c96b' opacity='.4'/>
+<text x='71' y='128' text-anchor='middle' fill='#c9a0ff' font-size='8' font-family='sans-serif' font-weight='bold' letter-spacing='4'>HOPE</text>
+<text x='71' y='170' text-anchor='middle' fill='#e7c96b' font-size='6.5' font-family='sans-serif' letter-spacing='1' opacity='.7'>WALKING FREE CCG</text>
+</svg>"""
+        "Courage":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='142' height='186'>
+<defs>
+<radialGradient id='a' cx='50%' cy='100%' r='120%'><stop stop-color='#3d0a08'/><stop offset='1' stop-color='#090202'/></radialGradient>
+<radialGradient id='b' cx='50%' cy='60%' r='40%'><stop stop-color='#c42a12' stop-opacity='.45'/><stop offset='1' stop-color='#3d0a08' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='142' height='186' rx='9' fill='url(#a)'/><rect width='142' height='186' rx='9' fill='url(#b)'/>
+<ellipse cx='71' cy='186' rx='60' ry='30' fill='#e63a14' opacity='.28'/>
+<rect x='5' y='5' width='132' height='176' rx='7' fill='none' stroke='#ff8c42' stroke-width='1.5' opacity='.6'/>
+<line x1='5' y1='28' x2='28' y2='5' stroke='#ff8c42' stroke-width='1' opacity='.4'/>
+<line x1='5' y1='158' x2='28' y2='181' stroke='#ff8c42' stroke-width='1' opacity='.4'/>
+<line x1='137' y1='28' x2='114' y2='5' stroke='#ff8c42' stroke-width='1' opacity='.4'/>
+<line x1='137' y1='158' x2='114' y2='181' stroke='#ff8c42' stroke-width='1' opacity='.4'/>
+<path d='M75 45 C88 62 72 70 84 83 C90 90 90 104 71 114 C54 102 56 87 64 78 C74 68 60 59 75 45 Z' fill='#ff7c3a' opacity='.88'/>
+<path d='M71 80 C79 90 76 100 68 112 C60 99 62 87 71 80 Z' fill='#ffe066' opacity='.72'/>
+<circle cx='40' cy='145' r='2' fill='#ff9e5a' opacity='.5'/><circle cx='54' cy='155' r='1.5' fill='#ff9e5a' opacity='.4'/>
+<circle cx='100' cy='148' r='2' fill='#ff9e5a' opacity='.5'/><circle cx='88' cy='157' r='1.5' fill='#ff9e5a' opacity='.4'/>
+<circle cx='70' cy='151' r='1.5' fill='#ffcc44' opacity='.35'/>
+<text x='71' y='130' text-anchor='middle' fill='#ffb07a' font-size='7.5' font-family='sans-serif' font-weight='bold' letter-spacing='2'>COURAGE</text>
+<text x='71' y='170' text-anchor='middle' fill='#ff8c42' font-size='6.5' font-family='sans-serif' letter-spacing='1' opacity='.7'>WALKING FREE CCG</text>
+</svg>"""
+        "Serenity":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='142' height='186'>
+<defs>
+<radialGradient id='a' cx='50%' cy='50%' r='80%'><stop stop-color='#073040'/><stop offset='1' stop-color='#030d14'/></radialGradient>
+<radialGradient id='b' cx='50%' cy='55%' r='45%'><stop stop-color='#1ab5cc' stop-opacity='.35'/><stop offset='1' stop-color='#073040' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='142' height='186' rx='9' fill='url(#a)'/><rect width='142' height='186' rx='9' fill='url(#b)'/>
+<rect x='5' y='5' width='132' height='176' rx='7' fill='none' stroke='#4dd9e8' stroke-width='1.5' opacity='.55'/>
+<rect x='9' y='9' width='124' height='168' rx='5' fill='none' stroke='#1ab5cc' stroke-width='.75' opacity='.35'/>
+<ellipse cx='71' cy='83' rx='34' ry='30' fill='none' stroke='#4dd9e8' stroke-width='1.2' opacity='.5'/>
+<ellipse cx='71' cy='83' rx='22' ry='19' fill='none' stroke='#4dd9e8' stroke-width='.8' opacity='.4'/>
+<path d='M28 83 Q52 64 71 83 Q90 102 114 83' fill='none' stroke='#78eef8' stroke-width='1.5' opacity='.7'/>
+<path d='M20 96 Q46 77 71 96 Q96 115 122 96' fill='none' stroke='#4dd9e8' stroke-width='.9' opacity='.45'/>
+<path d='M36 70 Q56 56 71 70 Q86 56 106 70' fill='none' stroke='#4dd9e8' stroke-width='.9' opacity='.45'/>
+<circle cx='71' cy='83' r='6' fill='#78eef8' opacity='.55'/>
+<circle cx='22' cy='24' r='3' fill='#4dd9e8' opacity='.35'/><circle cx='120' cy='24' r='3' fill='#4dd9e8' opacity='.35'/>
+<circle cx='22' cy='164' r='3' fill='#4dd9e8' opacity='.35'/><circle cx='120' cy='164' r='3' fill='#4dd9e8' opacity='.35'/>
+<text x='71' y='128' text-anchor='middle' fill='#78eef8' font-size='7.5' font-family='sans-serif' font-weight='bold' letter-spacing='2'>SERENITY</text>
+<text x='71' y='170' text-anchor='middle' fill='#4dd9e8' font-size='6.5' font-family='sans-serif' letter-spacing='1' opacity='.7'>WALKING FREE CCG</text>
+</svg>"""
+        "Purpose":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='142' height='186'>
+<defs>
+<radialGradient id='a' cx='50%' cy='50%' r='80%'><stop stop-color='#2e1c04'/><stop offset='1' stop-color='#080500'/></radialGradient>
+<radialGradient id='b' cx='50%' cy='55%' r='45%'><stop stop-color='#c47a12' stop-opacity='.35'/><stop offset='1' stop-color='#2e1c04' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='142' height='186' rx='9' fill='url(#a)'/><rect width='142' height='186' rx='9' fill='url(#b)'/>
+<rect x='5' y='5' width='132' height='176' rx='7' fill='none' stroke='#f0c44a' stroke-width='1.5' opacity='.6'/>
+<rect x='10' y='10' width='122' height='166' rx='4' fill='none' stroke='#c47a12' stroke-width='.75' opacity='.35'/>
+<polygon points='71,52 85,68 85,84 71,100 57,84 57,68' fill='none' stroke='#f0c44a' stroke-width='1.4' opacity='.75'/>
+<polygon points='71,44 91,66 91,86 71,108 51,86 51,66' fill='none' stroke='#c47a12' stroke-width='.75' opacity='.4'/>
+<circle cx='71' cy='78' r='10' fill='#f0c44a' opacity='.6'/>
+<line x1='71' y1='44' x2='71' y2='52' stroke='#f0c44a' stroke-width='1.2' opacity='.6'/>
+<line x1='71' y1='104' x2='71' y2='112' stroke='#f0c44a' stroke-width='1.2' opacity='.6'/>
+<line x1='44' y1='66' x2='51' y2='68' stroke='#f0c44a' stroke-width='1.2' opacity='.6'/>
+<line x1='98' y1='66' x2='91' y2='68' stroke='#f0c44a' stroke-width='1.2' opacity='.6'/>
+<line x1='44' y1='90' x2='51' y2='84' stroke='#f0c44a' stroke-width='1.2' opacity='.6'/>
+<line x1='98' y1='90' x2='91' y2='84' stroke='#f0c44a' stroke-width='1.2' opacity='.6'/>
+<rect x='15' y='15' width='8' height='8' fill='#f0c44a' opacity='.35'/><rect x='119' y='15' width='8' height='8' fill='#f0c44a' opacity='.35'/>
+<rect x='15' y='163' width='8' height='8' fill='#f0c44a' opacity='.35'/><rect x='119' y='163' width='8' height='8' fill='#f0c44a' opacity='.35'/>
+<text x='71' y='128' text-anchor='middle' fill='#f0c44a' font-size='7.5' font-family='sans-serif' font-weight='bold' letter-spacing='2'>PURPOSE</text>
+<text x='71' y='170' text-anchor='middle' fill='#d4960e' font-size='6.5' font-family='sans-serif' letter-spacing='1' opacity='.7'>WALKING FREE CCG</text>
+</svg>"""
+        # Aliases: default sleeve IDs map to their class design.
+        "hope_dawn":       return _class_card_back_svg("Hope")
+        "courage_flame":   return _class_card_back_svg("Courage")
+        "serenity_wave":   return _class_card_back_svg("Serenity")
+        "purpose_compass": return _class_card_back_svg("Purpose")
+        # ── Rare sleeves ──────────────────────────────────────────────────────
+        "hope_midnight":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='142' height='186'>
+<defs>
+<radialGradient id='a' cx='35%' cy='35%' r='100%'><stop stop-color='#070e24'/><stop offset='1' stop-color='#020409'/></radialGradient>
+<radialGradient id='b' cx='35%' cy='35%' r='50%'><stop stop-color='#2a4fab' stop-opacity='.4'/><stop offset='1' stop-color='#070e24' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='142' height='186' rx='9' fill='url(#a)'/><rect width='142' height='186' rx='9' fill='url(#b)'/>
+<rect x='5' y='5' width='132' height='176' rx='7' fill='none' stroke='#8ab4f8' stroke-width='1.5' opacity='.55'/>
+<rect x='9' y='9' width='124' height='168' rx='5' fill='none' stroke='#3a5fbd' stroke-width='.75' opacity='.35'/>
+<circle cx='71' cy='78' r='26' fill='#7aaeff' opacity='.5'/><circle cx='80' cy='70' r='24' fill='#070e24'/>
+<circle cx='71' cy='78' r='26' fill='none' stroke='#8ab4f8' stroke-width='1' opacity='.7'/>
+<circle cx='38' cy='42' r='1.5' fill='#c8deff' opacity='.6'/><circle cx='110' cy='48' r='2' fill='#c8deff' opacity='.5'/>
+<circle cx='25' cy='92' r='1' fill='#c8deff' opacity='.4'/><circle cx='118' cy='95' r='1.5' fill='#c8deff' opacity='.55'/>
+<circle cx='55' cy='130' r='1' fill='#c8deff' opacity='.4'/><circle cx='95' cy='125' r='1.5' fill='#c8deff' opacity='.5'/>
+<circle cx='30' cy='115' r='1' fill='#c8deff' opacity='.35'/><circle cx='112' cy='115' r='1' fill='#c8deff' opacity='.35'/>
+<circle cx='20' cy='58' r='1.2' fill='#c8deff' opacity='.4'/><circle cx='122' cy='62' r='1' fill='#c8deff' opacity='.4'/>
+<circle cx='22' cy='25' r='3' fill='#8ab4f8' opacity='.3'/><circle cx='120' cy='25' r='3' fill='#8ab4f8' opacity='.3'/>
+<circle cx='22' cy='164' r='3' fill='#8ab4f8' opacity='.3'/><circle cx='120' cy='164' r='3' fill='#8ab4f8' opacity='.3'/>
+<text x='71' y='128' text-anchor='middle' fill='#8ab4f8' font-size='7' font-family='sans-serif' font-weight='bold' letter-spacing='2'>MIDNIGHT STAR</text>
+<text x='71' y='170' text-anchor='middle' fill='#5878cc' font-size='6.5' font-family='sans-serif' letter-spacing='1' opacity='.7'>WALKING FREE CCG</text>
+</svg>"""
+        "courage_storm":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='142' height='186'>
+<defs>
+<radialGradient id='a' cx='50%' cy='50%' r='80%'><stop stop-color='#0e1520'/><stop offset='1' stop-color='#040608'/></radialGradient>
+<radialGradient id='b' cx='50%' cy='40%' r='45%'><stop stop-color='#1e6ed4' stop-opacity='.4'/><stop offset='1' stop-color='#0e1520' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='142' height='186' rx='9' fill='url(#a)'/><rect width='142' height='186' rx='9' fill='url(#b)'/>
+<rect x='5' y='5' width='132' height='176' rx='7' fill='none' stroke='#60b0ff' stroke-width='1.5' opacity='.6'/>
+<path d='M78 28 L52 84 L71 84 L64 148 L90 80 L71 80 L82 28 Z' fill='#60b0ff' opacity='.8'/>
+<path d='M78 28 L52 84 L71 84 L64 148 L90 80 L71 80 L82 28 Z' fill='none' stroke='#c0e4ff' stroke-width='1' opacity='.5'/>
+<line x1='30' y1='64' x2='48' y2='72' stroke='#60b0ff' stroke-width='1' opacity='.5'/>
+<line x1='18' y1='80' x2='40' y2='82' stroke='#60b0ff' stroke-width='1' opacity='.4'/>
+<line x1='112' y1='64' x2='94' y2='72' stroke='#60b0ff' stroke-width='1' opacity='.5'/>
+<line x1='124' y1='80' x2='102' y2='82' stroke='#60b0ff' stroke-width='1' opacity='.4'/>
+<circle cx='22' cy='25' r='3' fill='#60b0ff' opacity='.35'/><circle cx='120' cy='25' r='3' fill='#60b0ff' opacity='.35'/>
+<circle cx='22' cy='164' r='3' fill='#60b0ff' opacity='.35'/><circle cx='120' cy='164' r='3' fill='#60b0ff' opacity='.35'/>
+<text x='71' y='128' text-anchor='middle' fill='#80c8ff' font-size='7.5' font-family='sans-serif' font-weight='bold' letter-spacing='3'>STORM</text>
+<text x='71' y='170' text-anchor='middle' fill='#3880cc' font-size='6.5' font-family='sans-serif' letter-spacing='1' opacity='.7'>WALKING FREE CCG</text>
+</svg>"""
+        "serenity_jade":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='142' height='186'>
+<defs>
+<radialGradient id='a' cx='50%' cy='50%' r='80%'><stop stop-color='#04180a'/><stop offset='1' stop-color='#020905'/></radialGradient>
+<radialGradient id='b' cx='50%' cy='50%' r='45%'><stop stop-color='#2a9c58' stop-opacity='.35'/><stop offset='1' stop-color='#04180a' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='142' height='186' rx='9' fill='url(#a)'/><rect width='142' height='186' rx='9' fill='url(#b)'/>
+<rect x='5' y='5' width='132' height='176' rx='7' fill='none' stroke='#5ad490' stroke-width='1.5' opacity='.55'/>
+<rect x='9' y='9' width='124' height='168' rx='5' fill='none' stroke='#2a9c58' stroke-width='.75' opacity='.35'/>
+<path d='M71 100 C60 85 55 70 71 58 C87 70 82 85 71 100 Z' fill='#5ad490' opacity='.6'/>
+<path d='M71 100 C48 95 38 82 44 66 C60 68 65 82 71 100 Z' fill='#5ad490' opacity='.5'/>
+<path d='M71 100 C94 95 104 82 98 66 C82 68 77 82 71 100 Z' fill='#5ad490' opacity='.5'/>
+<path d='M71 100 C42 105 34 92 38 76 C52 76 60 90 71 100 Z' fill='#5ad490' opacity='.4'/>
+<path d='M71 100 C100 105 108 92 104 76 C90 76 82 90 71 100 Z' fill='#5ad490' opacity='.4'/>
+<circle cx='71' cy='96' r='6' fill='#8af0b8' opacity='.65'/>
+<line x1='71' y1='100' x2='71' y2='58' stroke='#2a9c58' stroke-width='.6' opacity='.3'/>
+<circle cx='22' cy='24' r='3' fill='#5ad490' opacity='.3'/><circle cx='120' cy='24' r='3' fill='#5ad490' opacity='.3'/>
+<circle cx='22' cy='164' r='3' fill='#5ad490' opacity='.3'/><circle cx='120' cy='164' r='3' fill='#5ad490' opacity='.3'/>
+<text x='71' y='130' text-anchor='middle' fill='#5ad490' font-size='7' font-family='sans-serif' font-weight='bold' letter-spacing='2'>JADE TRANQUIL</text>
+<text x='71' y='170' text-anchor='middle' fill='#2a9c58' font-size='6.5' font-family='sans-serif' letter-spacing='1' opacity='.7'>WALKING FREE CCG</text>
+</svg>"""
+        "purpose_sovereign":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='142' height='186'>
+<defs>
+<radialGradient id='a' cx='50%' cy='50%' r='80%'><stop stop-color='#160e00'/><stop offset='1' stop-color='#060400'/></radialGradient>
+<radialGradient id='b' cx='50%' cy='45%' r='50%'><stop stop-color='#c47a12' stop-opacity='.3'/><stop offset='1' stop-color='#160e00' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='142' height='186' rx='9' fill='url(#a)'/><rect width='142' height='186' rx='9' fill='url(#b)'/>
+<rect x='5' y='5' width='132' height='176' rx='7' fill='none' stroke='#f0c44a' stroke-width='1.5' opacity='.65'/>
+<rect x='10' y='10' width='122' height='166' rx='4' fill='none' stroke='#8a5e10' stroke-width='.75' opacity='.35'/>
+<path d='M40 96 L40 72 L55 84 L71 62 L87 84 L102 72 L102 96 Z' fill='#f0c44a' opacity='.8'/>
+<path d='M36 96 L106 96 L106 102 L36 102 Z' fill='#f0c44a' opacity='.75'/>
+<circle cx='71' cy='66' r='4' fill='#fff' opacity='.7'/>
+<circle cx='44' cy='76' r='3' fill='#ff8888' opacity='.7'/>
+<circle cx='98' cy='76' r='3' fill='#8888ff' opacity='.7'/>
+<line x1='36' y1='108' x2='106' y2='108' stroke='#f0c44a' stroke-width='.8' opacity='.5'/>
+<rect x='15' y='15' width='8' height='8' fill='#f0c44a' opacity='.4'/><rect x='119' y='15' width='8' height='8' fill='#f0c44a' opacity='.4'/>
+<rect x='15' y='163' width='8' height='8' fill='#f0c44a' opacity='.4'/><rect x='119' y='163' width='8' height='8' fill='#f0c44a' opacity='.4'/>
+<text x='71' y='128' text-anchor='middle' fill='#f0c44a' font-size='7' font-family='sans-serif' font-weight='bold' letter-spacing='2'>SOVEREIGN SEAL</text>
+<text x='71' y='170' text-anchor='middle' fill='#a87a20' font-size='6.5' font-family='sans-serif' letter-spacing='1' opacity='.7'>WALKING FREE CCG</text>
+</svg>"""
+        # ── Legendary sleeves ─────────────────────────────────────────────────
+        "dawn_unity":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='142' height='186'>
+<defs>
+<radialGradient id='a' cx='50%' cy='50%' r='80%'><stop stop-color='#0e0a1a'/><stop offset='1' stop-color='#020104'/></radialGradient>
+<radialGradient id='b' cx='50%' cy='50%' r='45%'><stop stop-color='#fff' stop-opacity='.08'/><stop offset='1' stop-color='#0e0a1a' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='142' height='186' rx='9' fill='url(#a)'/><rect width='142' height='186' rx='9' fill='url(#b)'/>
+<rect x='5' y='5' width='132' height='176' rx='7' fill='none' stroke='#fff' stroke-width='1.2' opacity='.28'/>
+<path d='M71 78 L71 46 A32 32 0 0 1 103 78 Z' fill='#b58af5' opacity='.75'/>
+<path d='M71 78 L103 78 A32 32 0 0 1 71 110 Z' fill='#ff7c3a' opacity='.75'/>
+<path d='M71 78 L71 110 A32 32 0 0 1 39 78 Z' fill='#f0c44a' opacity='.75'/>
+<path d='M71 78 L39 78 A32 32 0 0 1 71 46 Z' fill='#4dd9e8' opacity='.75'/>
+<circle cx='71' cy='78' r='12' fill='#0e0a1a'/><circle cx='71' cy='78' r='10' fill='none' stroke='#fff' stroke-width='1.2' opacity='.6'/>
+<circle cx='71' cy='78' r='4' fill='#fff' opacity='.7'/>
+<circle cx='71' cy='78' r='32' fill='none' stroke='#fff' stroke-width='.8' opacity='.28'/>
+<circle cx='22' cy='25' r='3' fill='#b58af5' opacity='.5'/><circle cx='120' cy='25' r='3' fill='#ff7c3a' opacity='.5'/>
+<circle cx='22' cy='164' r='3' fill='#4dd9e8' opacity='.5'/><circle cx='120' cy='164' r='3' fill='#f0c44a' opacity='.5'/>
+<text x='71' y='128' text-anchor='middle' fill='#fff' font-size='7' font-family='sans-serif' font-weight='bold' letter-spacing='2'>UNITY OF DAWN</text>
+<text x='71' y='170' text-anchor='middle' fill='#aaa' font-size='6.5' font-family='sans-serif' letter-spacing='1' opacity='.7'>WALKING FREE CCG</text>
+</svg>"""
+        "sponsor":
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='142' height='186'>
+<defs>
+<radialGradient id='a' cx='50%' cy='50%' r='80%'><stop stop-color='#0a0a0a'/><stop offset='1' stop-color='#000'/></radialGradient>
+<radialGradient id='b' cx='50%' cy='50%' r='45%'><stop stop-color='#888' stop-opacity='.15'/><stop offset='1' stop-color='#0a0a0a' stop-opacity='0'/></radialGradient>
+</defs>
+<rect width='142' height='186' rx='9' fill='url(#a)'/><rect width='142' height='186' rx='9' fill='url(#b)'/>
+<rect x='5' y='5' width='132' height='176' rx='7' fill='none' stroke='#888' stroke-width='1.5' opacity='.5'/>
+<rect x='9' y='9' width='124' height='168' rx='5' fill='none' stroke='#555' stroke-width='.75' opacity='.35'/>
+<ellipse cx='71' cy='78' rx='28' ry='18' fill='none' stroke='#888' stroke-width='1.2' opacity='.6'/>
+<ellipse cx='71' cy='78' rx='12' ry='12' fill='#333' stroke='#666' stroke-width='.8' opacity='.8'/>
+<circle cx='71' cy='78' r='5' fill='#888' opacity='.6'/><circle cx='74' cy='75' r='2' fill='#ccc' opacity='.5'/>
+<line x1='71' y1='56' x2='71' y2='44' stroke='#888' stroke-width='.8' opacity='.4'/>
+<line x1='71' y1='100' x2='71' y2='112' stroke='#888' stroke-width='.8' opacity='.4'/>
+<line x1='39' y1='78' x2='27' y2='78' stroke='#888' stroke-width='.8' opacity='.4'/>
+<line x1='103' y1='78' x2='115' y2='78' stroke='#888' stroke-width='.8' opacity='.4'/>
+<rect x='15' y='15' width='6' height='6' fill='#666' opacity='.4'/><rect x='121' y='15' width='6' height='6' fill='#666' opacity='.4'/>
+<rect x='15' y='165' width='6' height='6' fill='#666' opacity='.4'/><rect x='121' y='165' width='6' height='6' fill='#666' opacity='.4'/>
+<text x='71' y='128' text-anchor='middle' fill='#888' font-size='7' font-family='sans-serif' font-weight='bold' letter-spacing='2'>THE SPONSOR</text>
+<text x='71' y='170' text-anchor='middle' fill='#555' font-size='6.5' font-family='sans-serif' letter-spacing='1' opacity='.7'>WALKING FREE CCG</text>
+</svg>"""
+        _:  # Universal / no class — original teal star design
+            return """<svg xmlns='http://www.w3.org/2000/svg' width='142' height='186'>
+<defs><radialGradient id='g' cx='50%' cy='50%' r='80%'><stop stop-color='#2e8496'/><stop offset='1' stop-color='#081b2b'/></radialGradient></defs>
+<rect width='142' height='186' rx='9' fill='url(#g)'/>
+<rect x='5' y='5' width='132' height='176' rx='7' fill='none' stroke='#e7c96b' stroke-width='1.5' opacity='.6'/>
+<circle cx='71' cy='80' r='38' fill='none' stroke='#e7c96b' stroke-width='2' opacity='.5'/>
+<path d='M71 48 L77 66 L96 66 L81 78 L86 96 L71 84 L56 96 L61 78 L46 66 L65 66 Z' fill='#e7c96b' opacity='.88'/>
+<text x='71' y='136' text-anchor='middle' fill='#a8dce6' font-size='7.5' font-family='sans-serif' font-weight='bold' letter-spacing='2'>UNIVERSAL</text>
+<text x='71' y='170' text-anchor='middle' fill='#e7c96b' font-size='6.5' font-family='sans-serif' letter-spacing='1' opacity='.7'>WALKING FREE CCG</text>
+</svg>"""
 
 func _art_svg() -> String:
     var seed_value: int = absi(str(data.get("name", "card")).hash())
