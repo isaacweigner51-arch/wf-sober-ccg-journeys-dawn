@@ -243,7 +243,8 @@ func _add_keyword_badges(frame: Control) -> void:
     var keywords := _card_keywords()
     if keywords.is_empty():
         return
-    var _bf_badge := (display_mode == DisplayMode.BATTLEFIELD)
+    var _kw_ctx: String = str(data.get("_ui_context", ""))
+    var _bf_badge := (_kw_ctx == "player_board" or _kw_ctx == "enemy_board")
     var use_compact := compact or _bf_badge
     var badge_row := HBoxContainer.new()
     # BATTLEFIELD: small icon badges sit below the stat row (y≈164)
@@ -294,10 +295,14 @@ func _build() -> void:
     # Clip container — art drift/float stays strictly inside the card's art window.
     # Battlefield: art fills the entire card face (name bar only stays).
     # Other modes: original compact art window with room for ability text.
-    var _bf: bool  = (display_mode == DisplayMode.BATTLEFIELD) and not hidden_card
+    # Only cards actually on the board get the compact portrait layout.
+    # display_mode defaults to BATTLEFIELD for every CardView and is never
+    # changed, so we use _ui_context (set by rebuild_board) as the real signal.
+    var _ui_ctx: String = str(data.get("_ui_context", ""))
+    var _bf: bool = (_ui_ctx == "player_board" or _ui_ctx == "enemy_board") and not hidden_card
     var art_top: float = 24.0 if not compact else 20.0
-    # BATTLEFIELD: 124×124 circle portrait centred in the card.
-    # Other modes: original compact rect with room for ability text below.
+    # BATTLEFIELD board cards: 124×124 circle portrait centred in the card.
+    # All other contexts: original compact rect with room for ability text below.
     var art_x: float = (custom_minimum_size.x - 124.0) * 0.5 if _bf else 8.0
     var art_w: float = 124.0 if _bf else (custom_minimum_size.x - 16.0)
     var art_h: float = 124.0 if _bf else (82.0 if not compact else 64.0)
@@ -893,9 +898,10 @@ func _living_glow_style() -> StyleBoxFlat:
     return style
 
 func _frame_style() -> StyleBoxFlat:
-    # BATTLEFIELD portrait mode — the circle carries all visual identity.
+    # Board portrait mode — the circle carries all visual identity.
     # Return a fully transparent frame so no rectangle shows behind the circle.
-    if display_mode == DisplayMode.BATTLEFIELD and not hidden_card:
+    var _ctx: String = str(data.get("_ui_context", ""))
+    if (_ctx == "player_board" or _ctx == "enemy_board") and not hidden_card:
         var bf := StyleBoxFlat.new()
         bf.bg_color = Color(0, 0, 0, 0)
         return bf
