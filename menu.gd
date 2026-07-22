@@ -6349,9 +6349,11 @@ func pack_rarity_burst(center: Vector2, rarity: String) -> void:
 func show_pack_results(pulled: Array, platinum_hit: bool) -> void:
     clear_screen(); add_background(0.80); header("PACK OPENED", "SIGNATURE PLATINUM!" if platinum_hit else "Cards added to your collection"); currency_bar()
     var backs: Array[Panel] = []
+    # 7 cards × 168 px + 6 × 10 px gap = 1,258 px — fits the 1,280 px viewport.
+    # Old step of 244 placed card 7 at x = 1,519, completely off-screen.
     for i in range(pulled.size()):
-        var pos := Vector2(55 + i * 244, 178)
-        var back := pack_card_back(pos, Vector2(220, 340))
+        var pos := Vector2(22 + i * 178, 178)
+        var back := pack_card_back(pos, Vector2(168, 300))
         root_layer.add_child(back)
         backs.append(back)
     button("OPEN ANOTHER (%d)" % pack_inventory,Vector2(255,550),Vector2(230,55),show_pack_opening)
