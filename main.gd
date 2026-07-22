@@ -764,9 +764,11 @@ func build_developer_final_boss_deck() -> Array:
     # It is powerful through synergy and curve quality, not illegal advantages.
     var pool: Array = build_class_cards("Purpose")
     pool.append_array(build_universal_cards())
+    pool.append_array(build_class_cards("Courage"))  # for Phoenix Rising
     var deck: Array = []
     _append_named_cards(deck, pool, [
         "The Sponsor", "Walking Free",
+        "Phoenix Rising", "Phoenix Rising", "Phoenix Rising",
         "Newcomer", "Newcomer", "Newcomer",
         "Sponsor's Guidance", "Sponsor's Guidance", "Sponsor's Guidance",
         "Daily Progress", "Daily Progress", "Daily Progress",
