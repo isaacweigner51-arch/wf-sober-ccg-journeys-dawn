@@ -1,5 +1,5 @@
 {
-  "version": "0.9.5",
+  "version": "0.9.6",
   "build_name": "Battle Prep Overhaul",
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
@@ -91,6 +91,22 @@
     "More seasonal content and cards are in development \u2014 check back after future updates."
   ],
   "whats_new": [
+    {
+      "version": "0.9.6",
+      "date": "2026-07-22",
+      "notes": [
+        "Battlefield is now unique per leader: Hope gets a dawn crystal courtyard, Courage a volcanic lava arena, Serenity a floating lotus lake platform, Purpose a golden compass colosseum.",
+        "Battle intro screen: leader portraits are now full-screen with no frames or glowing squares. Leaders slide in edge-to-edge with their name and title overlaid.",
+        "All third-party (Shadowverse) artwork removed from the game."
+      ]
+    },
+    {
+      "version": "0.9.6",
+      "date": "2026-07-22",
+      "notes": [
+        "Battlefield background replaced with original art \u2014 no third-party content."
+      ]
+    },
     {
       "version": "0.9.5",
       "date": "2026-07-22",

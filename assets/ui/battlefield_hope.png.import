@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bifqha1ldfbd6"
-path="res://.godot/imported/battlefield.png-ad15f7659cd2c090b54f30f6c7940749.ctex"
+uid="uid://4g33vaiw2462"
+path="res://.godot/imported/battlefield_hope.png-718bc7cc390d8da19234b84bb5e367b4.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/ui/battlefield.png"
-dest_files=["res://.godot/imported/battlefield.png-ad15f7659cd2c090b54f30f6c7940749.ctex"]
+source_file="res://assets/ui/battlefield_hope.png"
+dest_files=["res://.godot/imported/battlefield_hope.png-718bc7cc390d8da19234b84bb5e367b4.ctex"]
 
 [params]
 

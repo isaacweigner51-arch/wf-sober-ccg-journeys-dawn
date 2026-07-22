@@ -1870,7 +1870,7 @@ func build_ui() -> void:
     battlefield_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     battlefield_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     battlefield_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    battlefield_background.texture = load("res://assets/ui/battlefield.png") as Texture2D
+    battlefield_background.texture = _battlefield_texture_for_class(selected_class)
     add_child(battlefield_background)
 
     # Class-tinted shade — updated by refresh_battlefield_theme() each match
@@ -7820,7 +7820,16 @@ func clear_children(node: Node) -> void:
 func svg_texture(svg: String) -> Texture2D:
     var image := Image.new(); image.load_svg_from_string(svg, 1.0); return ImageTexture.create_from_image(image)
 
+func _battlefield_texture_for_class(cls: String) -> Texture2D:
+    var path := "res://assets/ui/battlefield_%s.png" % cls.to_lower()
+    if ResourceLoader.exists(path):
+        return load(path) as Texture2D
+    return load("res://assets/ui/battlefield.png") as Texture2D
+
 func refresh_battlefield_theme() -> void:
+    # Swap the battlefield background to match the player's class.
+    if is_instance_valid(battlefield_background):
+        battlefield_background.texture = _battlefield_texture_for_class(selected_class)
     # Strengthen the class shade and apply the per-class atmosphere overlay.
     var ac := class_accent_color(selected_class)
     if is_instance_valid(_battle_class_shade):

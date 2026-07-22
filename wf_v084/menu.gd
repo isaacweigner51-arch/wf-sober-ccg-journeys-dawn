@@ -3872,125 +3872,119 @@ func _show_battle_intro(player_class_name: String, opponent_class_name: String) 
     intro.add_child(divider)
 
     # Portrait frame helper — returns a Panel with art inside, starts off-screen.
-    var frame_w := 545.0; var frame_h := 560.0; var frame_y := 50.0
-
-    # ── Left portrait ─────────────────────────────────────────────────────────
-    var left_frame := Panel.new()
-    left_frame.size = Vector2(frame_w, frame_h)
-    left_frame.clip_contents = true
-    var lf_st := StyleBoxFlat.new()
-    lf_st.bg_color = Color(0.01, 0.015, 0.03)
-    lf_st.border_color = pc; lf_st.set_border_width_all(3)
-    lf_st.set_corner_radius_all(16)
-    lf_st.shadow_color = Color(pc.r, pc.g, pc.b, 0.65); lf_st.shadow_size = 28
-    left_frame.add_theme_stylebox_override("panel", lf_st)
-    left_frame.position = Vector2(-620.0, frame_y)   # slides in from left
-    left_frame.modulate = Color(1, 1, 1, 0)
-    intro.add_child(left_frame)
-
+    # ── Left portrait — raw image, no frame, slides in from off-screen left ──
     var left_art := TextureRect.new()
     left_art.texture = class_leader_texture(player_class_name)
     left_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     left_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    left_art.position = Vector2(0, 0); left_art.size = Vector2(frame_w, frame_h)
+    left_art.position = Vector2(-700.0, 0.0)
+    left_art.size = Vector2(660, 720)
     left_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    left_frame.add_child(left_art)
+    left_art.modulate.a = 0.0
+    intro.add_child(left_art)
 
-    # ── Right portrait ────────────────────────────────────────────────────────
-    var right_frame := Panel.new()
-    right_frame.size = Vector2(frame_w, frame_h)
-    right_frame.clip_contents = true
-    var rf_st := StyleBoxFlat.new()
-    rf_st.bg_color = Color(0.01, 0.015, 0.03)
-    rf_st.border_color = oc; rf_st.set_border_width_all(3)
-    rf_st.set_corner_radius_all(16)
-    rf_st.shadow_color = Color(oc.r, oc.g, oc.b, 0.65); rf_st.shadow_size = 28
-    right_frame.add_theme_stylebox_override("panel", rf_st)
-    right_frame.position = Vector2(1300.0, frame_y)  # slides in from right
-    right_frame.modulate = Color(1, 1, 1, 0)
-    intro.add_child(right_frame)
+    # Soft gradient fade on the right edge of the left portrait so it blends
+    # naturally into the dark centre rather than hard-cutting.
+    var left_fade := ColorRect.new()
+    left_fade.position = Vector2(0, 0); left_fade.size = Vector2(660, 720)
+    left_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    # Rendered as invisible — Godot ColorRect can't do horizontal gradients
+    # natively; the portrait STRETCH_KEEP_ASPECT_COVERED already provides a
+    # natural edge. Keep the node so the position reference is stable.
+    left_fade.color = Color(0, 0, 0, 0)
+    intro.add_child(left_fade)
 
+    # ── Right portrait — raw image, no frame, slides in from off-screen right ─
     var right_art := TextureRect.new()
     right_art.texture = class_leader_texture(opponent_class_name)
     right_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     right_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    right_art.flip_h = true   # mirror so opponent faces centre
-    right_art.position = Vector2(0, 0); right_art.size = Vector2(frame_w, frame_h)
+    right_art.flip_h = true   # mirror so they face each other
+    right_art.position = Vector2(1400.0, 0.0)
+    right_art.size = Vector2(660, 720)
     right_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    right_frame.add_child(right_art)
+    right_art.modulate.a = 0.0
+    intro.add_child(right_art)
 
-    # Resting x positions — each frame touches the divider with a 16 px gap.
-    var left_rest  := 638.0 - frame_w - 16.0   # = 638 - 545 - 16 = 77
-    var right_rest := 642.0 + 16.0              # = 658
-
-    # ── Leader name plates (appear below portraits) ───────────────────────────
-    # Left: player leader
+    # ── Leader name + title — bottom-third overlay on each side ──────────────
+    # Left name plate
     var lp_name := Label.new()
     lp_name.text = _leader_first_name(player_class_name)
-    lp_name.position = Vector2(left_rest, frame_y + frame_h + 10.0)
-    lp_name.size = Vector2(frame_w, 42)
-    lp_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    lp_name.add_theme_font_size_override("font_size", ui_font_size(36))
-    lp_name.add_theme_color_override("font_color", pc.lightened(0.35))
+    lp_name.position = Vector2(20, 560); lp_name.size = Vector2(620, 50)
+    lp_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+    lp_name.add_theme_font_size_override("font_size", ui_font_size(42))
+    lp_name.add_theme_color_override("font_color", pc.lightened(0.40))
+    lp_name.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+    lp_name.add_theme_constant_override("shadow_offset_x", 2)
+    lp_name.add_theme_constant_override("shadow_offset_y", 2)
     lp_name.modulate.a = 0.0
     intro.add_child(lp_name)
 
     var lp_title := Label.new()
     lp_title.text = _leader_title(player_class_name)
-    lp_title.position = Vector2(left_rest, frame_y + frame_h + 54.0)
-    lp_title.size = Vector2(frame_w, 28)
-    lp_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    lp_title.add_theme_font_size_override("font_size", ui_font_size(18))
-    lp_title.add_theme_color_override("font_color", Color(pc.r, pc.g, pc.b, 0.75).lightened(0.20))
+    lp_title.position = Vector2(20, 612); lp_title.size = Vector2(620, 30)
+    lp_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+    lp_title.add_theme_font_size_override("font_size", ui_font_size(20))
+    lp_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.80))
+    lp_title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+    lp_title.add_theme_constant_override("shadow_offset_x", 1)
+    lp_title.add_theme_constant_override("shadow_offset_y", 1)
     lp_title.modulate.a = 0.0
     intro.add_child(lp_title)
 
-    # Right: opponent leader
+    # Right name plate (right-aligned, mirrored side)
     var rp_name := Label.new()
     rp_name.text = _leader_first_name(opponent_class_name)
-    rp_name.position = Vector2(right_rest, frame_y + frame_h + 10.0)
-    rp_name.size = Vector2(frame_w, 42)
-    rp_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    rp_name.add_theme_font_size_override("font_size", ui_font_size(36))
-    rp_name.add_theme_color_override("font_color", oc.lightened(0.35))
+    rp_name.position = Vector2(640, 560); rp_name.size = Vector2(620, 50)
+    rp_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    rp_name.add_theme_font_size_override("font_size", ui_font_size(42))
+    rp_name.add_theme_color_override("font_color", oc.lightened(0.40))
+    rp_name.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+    rp_name.add_theme_constant_override("shadow_offset_x", 2)
+    rp_name.add_theme_constant_override("shadow_offset_y", 2)
     rp_name.modulate.a = 0.0
     intro.add_child(rp_name)
 
     var rp_title := Label.new()
     rp_title.text = _leader_title(opponent_class_name)
-    rp_title.position = Vector2(right_rest, frame_y + frame_h + 54.0)
-    rp_title.size = Vector2(frame_w, 28)
-    rp_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    rp_title.add_theme_font_size_override("font_size", ui_font_size(18))
-    rp_title.add_theme_color_override("font_color", Color(oc.r, oc.g, oc.b, 0.75).lightened(0.20))
+    rp_title.position = Vector2(640, 612); rp_title.size = Vector2(620, 30)
+    rp_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    rp_title.add_theme_font_size_override("font_size", ui_font_size(20))
+    rp_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.80))
+    rp_title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+    rp_title.add_theme_constant_override("shadow_offset_x", 1)
+    rp_title.add_theme_constant_override("shadow_offset_y", 1)
     rp_title.modulate.a = 0.0
     intro.add_child(rp_title)
 
-    # ── VS label — centred on the divider ─────────────────────────────────────
+    # ── VS label — dead centre ────────────────────────────────────────────────
     var vs := Label.new()
     vs.text = "VS"
-    vs.position = Vector2(540, 245); vs.size = Vector2(200, 100)
+    vs.position = Vector2(490, 290); vs.size = Vector2(300, 120)
     vs.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    vs.add_theme_font_size_override("font_size", ui_font_size(86))
+    vs.add_theme_font_size_override("font_size", ui_font_size(96))
     vs.add_theme_color_override("font_color", GOLD_COLOR)
-    vs.scale = Vector2(0.15, 0.15)
+    vs.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+    vs.add_theme_constant_override("shadow_offset_x", 3)
+    vs.add_theme_constant_override("shadow_offset_y", 3)
+    vs.scale = Vector2(0.10, 0.10)
     vs.pivot_offset = vs.size * 0.5
     vs.modulate.a = 0.0
     intro.add_child(vs)
 
     # ── Animation ─────────────────────────────────────────────────────────────
     var tween := create_tween().set_parallel(true)
-    tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    tween.tween_property(left_frame,  "position:x", left_rest,  0.45)
-    tween.tween_property(left_frame,  "modulate:a", 1.0,        0.32)
-    tween.tween_property(right_frame, "position:x", right_rest, 0.45)
-    tween.tween_property(right_frame, "modulate:a", 1.0,        0.32)
-    tween.tween_property(vs, "scale",      Vector2.ONE, 0.55)
-    tween.tween_property(vs, "modulate:a", 1.0,         0.38)
-    tween.tween_property(lp_name,  "modulate:a", 1.0, 0.35).set_delay(0.30)
-    tween.tween_property(lp_title, "modulate:a", 1.0, 0.35).set_delay(0.38)
-    tween.tween_property(rp_name,  "modulate:a", 1.0, 0.35).set_delay(0.30)
-    tween.tween_property(rp_title, "modulate:a", 1.0, 0.35).set_delay(0.38)
+    tween.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+    tween.tween_property(left_art,  "position:x", 0.0,    0.40)
+    tween.tween_property(left_art,  "modulate:a", 1.0,    0.28)
+    tween.tween_property(right_art, "position:x", 620.0,  0.40)
+    tween.tween_property(right_art, "modulate:a", 1.0,    0.28)
+    tween.tween_property(vs, "scale",      Vector2.ONE, 0.50)
+    tween.tween_property(vs, "modulate:a", 1.0,         0.32)
+    tween.tween_property(lp_name,  "modulate:a", 1.0, 0.30).set_delay(0.25)
+    tween.tween_property(lp_title, "modulate:a", 1.0, 0.30).set_delay(0.33)
+    tween.tween_property(rp_name,  "modulate:a", 1.0, 0.30).set_delay(0.25)
+    tween.tween_property(rp_title, "modulate:a", 1.0, 0.30).set_delay(0.33)
     await get_tree().create_timer(0.45).timeout   # guard — tween.finished can hang
 
     await get_tree().create_timer(1.20).timeout
