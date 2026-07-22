@@ -231,6 +231,7 @@ var tutorial_heading_label: Label
 # ──────────────────────────────────────────────────────────────────────────────
 var battle_setup_loaded := false
 var battlefield_background: TextureRect
+var _battle_class_shade: ColorRect
 
 func safe_set_text(node: Object, value: String) -> void:
     if node != null and is_instance_valid(node) and "text" in node:
@@ -1724,11 +1725,20 @@ func leader_feedback(leader: Control, damage: int, healing: bool = false) -> voi
         _spawn_heal_particles(leader.global_position + leader.size * 0.5)
     else:
         tween.tween_property(leader, "modulate", Color(1.65, 0.35, 0.35), 0.06)
-        tween.tween_property(leader, "position", start + Vector2(10, 0), 0.04)
-        tween.tween_property(leader, "position", start - Vector2(10, 0), 0.04)
-        tween.tween_property(leader, "position", start, 0.04)
+        tween.tween_property(leader, "position", start + Vector2(14, 0), 0.04)
+        tween.tween_property(leader, "position", start - Vector2(14, 0), 0.04)
+        tween.tween_property(leader, "position", start + Vector2(7, 0), 0.03)
+        tween.tween_property(leader, "position", start, 0.05)
         tween.tween_property(leader, "modulate", Color.WHITE, 0.15)
         leader_emote(leader, "!" if damage < 4 else "✦", Color(1.0, 0.42, 0.32))
+        # Impact burst — sparks, shockwave ring, and camera shake
+        var lc := leader.global_position + leader.size * 0.5
+        _spawn_impact_sparks(lc, Color(1.0, 0.36, 0.16), 5 + mini(damage, 7))
+        _spawn_impact_ring(lc, Color(1.05, 0.44, 0.20), mini(damage / 2, 4))
+        _screen_shake(minf(damage * 1.8, 10.0), 0.24, Vector2.ZERO)
+        # Sober recovery quote on heavy hits
+        if damage >= 4:
+            show_vfx(_hit_recovery_quote(), lc + Vector2(0, -55), Color(0.95, 0.82, 0.32))
 
 # Small floating reaction bubble ("emote") above a leader portrait — pops in,
 # drifts up, and fades. Kept to the handful of glyphs already proven to
@@ -1847,17 +1857,20 @@ func build_ui() -> void:
     # Neutral arena background: no embedded menus or duplicate UI artwork.
     battlefield_background = TextureRect.new()
     battlefield_background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    battlefield_background.texture = svg_texture(battlefield_svg())
+    battlefield_background.texture = load("res://assets/ui/battlefield.png")
     battlefield_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     battlefield_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     battlefield_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(battlefield_background)
 
-    var field_shade := ColorRect.new()
-    field_shade.color = Color(0.01, 0.02, 0.04, 0.10)
-    field_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    field_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(field_shade)
+    # Class-tinted shade — updated by refresh_battlefield_theme() each match
+    _battle_class_shade = ColorRect.new()
+    _battle_class_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    _battle_class_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(_battle_class_shade)
+    # Apply initial tint (will be overwritten when selected_class is known)
+    var _init_ac := class_accent_color(selected_class if selected_class != "" else "Hope")
+    _battle_class_shade.color = Color(_init_ac.r * 0.10, _init_ac.g * 0.10, _init_ac.b * 0.16, 0.28)
 
     # A slim header bar grounds the title and HOME/RESTART controls instead of
     # leaving them floating loose over the battlefield artwork.
@@ -5118,6 +5131,12 @@ func play_card(index: int) -> void:
     player_board.append(chosen); status_label.text = "%s enters the field!" % chosen["name"]
     play_sfx("platinum" if str(chosen.get("rarity", "")) == "Platinum" else "play")
     refresh_ui(true, player_board.size() - 1, true)
+    # Class-colored summon burst at player board
+    if is_instance_valid(player_board_area):
+        var sp := player_board_area.global_position + player_board_area.size * 0.5
+        var sc := class_accent_color(str(chosen.get("faction", selected_class)))
+        _spawn_impact_ring(sp, sc, 2)
+        _spawn_impact_sparks(sp, sc, 12)
     play_battle_bark(player_leader, selected_class, "play", true)
     await get_tree().create_timer(0.34).timeout; await resolve_on_play(chosen, true)
     training_on_card_played(chosen)
@@ -6764,6 +6783,24 @@ func _launch_projectile(from_global: Vector2, to_global: Vector2, proj_type: Str
     var base_col: Color  = _projectile_impact_color(proj_type, rarity)
     var proj_sz: float   = 11.0 + rtier * 3.5
 
+    # ── Directional beam slash (thin rect oriented along attack vector) ──────
+    var angle := from_global.angle_to_point(to_global)
+    var beam_w := maxf(3.0, proj_sz * 0.42)
+    var beam_len := clampf(dist * 0.24, 30.0, 105.0)
+    var beam := ColorRect.new()
+    beam.size = Vector2(beam_len, beam_w)
+    beam.pivot_offset = Vector2(beam_len * 0.5, beam_w * 0.5)
+    beam.rotation = angle
+    beam.color = Color(base_col.r, base_col.g, base_col.b, 0.90)
+    beam.position = from_global - Vector2(beam_len * 0.5, beam_w * 0.5)
+    beam.z_index = 848
+    beam.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    if safe_add_child(self, beam):
+        var btw := create_tween()
+        btw.tween_property(beam, "modulate:a", 0.0, travel * 0.58)
+        get_tree().create_timer(travel * 0.62, true, false, true).timeout.connect(
+            func(): if is_instance_valid(beam): beam.queue_free())
+
     # ── Main projectile node ───────────────────────────────────────────────
     var proj := Panel.new()
     proj.size    = Vector2(proj_sz, proj_sz)
@@ -6832,6 +6869,11 @@ func _launch_projectile(from_global: Vector2, to_global: Vector2, proj_type: Str
         func(): if is_instance_valid(proj): proj.queue_free())
 
     return travel
+
+## Returns a short recovery-themed line shown when a leader takes a heavy hit.
+func _hit_recovery_quote() -> String:
+    var q := ["ONE DAY AT A TIME", "STAY THE COURSE", "KEEP GOING", "HOLD STRONG", "RISE AGAIN", "NOT TODAY"]
+    return q[randi() % q.size()]
 
 ## Spawns `count` spark fragments flying outward from `at_global`.
 func _spawn_impact_sparks(at_global: Vector2, color: Color, count: int) -> void:
@@ -7607,8 +7649,10 @@ func svg_texture(svg: String) -> Texture2D:
     var image := Image.new(); image.load_svg_from_string(svg, 1.0); return ImageTexture.create_from_image(image)
 
 func refresh_battlefield_theme() -> void:
-    if is_instance_valid(battlefield_background):
-        battlefield_background.texture = svg_texture(battlefield_svg())
+    # PNG background is static; only update the class-colored shade overlay.
+    if is_instance_valid(_battle_class_shade):
+        var ac := class_accent_color(selected_class)
+        _battle_class_shade.color = Color(ac.r * 0.10, ac.g * 0.10, ac.b * 0.16, 0.28)
 
 func battlefield_svg() -> String:
     # Strongly differentiated host arenas. The active player's selected deck class

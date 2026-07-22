@@ -606,12 +606,19 @@ func play_buff_vfx(stat_text: String, color: Color) -> void:
     tw.parallel().tween_property(self, "modulate", Color.WHITE, 0.22)
 
 func summon_animation() -> void:
-    scale = Vector2(0.18, 0.18)
-    modulate.a = 0.0
+    # Slam in from tiny + bright white flash → settle with back-ease overshoot pop
+    pivot_offset = custom_minimum_size * 0.5
+    scale = Vector2(0.08, 0.08)
+    modulate = Color(3.0, 3.0, 3.0, 0.0)
     var tween := create_tween().set_parallel(true)
     tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    tween.tween_property(self, "scale", Vector2.ONE, 0.34)
-    tween.tween_property(self, "modulate:a", 1.0, 0.2)
+    tween.tween_property(self, "scale", Vector2(1.12, 1.12), 0.30)
+    tween.tween_property(self, "modulate", Color.WHITE, 0.20)
+    # Settle to exact 1.0 after overshoot
+    var settle := create_tween()
+    settle.tween_interval(0.30)
+    settle.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+    settle.tween_property(self, "scale", Vector2.ONE, 0.10)
 
 func damage_flash() -> void:
     var start := position
