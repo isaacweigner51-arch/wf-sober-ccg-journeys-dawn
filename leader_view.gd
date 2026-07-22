@@ -7,7 +7,7 @@
 #   _layer_body  — torso / clothing (breathing scale)
 #   _layer_head  — face + neck (lateral drift; texture-swapped for blink)
 #   _layer_hair  — hair (sways wider than head, offset phase)
-#   _layer_aura  — optional glow overlay
+#   _layer_aura  — optional glow, drawn BEHIND body/head/hair (halo)
 #   _art         — flat composite fallback (only when !has_layered_art)
 #
 # Layered art file convention  (1024×1024 PNG, transparent bg):
