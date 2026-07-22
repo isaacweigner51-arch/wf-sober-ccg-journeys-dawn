@@ -586,76 +586,110 @@ func _init_rarity_vfx(frame: Control) -> void:
 ## All three methods are fire-and-forget (no await).
 ## Caller in main.gd controls sequencing with explicit timers.
 
+## Returns the class-specific combat accent color used for charge/flash tints.
+func _class_combat_color() -> Color:
+    match str(data.get("class", data.get("faction", ""))):
+        "Hope":     return Color(1.35, 0.70, 2.20)   # vivid purple
+        "Courage":  return Color(2.40, 0.75, 0.45)   # burning red-orange
+        "Purpose":  return Color(2.00, 1.50, 0.40)   # gold
+        "Serenity": return Color(0.45, 1.90, 1.90)   # cold teal
+        _:          return Color(1.70, 1.60, 1.30)   # warm white
+
 func play_attack_wind_up(lean_dir: Vector2) -> void:
-    ## Card squashes and leans AWAY from the target — builds anticipation.
+    ## Portrait snaps to attention then leans hard away — "coming to life" charge.
     if display_mode != DisplayMode.BATTLEFIELD:
         return
     _idle_paused = true
     var tier := _rarity_tier_val()
-    var sx := 0.74 if tier >= 4 else (0.80 if tier >= 3 else 0.85)
-    var sy := 1.26 if tier >= 4 else (1.20 if tier >= 3 else 1.15)
-    var lean := 11.0 + tier * 2.5
+
+    # More dramatic squash-lean than before
+    var sx  := 0.66 if tier >= 4 else (0.72 if tier >= 3 else 0.78)
+    var sy  := 1.34 if tier >= 4 else (1.28 if tier >= 3 else 1.20)
+    var lean := 15.0 + tier * 3.5
+
     var tw := create_tween().set_parallel(true)
     tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    tw.tween_property(self, "scale", Vector2(sx, sy), 0.12)
-    tw.tween_property(self, "position", base_position + lean_dir * lean, 0.11)
-    tw.tween_property(self, "rotation", lean_dir.x * -0.13, 0.11)
+    tw.tween_property(self, "scale",    Vector2(sx, sy),                   0.15)
+    tw.tween_property(self, "position", base_position + lean_dir * lean,   0.14)
+    tw.tween_property(self, "rotation", lean_dir.x * -0.20,               0.14)
+
+    # Art charges up — portrait zooms in as if the character is rearing back
+    if art_rect != null and is_instance_valid(art_rect):
+        art_rect.pivot_offset = art_rect.size * 0.5
+        var atw := create_tween().set_parallel(true)
+        atw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        var charge_z := 1.24 + tier * 0.05
+        atw.tween_property(art_rect, "scale",    Vector2(charge_z, charge_z),         0.15)
+        atw.tween_property(art_rect, "position", art_home + lean_dir * -(4.0 + tier), 0.14)
+
+    # Class-coloured charge flash — character glows their faction colour
+    var ctw := create_tween()
+    ctw.tween_property(self, "modulate", _class_combat_color(), 0.09)
+    ctw.tween_property(self, "modulate", Color.WHITE,            0.07)
 
 func play_attack_lunge(toward_dir: Vector2) -> void:
-    ## Card stretches TOWARD the target — peak of the strike.
+    ## Explosive stretch toward the target — the character erupts out of the portrait.
     if display_mode != DisplayMode.BATTLEFIELD:
         return
     var tier := _rarity_tier_val()
-    var sx := 1.24 if tier >= 4 else (1.19 if tier >= 3 else 1.13)
-    var sy := 0.78 if tier >= 4 else (0.83 if tier >= 3 else 0.88)
-    var lunge := 18.0 + tier * 3.0
+
+    # More aggressive stretch and distance than before
+    var sx    := 1.40 if tier >= 4 else (1.32 if tier >= 3 else 1.22)
+    var sy    := 0.68 if tier >= 4 else (0.74 if tier >= 3 else 0.82)
+    var lunge := 28.0 + tier * 5.0
+
     var tw := create_tween().set_parallel(true)
     tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    tw.tween_property(self, "scale", Vector2(sx, sy), 0.07)
-    tw.tween_property(self, "position", base_position + toward_dir * lunge, 0.07)
-    tw.tween_property(self, "rotation", toward_dir.x * 0.09, 0.07)
-    # Art zooms and shifts inside the clip window toward the strike
+    tw.tween_property(self, "scale",    Vector2(sx, sy),                      0.06)
+    tw.tween_property(self, "position", base_position + toward_dir * lunge,   0.06)
+    tw.tween_property(self, "rotation", toward_dir.x * 0.14,                  0.06)
+
+    # Art slams into the strike — character is fully committed
     _art_lunge(toward_dir)
-    # Rarity-scaled release flash — Gold+ get a visible pop
-    var flash_col: Color
-    if tier >= 5:   flash_col = Color(0.55, 1.9, 2.4)
-    elif tier >= 4: flash_col = Color(2.0, 1.6, 0.52)
-    elif tier >= 2: flash_col = Color(1.5, 1.4, 1.2)
-    else:           flash_col = Color(1.25, 1.2, 1.15)
+
+    # Explosive class-coloured flash on release
+    var base_flash := _class_combat_color()
+    var flash_col  := Color(
+        minf(base_flash.r * 2.2, 3.5),
+        minf(base_flash.g * 2.2, 3.5),
+        minf(base_flash.b * 2.2, 3.5)
+    )
     var ftw := create_tween()
-    ftw.tween_property(self, "modulate", flash_col, 0.04)
-    ftw.tween_property(self, "modulate", Color.WHITE, 0.10)
+    ftw.tween_property(self, "modulate", flash_col,   0.04)
+    ftw.tween_property(self, "modulate", Color.WHITE, 0.14)
 
 func play_attack_settle() -> void:
-    ## Card eases back to its resting pose after the strike.
+    ## Springy bounce back — character lands satisfied after the strike.
     if display_mode != DisplayMode.BATTLEFIELD:
         return
     _art_settle_to_home()
     var tw := create_tween().set_parallel(true)
-    tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    tw.tween_property(self, "scale",    Vector2.ONE,     0.22)
-    tw.tween_property(self, "position", base_position,   0.22)
-    tw.tween_property(self, "rotation", 0.0,             0.18)
-    # Resume idle breathing once settle completes.
-    # Using tween.finished avoids get_tree().create_timer() which crashes when
-    # the CardView has already been freed or removed from the scene tree.
+    tw.set_trans(Tween.TRANS_SPRING).set_ease(Tween.EASE_OUT)
+    tw.tween_property(self, "scale",    Vector2.ONE,   0.34)
+    tw.tween_property(self, "position", base_position, 0.32)
+    tw.tween_property(self, "rotation", 0.0,           0.28)
+    # Brief satisfied faction-colour after-glow on landing
+    var glow := _class_combat_color()
+    glow.a = 0.0
+    var stw := create_tween()
+    stw.tween_property(self, "modulate", Color(glow.r * 0.6 + 0.4, glow.g * 0.6 + 0.4, glow.b * 0.6 + 0.4), 0.06)
+    stw.tween_property(self, "modulate", Color.WHITE, 0.18)
     tw.finished.connect(func():
         if is_instance_valid(self) and not is_queued_for_deletion() and is_inside_tree():
             _idle_paused = false
     )
 
-## Art zooms and shifts toward the strike direction inside the clip window.
-## Clip container prevents overflow; this makes the character look like it's lunging.
+## Art erupts toward the strike — character commits fully to the attack.
 func _art_lunge(toward_dir: Vector2) -> void:
     if art_rect == null or not is_instance_valid(art_rect): return
     var tier := _rarity_tier_val()
-    var zoom := 1.12 + tier * 0.028
-    var shift := toward_dir * (4.5 + tier * 1.2)
+    var zoom  := 1.32 + tier * 0.05   # much bigger than before
+    var shift := toward_dir * (12.0 + tier * 3.0)   # big slam shift
     art_rect.pivot_offset = art_rect.size * 0.5
     var tw := create_tween().set_parallel(true)
     tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    tw.tween_property(art_rect, "scale", Vector2(zoom, zoom), 0.07)
-    tw.tween_property(art_rect, "position", art_home + shift, 0.07)
+    tw.tween_property(art_rect, "scale",    Vector2(zoom, zoom), 0.06)
+    tw.tween_property(art_rect, "position", art_home + shift,    0.06)
 
 ## Resets art position and scale during the settle phase.
 func _art_settle_to_home() -> void:
