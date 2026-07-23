@@ -9851,6 +9851,28 @@ func show_auto_build_preview(c: String, deck: Array, is_fallback: bool,
 ## Existing deck slots are NEVER modified — the auto-built deck always creates
 ## a new named slot, so there is nothing to overwrite.
 func _accept_auto_built_deck(c: String, deck: Array, is_fallback: bool, from_onboarding: bool) -> void:
+    # ── Slot-capacity guard (deck builder path only) ──────────────────────────
+    # Must run BEFORE any state mutation so that a full-slots failure leaves
+    # saved_deck / selected_deck_class / saved_decks completely untouched.
+    # The onboarding path uses insert(0, …) which always has room because
+    # new players start with an empty or very small deck_slots array.
+    if not from_onboarding and deck_slots.size() >= MAX_DECK_SLOTS:
+        var err := Panel.new()
+        err.position = Vector2(280, 220); err.size = Vector2(720, 172)
+        err.z_index = 500
+        err.add_theme_stylebox_override("panel", style(Color(0.28, 0.08, 0.08), 14))
+        root_layer.add_child(err)
+        centered_label("DECK SLOTS FULL", Vector2(20, 18), Vector2(680, 36), 22, err).add_theme_color_override("font_color", Color(1.0, 0.55, 0.50))
+        var msg_lbl := Label.new()
+        msg_lbl.text = "You have %d/%d deck slots. Delete an existing deck first, then come back to Auto-Build." % [deck_slots.size(), MAX_DECK_SLOTS]
+        msg_lbl.position = Vector2(40, 68); msg_lbl.size = Vector2(640, 60)
+        msg_lbl.add_theme_font_size_override("font_size", 15)
+        msg_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        err.add_child(msg_lbl)
+        button("OK", Vector2(280, 120), Vector2(160, 42), func(): err.queue_free(), err)
+        return  # ← no state mutations have occurred above this line
+
+    # ── Mutate runtime state now that we know the save will succeed ───────────
     selected_class      = c
     selected_deck_class = c
 
@@ -9881,25 +9903,7 @@ func _accept_auto_built_deck(c: String, deck: Array, is_fallback: bool, from_onb
         show_home()
         return
 
-    # Deck builder path — check there is a free slot before creating one.
-    if deck_slots.size() >= MAX_DECK_SLOTS:
-        # Show an error overlay on top of the current preview without rebuilding
-        # the full screen (which would cost another _auto_build_deck call).
-        var err := Panel.new()
-        err.position = Vector2(280, 220); err.size = Vector2(720, 172)
-        err.z_index = 500
-        err.add_theme_stylebox_override("panel", style(Color(0.28, 0.08, 0.08), 14))
-        root_layer.add_child(err)
-        centered_label("DECK SLOTS FULL", Vector2(20, 18), Vector2(680, 36), 22, err).add_theme_color_override("font_color", Color(1.0, 0.55, 0.50))
-        var msg_lbl := Label.new()
-        msg_lbl.text = "You have %d/%d deck slots. Delete an existing deck first, then come back to Auto-Build." % [deck_slots.size(), MAX_DECK_SLOTS]
-        msg_lbl.position = Vector2(40, 68); msg_lbl.size = Vector2(640, 60)
-        msg_lbl.add_theme_font_size_override("font_size", 15)
-        msg_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-        err.add_child(msg_lbl)
-        button("OK", Vector2(280, 120), Vector2(160, 42), func(): err.queue_free(), err)
-        return
-
+    # Deck builder path — slot capacity was already verified above.
     deck_slots.append(slot_dict)
     editing_deck_slot_idx = deck_slots.size() - 1
     save_profile()
