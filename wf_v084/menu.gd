@@ -781,6 +781,11 @@ var _cloud_safe_to_upload := false
 # Snapshot of the last successfully fetched cloud save, used by the upload
 # integrity check to block uploads that would regress collection/progress.
 var _last_cloud_snapshot: Dictionary = {}
+# First-login onboarding gate.  Set to true once the player has chosen and
+# claimed their starter deck.  Saved to both local disk and Supabase so it
+# persists across devices and reinstalls.  False only for brand-new accounts
+# that have never chosen a class.
+var starter_deck_selected := false
 const SUPPORT_EMAIL := "walkingfreeagain@gmail.com"
 
 func ensure_home_music() -> void:
@@ -1128,6 +1133,12 @@ func load_profile() -> void:
         last_battle_deck_idx = int(cfg.get_value("deck_slots", "last_battle_idx", -1))
         if deck_slots.is_empty():
             _migrate_saved_decks_to_slots()
+        starter_deck_selected = bool(cfg.get_value("onboarding", "starter_deck_selected", false))
+        # Migration: any player who already has cards or deck slots is treated as
+        # having completed the starter-deck step even if the flag was never written.
+        # This ensures no existing player is ever shown the onboarding screen.
+        if not starter_deck_selected and (collection_owned.size() > 0 or deck_slots.size() > 0):
+            starter_deck_selected = true
         # Existing players from earlier builds should not lose access.
         if selected_class != "" and not cfg.has_section_key("academy", "complete"):
             academy_complete = true
@@ -1201,6 +1212,7 @@ func save_profile() -> void:
     cfg.set_value("cosmetics", "equipped_sleeve", equipped_sleeve)
     cfg.set_value("trials", "selected_leader_skin", selected_leader_skin)
     cfg.set_value("meta", "last_seen_whats_new_version", last_seen_whats_new_version)
+    cfg.set_value("onboarding", "starter_deck_selected", starter_deck_selected)
     # Multi-deck slots — sync the currently-editing slot before writing.
     if editing_deck_slot_idx >= 0 and editing_deck_slot_idx < deck_slots.size():
         deck_slots[editing_deck_slot_idx]["cards"] = saved_deck.duplicate()
@@ -1321,7 +1333,8 @@ func _serialize_profile_for_cloud() -> Dictionary:
             "sponsor_defeated": sponsor_defeated,
             "selected_leader_skin": selected_leader_skin
         },
-        "meta": {"last_seen_whats_new_version": last_seen_whats_new_version}
+        "meta": {"last_seen_whats_new_version": last_seen_whats_new_version},
+        "onboarding": {"starter_deck_selected": starter_deck_selected}
     }
 
 ## Safely coerce any Variant to bool without crashing on null.
@@ -1364,7 +1377,8 @@ func _apply_cloud_profile(data: Dictionary) -> bool:
             # ── Boolean progress flags: OR — never regress ─────────────────────
             if (section == "academy" and key in ["complete", "reward_claimed"]) or \
                (section == "trials" and key in ["sponsor_leader_unlocked",
-                    "sponsor_sleeve_unlocked", "sponsor_defeated"]):
+                    "sponsor_sleeve_unlocked", "sponsor_defeated"]) or \
+               (section == "onboarding" and key == "starter_deck_selected"):
                 cfg.set_value(section, key, _safe_bool(local_val) or _safe_bool(cloud_val))
                 continue
 
@@ -1711,6 +1725,14 @@ func currency_bar() -> void:
     var l := label("GOLD %d   •   VIALS %d   •   PACKS %d" % [gold_balance,dust_balance,pack_inventory],Vector2(8,10),Vector2(374,34),17,p); l.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 
 func show_home() -> void:
+    # ── First-login onboarding gate ───────────────────────────────────────────
+    # Authenticated new players who have not yet chosen a starter deck are
+    # intercepted here before the home screen is built.  Guest players (no
+    # user_id) skip the gate so offline play is never blocked.
+    if not starter_deck_selected and not NetworkManager.user_id.is_empty():
+        print("ONBOARDING GATE: starter_deck_selected=false user=%s → showing deck choice" % NetworkManager.user_id)
+        show_starter_deck_choice()
+        return
     clear_screen()
     add_background(0.58)
     ensure_home_music()
@@ -9052,3 +9074,240 @@ func _default_sleeve_for_class() -> String:
         "Serenity": return "serenity_wave"
         "Purpose":  return "purpose_compass"
     return ""
+
+# ── First-login starter deck choice ──────────────────────────────────────────
+# Shown exactly once per account, immediately after the player's first login.
+# The player picks one of the four class starter decks; on confirm the 40-card
+# deck is granted, a named deck slot is created, and the choice is saved to
+# both local disk and Supabase before navigation proceeds to the home screen.
+#
+# Design rules:
+#  • No developer/meta/final-boss/test cards are granted — only the same cards
+#    build_starter_deck() produces from starter_recipe().
+#  • No full-collection grant — only the 40 starter cards.
+#  • Existing players skip this entirely (migration in load_profile sets the
+#    flag if collection_owned or deck_slots is non-empty).
+#  • Guest players (no user_id) also skip this gate in show_home().
+
+func show_starter_deck_choice() -> void:
+    clear_screen(); add_background(0.72)
+    ensure_home_music()
+    header("CHOOSE YOUR STARTER DECK",
+        "Pick the class that speaks to you — you'll receive its full 40-card deck to start")
+
+    # Per-class content displayed on each panel.
+    var class_strategies := {
+        "Hope":     ["Heal your leader to stay in the fight",
+                     "Recover fallen followers from the Relapse Zone",
+                     "Draw cards and outlast any opponent"],
+        "Courage":  ["Rush followers onto the board immediately",
+                     "Attack the enemy leader directly to build Resolve",
+                     "Overwhelm with speed and relentless pressure"],
+        "Serenity": ["Guard your leader with Protector followers",
+                     "Freeze strong enemies and control the board",
+                     "Outlast and out-value with healing and patience"],
+        "Purpose":  ["Spend all your Play Points to earn Progress",
+                     "Ramp up maximum PP for powerful late-game cards",
+                     "Unleash Walking Free to dominate with finishers"]
+    }
+    var class_mechanics := {
+        "Hope":     "Recovery • Final Breath • Healing",
+        "Courage":  "Rush • Charge • Breakthrough",
+        "Serenity": "Protector • Exhaust • Calm",
+        "Purpose":  "Progress • PP Ramp • Evolution"
+    }
+
+    # Shared state dictionary boxes the selection so closures can see updates.
+    # (GDScript closures capture by value for locals; a Dictionary reference
+    # lets every callback see the latest selected class and widget handles.)
+    var state := {
+        "selected":      "",
+        "confirm_btn":   null,
+        "confirm_label": null,
+        "panels":        {}
+    }
+
+    for i in range(CLASSES.size()):
+        var c: String = CLASSES[i]
+        var accent := class_color(c)
+
+        var outer := Panel.new()
+        outer.position = Vector2(32 + i * 312, 102)
+        outer.size = Vector2(288, 492)
+        outer.add_theme_stylebox_override("panel", style(accent, 18))
+        root_layer.add_child(outer)
+        state["panels"][c] = outer
+
+        # Leader portrait (top 45% of panel)
+        var art := TextureRect.new()
+        art.texture = class_leader_texture(c)
+        art.position = Vector2(22, 16)
+        art.size = Vector2(244, 202)
+        art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        art.clip_contents = true
+        art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        outer.add_child(art)
+
+        # Class name
+        var class_lbl := centered_label(c.to_upper(),
+            Vector2(16, 224), Vector2(256, 36), 24, outer)
+        class_lbl.add_theme_color_override("font_color", accent.lightened(0.30))
+        class_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+        # Strategy bullets (3 short lines)
+        var bullets: Array = class_strategies.get(c, [])
+        for bi in range(bullets.size()):
+            var bl := label("• " + str(bullets[bi]),
+                Vector2(20, 268 + bi * 28), Vector2(248, 26), 13, outer)
+            bl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            bl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+        # Key mechanics line
+        var mech_lbl := centered_label(str(class_mechanics.get(c, "")),
+            Vector2(20, 360), Vector2(248, 24), 12, outer)
+        mech_lbl.add_theme_color_override("font_color", GOLD_COLOR)
+        mech_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+        # "Preview Deck" opens the standard deck-preview screen; "Back" rebuilds
+        # the starter choice screen so the player can still change their mind.
+        var cc := c  # capture-safe copy for closures
+        button("PREVIEW DECK", Vector2(24, 394), Vector2(240, 38),
+            func(): _show_starter_deck_preview(cc, state), outer)
+
+        # "Select" highlights this panel and arms the confirm button.
+        button("SELECT THIS DECK", Vector2(24, 444), Vector2(240, 40),
+            func(): _select_starter_deck(cc, state), outer)
+
+    # Global confirm button — disabled until a panel is selected.
+    var confirm := button("CONFIRM CHOICE",
+        Vector2(490, 612), Vector2(300, 50),
+        func(): _confirm_starter_deck_choice(state))
+    confirm.disabled = true
+    state["confirm_btn"] = confirm
+
+    # Feedback label for cloud-save status (error or progress messages).
+    var fb := label("", Vector2(200, 670), Vector2(880, 28), 15)
+    fb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    fb.add_theme_color_override("font_color", Color(1.0, 0.65, 0.35))
+    state["confirm_label"] = fb
+
+
+## Highlight the chosen panel and arm the confirm button for the given class.
+func _select_starter_deck(c: String, state: Dictionary) -> void:
+    state["selected"] = c
+    # Update all panel borders: selected = white border + slightly lightened bg;
+    # others = normal class-coloured style.
+    for cls in state["panels"].keys():
+        var panel: Panel = state["panels"][cls]
+        if not is_instance_valid(panel):
+            continue
+        if cls == c:
+            var s := StyleBoxFlat.new()
+            s.bg_color = class_color(cls).lerp(Color.WHITE, 0.14)
+            s.border_width_top    = 4; s.border_width_bottom = 4
+            s.border_width_left   = 4; s.border_width_right  = 4
+            s.border_color = Color(1, 1, 1, 0.90)
+            s.corner_radius_top_left     = 18; s.corner_radius_top_right    = 18
+            s.corner_radius_bottom_left  = 18; s.corner_radius_bottom_right = 18
+            panel.add_theme_stylebox_override("panel", s)
+        else:
+            panel.add_theme_stylebox_override("panel", style(class_color(cls), 18))
+    # Arm the confirm button and label it with the chosen class.
+    var confirm_btn: Button = state.get("confirm_btn")
+    if is_instance_valid(confirm_btn):
+        confirm_btn.disabled = false
+        confirm_btn.text = "CLAIM %s DECK ✓" % c.to_upper()
+    # Clear any leftover feedback text from a previous attempt.
+    var fb: Label = state.get("confirm_label")
+    if is_instance_valid(fb):
+        fb.text = ""
+
+
+## Open the standard prebuilt deck-preview screen for class c, then add a
+## "Back to deck choice" button so the player can return and change their mind.
+func _show_starter_deck_preview(c: String, state: Dictionary) -> void:
+    _show_battle_deck_preview(c, "prebuilt", false)
+    # Re-add a back button over the preview screen's normal HOME button area.
+    button("← BACK TO DECK CHOICE", Vector2(28, 650), Vector2(280, 48),
+        func(): show_starter_deck_choice())
+
+
+## Grant the chosen starter deck, persist to disk + Supabase, then go home.
+## This is an async function: it awaits the cloud upload before navigating.
+func _confirm_starter_deck_choice(state: Dictionary) -> void:
+    var chosen_class: String = str(state.get("selected", ""))
+    if chosen_class.is_empty() or not (chosen_class in CLASSES):
+        return
+    # Double-click / double-call guard.
+    if starter_deck_selected:
+        print("STARTER DECK: already selected, skipping re-grant and going home")
+        show_home()
+        return
+
+    # Disable the button and show a saving indicator immediately so the player
+    # knows the confirm tap was registered even on a slow connection.
+    var confirm_btn: Button = state.get("confirm_btn")
+    var feedback_label: Label = state.get("confirm_label")
+    if is_instance_valid(confirm_btn):
+        confirm_btn.disabled = true
+    safe_set_text(feedback_label, "Saving your starter deck…")
+    print("STARTER DECK: confirm pressed, class=%s user=%s" % [chosen_class, NetworkManager.user_id])
+
+    # ── Grant the deck ───────────────────────────────────────────────────────
+    # build_starter_deck() only adds the 40 specific starter-recipe card IDs to
+    # collection_owned — it does NOT run grant_starter_collection(), so the
+    # player is not given every single class card.  No dev/meta/test cards.
+    selected_class      = chosen_class
+    selected_deck_class = chosen_class
+    build_starter_deck(chosen_class)
+
+    # Assert the recipe is exactly 40 cards and contains no owner/dev cards.
+    # This fires a logged error in debug builds if the content ever drifts.
+    if saved_deck.size() != 40:
+        push_error("STARTER DECK: deck has %d cards instead of 40 — check starter_recipe()" % saved_deck.size())
+
+    # Create a named deck slot at position 0 so the starter shows up first in
+    # the deck list.  If a slot already exists for this class (duplicate guard),
+    # update it in place instead of appending.
+    var slot_idx := -1
+    for si in range(deck_slots.size()):
+        if str(deck_slots[si].get("name", "")) == "My %s Starter" % chosen_class:
+            slot_idx = si
+            break
+    var slot_dict := {
+        "name":  "My %s Starter" % chosen_class,
+        "class": chosen_class,
+        "cards": saved_deck.duplicate()
+    }
+    if slot_idx >= 0:
+        deck_slots[slot_idx] = slot_dict
+        last_battle_deck_idx = slot_idx
+    else:
+        deck_slots.insert(0, slot_dict)
+        last_battle_deck_idx = 0
+
+    # Set the flag before saving so both the local file and cloud record it.
+    starter_deck_selected = true
+
+    # ── Local save (synchronous disk write — always succeeds) ────────────────
+    save_profile()
+    print("STARTER DECK: local save written, class=%s deck_size=%d collection=%d" % [
+        chosen_class, saved_deck.size(), collection_owned.size()])
+
+    # ── Cloud save (awaited — wait for the round-trip before navigating) ─────
+    # New accounts may not have had a cloud fetch complete yet; force-unlock the
+    # upload gate so their very first save reaches Supabase in this session.
+    if not NetworkManager.user_id.is_empty():
+        if not _cloud_safe_to_upload:
+            _cloud_safe_to_upload = true
+            print("STARTER DECK: upload gate force-unlocked for first-time save")
+        print("STARTER DECK: uploading to Supabase, user=%s" % NetworkManager.user_id)
+        await NetworkManager.upload_save_data(_serialize_profile_for_cloud())
+        print("STARTER DECK: cloud upload finished")
+    else:
+        print("STARTER DECK: guest session — skipping cloud upload, local save is the record")
+
+    # ── Navigate home ────────────────────────────────────────────────────────
+    if is_instance_valid(self):
+        show_home()
