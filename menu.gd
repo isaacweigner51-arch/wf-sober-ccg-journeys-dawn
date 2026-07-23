@@ -9290,24 +9290,20 @@ func _confirm_starter_deck_choice(state: Dictionary) -> void:
     # Set the flag before saving so both the local file and cloud record it.
     starter_deck_selected = true
 
-    # ── Local save (synchronous disk write — always succeeds) ────────────────
+    # ── Persist locally and queue a cloud sync ───────────────────────────────
+    # save_profile() writes to disk immediately (synchronous), then calls
+    # _queue_cloud_upload.call_deferred(), which routes through the established
+    # safety model: it checks _cloud_safe_to_upload and the integrity guard
+    # before touching Supabase.  We never bypass those checks here.
+    #
+    # If the cloud fetch hasn't completed yet (e.g. the player confirmed during
+    # the brief window between auth success and the save_data callback), the
+    # deferred upload will be blocked by _cloud_safe_to_upload = false.  That
+    # is correct and intentional: the local save is the record of truth in that
+    # case; the cloud will be updated on the next successful fetch-and-merge.
     save_profile()
-    print("STARTER DECK: local save written, class=%s deck_size=%d collection=%d" % [
-        chosen_class, saved_deck.size(), collection_owned.size()])
-
-    # ── Cloud save (awaited — wait for the round-trip before navigating) ─────
-    # New accounts may not have had a cloud fetch complete yet; force-unlock the
-    # upload gate so their very first save reaches Supabase in this session.
-    if not NetworkManager.user_id.is_empty():
-        if not _cloud_safe_to_upload:
-            _cloud_safe_to_upload = true
-            print("STARTER DECK: upload gate force-unlocked for first-time save")
-        print("STARTER DECK: uploading to Supabase, user=%s" % NetworkManager.user_id)
-        await NetworkManager.upload_save_data(_serialize_profile_for_cloud())
-        print("STARTER DECK: cloud upload finished")
-    else:
-        print("STARTER DECK: guest session — skipping cloud upload, local save is the record")
+    print("STARTER DECK: local save written, class=%s deck_size=%d collection=%d cloud_safe=%s" % [
+        chosen_class, saved_deck.size(), collection_owned.size(), str(_cloud_safe_to_upload)])
 
     # ── Navigate home ────────────────────────────────────────────────────────
-    if is_instance_valid(self):
-        show_home()
+    show_home()
