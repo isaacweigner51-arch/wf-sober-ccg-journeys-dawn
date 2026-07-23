@@ -4,7 +4,7 @@
   "package_id": "com.wfsober.ccg.journeysdawn",
   "minimum_supported_version": "0.7.0",
   "remote_manifest_url": "",
-  "notes": "Battle Prep rebuilt as 3-panel deck-selection UI; per-leader portrait focal offsets on Home; LeaderView state-machine created.",
+  "notes": "Battle Prep rebuilt as 3-panel deck-selection UI; per-leader portrait focal offsets on Home; LeaderView state-machine created. Whole-number decimal display fixed — card costs, stats, and all game values now show as clean integers.",
   "required": false,
   "version_code": "97",
   "version_name": "0.9.7",
@@ -13,6 +13,7 @@
     {
       "category": "What's New in 0.9.7",
       "items": [
+        "Card costs, attack, health, and all game-value labels now display as clean integers — no more '1.0', '2.0', etc.",
         "Evolution animations completely rebuilt — all four tiers now use real radial glow orbs instead of colored rectangles, and all ring shockwaves are true circles rather than expanding squares.",
         "Standard evolution: blinding white flash at peak, three circular shockwave rings fan outward, title smashes in at scale.",
         "Epic evolution: purple glow blob swells behind the card, four circular rings, spinning beam crown, art medallion slides in from the right.",

@@ -8203,7 +8203,7 @@ func _build_db_deck_list_entries(parent: Control) -> void:
         var cs := StyleBoxFlat.new(); cs.bg_color = Color(0.10, 0.16, 0.30)
         cs.set_corner_radius_all(5)
         cost_p.add_theme_stylebox_override("panel", cs)
-        var cost_l := Label.new(); cost_l.text = str(cd.get("cost", "?"))
+        var cost_l := Label.new(); cost_l.text = str(card_int_value(cd, "cost"))
         cost_l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         cost_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         cost_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

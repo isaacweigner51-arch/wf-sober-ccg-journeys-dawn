@@ -1905,16 +1905,19 @@ func show_home() -> void:
     art_tween.tween_property(art, "position:y", -8.0, 3.0)
     art_tween.tween_property(art, "position:y",  0.0, 3.0)
 
-    # Deep bottom scrim so the class nameplate is readable over any portrait
+    # Bottom scrim — only covers the nameplate zone (bottom 28%) so the
+    # portrait stays visible. Opacity kept at 0.48: dark enough to make text
+    # legible, but NOT so dark that a near-black panel bg + scrim compounds to
+    # solid black (the 0.78 value it replaced did exactly that).
     var scrim := ColorRect.new()
     scrim.color = Color(0.0, 0.0, 0.0, 0.0)
-    scrim.position = Vector2(0, art_frame.size.y * 0.55)
-    scrim.size = Vector2(art_frame.size.x, art_frame.size.y * 0.45)
+    scrim.position = Vector2(0, art_frame.size.y * 0.72)
+    scrim.size = Vector2(art_frame.size.x, art_frame.size.y * 0.28)
     scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
     art_frame.add_child(scrim)
     # Fade scrim in via tween so it feels atmospheric rather than hard-cut
     var scrim_t := create_tween()
-    scrim_t.tween_property(scrim, "color:a", 0.78, 0.6)
+    scrim_t.tween_property(scrim, "color:a", 0.48, 0.6)
 
     # Large class nameplate overlaid at the bottom of the portrait
     var nameplate_bg := ColorRect.new()
@@ -8200,7 +8203,7 @@ func _build_db_deck_list_entries(parent: Control) -> void:
         var cs := StyleBoxFlat.new(); cs.bg_color = Color(0.10, 0.16, 0.30)
         cs.set_corner_radius_all(5)
         cost_p.add_theme_stylebox_override("panel", cs)
-        var cost_l := Label.new(); cost_l.text = str(cd.get("cost", "?"))
+        var cost_l := Label.new(); cost_l.text = str(card_int_value(cd, "cost"))
         cost_l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         cost_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         cost_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

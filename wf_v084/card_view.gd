@@ -41,6 +41,18 @@ var art_home := Vector2.ZERO
 var art_clip: Panel          # clip container: keeps art drift/float inside the card window
 static var graphics_quality := 2  # 0 = Low  1 = Medium  2 = High
 
+## Shared integer formatter — converts any Variant that represents a whole-number
+## game value (cost, ATK, HP, PP, momentum, charges, counts) to a clean integer
+## string with no trailing decimal point.  Call as CardView.fmt_int(v) from any
+## file that has access to the CardView class_name.
+##
+## Reason this exists: card stats can arrive as floats (1.0, 2.0 …) from the
+## JSON parser or Supabase — str(1.0) produces "1.0" instead of "1".
+## Wrapping via int(round(float(v))) is the single authoritative fix so every
+## display site stays in sync without ad-hoc patches.
+static func fmt_int(v: Variant) -> String:
+    return str(int(round(float(v))))
+
 ## Display context — controls which animations and effects are active.
 ## Set BEFORE calling setup() so _build() / _init_rarity_vfx() can read it.
 ## BATTLEFIELD:   full idle breathing, orbs, hover lift, attack feel.
@@ -436,7 +448,7 @@ func _build() -> void:
         set_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
         frame.add_child(set_badge)
 
-    cost_label = _stat_orb(str(data.get("cost", 0)), Color(0.18, 0.58, 0.96))
+    cost_label = _stat_orb(CardView.fmt_int(data.get("cost", 0)), Color(0.18, 0.58, 0.96))
     cost_label.position = Vector2(-10, -11)
     frame.add_child(cost_label)
 
