@@ -50,6 +50,19 @@ const KEYWORD_EXAMPLE_CARDS := [
 ]
 const COPY_LIMITS := {"Bronze":3, "Silver":3, "Gold":3, "Epic":3, "Legendary":2, "Platinum":1, "Signature Gold":2, "Signature Platinum":1}
 const MAX_DECK_SLOTS := 8
+## IDs that must never appear in an auto-built player deck regardless of ownership.
+## JD-080 (The Sponsor) is the only catalog card explicitly banned from player decks.
+## Meta / final-boss / dev cards never appear in data/cards.json so they are
+## excluded implicitly when the algorithm filters against the catalog.
+const AUTO_BUILD_FORBIDDEN_IDS: Array[String] = ["JD-080"]
+## One-paragraph playstyle descriptions shown by the "Recommend a Class" branch
+## of the Auto-Build class-selection screen.
+const AUTO_BUILD_CLASS_BLURBS := {
+    "Hope": "Hope decks recover what they've lost. Your leader restores health, fallen followers return from the Relapse Zone, and every card you draw is another chance to outlast whatever the opponent throws at you. If you believe in second chances and want to win by simply refusing to quit, Hope is your class.",
+    "Courage": "Courage decks move fast and hit first. Rush and Charge followers land on the board immediately and start dealing damage, you hit the enemy leader directly to build Resolve, and you win before your opponent has time to set up. If you want to be the one driving the pace and putting pressure on from turn one, Courage is your class.",
+    "Serenity": "Serenity decks control the board and protect their leader. Protector followers block every threat, Exhaust effects lock down dangerous enemies, and steady healing buys time for your big finishers. If you like thinking two turns ahead and watching your opponent's plans fall apart quietly, Serenity is your class.",
+    "Purpose": "Purpose decks invest for the future. Daily Progress amulets grow your maximum PP each game, letting you land game-defining cards earlier than your opponent expects. Every turn you spend all your points moves you closer to Walking Free — a card that ends games. If you want to build toward an unstoppable late game, Purpose is your class."
+}
 # Per-leader horizontal display shift in pixels applied to the art TextureRect
 # inside its clipped container. Negative = move character LEFT in the frame.
 # Tune each leader individually until the face / upper body is well-centred.
@@ -8126,6 +8139,13 @@ func _build_db_deck_panel(parent: Control) -> void:
     reset_btn.add_theme_stylebox_override("normal", style(Color(0.42, 0.34, 0.14), 7))
     reset_btn.pressed.connect(func(): build_starter_deck(selected_deck_class); save_profile(); show_deck_builder())
     act_vb.add_child(reset_btn)
+    var auto_build_btn := Button.new(); auto_build_btn.text = "✦ AUTO-BUILD DECK"
+    auto_build_btn.add_theme_font_size_override("font_size", 12)
+    auto_build_btn.custom_minimum_size = Vector2(0, 34)
+    auto_build_btn.add_theme_stylebox_override("normal", style(Color(0.20, 0.36, 0.58), 7))
+    auto_build_btn.add_theme_stylebox_override("hover", style(Color(0.28, 0.46, 0.72), 7))
+    auto_build_btn.pressed.connect(func(): show_auto_build_class_select(false))
+    act_vb.add_child(auto_build_btn)
 
 func _build_db_slot_strip(parent: Control) -> void:
     var hdr := Label.new()
@@ -9192,6 +9212,15 @@ func show_starter_deck_choice() -> void:
     fb.add_theme_color_override("font_color", Color(1.0, 0.65, 0.35))
     state["confirm_label"] = fb
 
+    # "Build For Me" link — alternative path to auto-build without selecting
+    # a starter from this screen.  Sits below the confirm button row.
+    var bfm := button("✦ Build a deck from my cards instead →",
+        Vector2(395, 700), Vector2(490, 34),
+        func(): show_auto_build_class_select(true))
+    bfm.add_theme_font_size_override("font_size", 13)
+    bfm.add_theme_stylebox_override("normal", style(Color(0.20, 0.30, 0.48), 8))
+    bfm.add_theme_color_override("font_color", Color(0.62, 0.82, 1.0))
+
 
 ## Highlight the chosen panel and arm the confirm button for the given class.
 func _select_starter_deck(c: String, state: Dictionary) -> void:
@@ -9307,3 +9336,571 @@ func _confirm_starter_deck_choice(state: Dictionary) -> void:
 
     # ── Navigate home ────────────────────────────────────────────────────────
     show_home()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUTO-BUILD DECK
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Entry points:
+#   • Deck builder — "✦ AUTO-BUILD DECK" button in _build_db_deck_panel
+#   • First-login onboarding — "Build a deck from my cards instead →" link in
+#     show_starter_deck_choice
+#
+# Flow:
+#   show_auto_build_class_select(from_onboarding)
+#       ↓ class button                     ↓ "Recommend a Class"
+#   show_auto_build_preview(...)     _show_auto_build_recommend(from_onboarding)
+#       ↓ Accept / Regenerate / Cancel          ↓ click a class description
+#   _accept_auto_built_deck(...)     show_auto_build_preview(...)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+## Generate a 40-card deck for class [c] using only the player's owned cards.
+##
+## Algorithm:
+##   1. Build a pool of (id, cost, allowed_copies) from collection_owned,
+##      filtered to the target class + Neutral/Universal, excluding FORBIDDEN.
+##   2. If total available slots < 40, fall back to starter_recipe().
+##   3. Sort pool: cost ascending, then by random order (seeded for variety).
+##   4. Fill 40 slots greedily from the sorted pool.
+##
+## [rng_seed] < 0 → randomize (every Regenerate press produces a new deck).
+## [rng_seed] ≥ 0 → reproduce a specific result (e.g. for testing).
+##
+## Returns: { "deck": Array[String], "fallback": bool }
+##   fallback = true  → not enough owned cards; deck is the starter_recipe instead.
+func _auto_build_deck(c: String, rng_seed: int = -1) -> Dictionary:
+    var rng := RandomNumberGenerator.new()
+    if rng_seed < 0:
+        rng.randomize()
+    else:
+        rng.seed = rng_seed
+
+    # ── 1. Candidate pool ────────────────────────────────────────────────────
+    var pool: Array = []
+    for cd in cards:
+        var card_class := str(cd.get("class", ""))
+        if card_class != c and card_class != "Neutral" and card_class != "Universal":
+            continue
+        var id := str(cd.get("id", ""))
+        if id in AUTO_BUILD_FORBIDDEN_IDS:
+            continue
+        var owned := int(collection_owned.get(id, 0))
+        if owned <= 0:
+            continue
+        var rarity := str(cd.get("rarity", "Bronze"))
+        var copy_limit := int(COPY_LIMITS.get(rarity, 3))
+        # Per-card max_copies from the catalog may be tighter than the rarity default.
+        var json_max_raw: Variant = cd.get("max_copies", null)
+        var json_max: int
+        if json_max_raw == null:
+            json_max = copy_limit
+        else:
+            var jm := int(json_max_raw)
+            json_max = jm if jm > 0 else copy_limit
+        var allowed := mini(mini(copy_limit, json_max), owned)
+        if allowed <= 0:
+            continue
+        pool.append({
+            "id":        id,
+            "cost":      int(cd.get("cost", 0)),
+            "rng_order": rng.randi(),
+            "allowed":   allowed
+        })
+
+    # ── 2. Capacity check ────────────────────────────────────────────────────
+    var total_available := 0
+    for entry in pool:
+        total_available += int(entry["allowed"])
+    if total_available < 40:
+        # Not enough owned cards — build from the starter recipe instead.
+        var recipe := starter_recipe(c)
+        var fallback_deck: Array = []
+        for fid in recipe.keys():
+            for _fi in range(int(recipe[fid])):
+                fallback_deck.append(str(fid))
+        print("AUTO-BUILD: fallback for class=%s owned_slots=%d" % [c, total_available])
+        return {"deck": fallback_deck, "fallback": true}
+
+    # ── 3. Sort: cost ascending, random within each cost bucket ─────────────
+    pool.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+        if int(a["cost"]) != int(b["cost"]):
+            return int(a["cost"]) < int(b["cost"])
+        return int(a["rng_order"]) < int(b["rng_order"])
+    )
+
+    # ── 4. Fill 40 slots ─────────────────────────────────────────────────────
+    var result: Array = []
+    for entry in pool:
+        var to_add := mini(int(entry["allowed"]), 40 - result.size())
+        for _j in range(to_add):
+            result.append(str(entry["id"]))
+        if result.size() >= 40:
+            break
+
+    print("AUTO-BUILD: class=%s built %d cards from owned pool" % [c, result.size()])
+    return {"deck": result, "fallback": false}
+
+
+## Class-selection screen — first step of the Auto-Build flow.
+## Shows 4 class option buttons and a "Recommend a Class" button.
+## [from_onboarding] is forwarded through the whole flow so the final Accept
+## knows whether to finish the first-login sequence or return to deck builder.
+func show_auto_build_class_select(from_onboarding: bool) -> void:
+    clear_screen(); add_background(0.72)
+    ensure_home_music()
+
+    header("AUTO-BUILD DECK",
+        "Pick a class — the engine builds a legal 40-card deck from your owned cards")
+
+    # 2×2 class grid
+    for idx in range(CLASSES.size()):
+        var c: String = CLASSES[idx]
+        var accent := class_color(c)
+        var col := idx % 2
+        var row := idx / 2
+        var px := 30 + col * 366
+        var py := 118 + row * 192
+
+        var panel := Panel.new()
+        panel.position = Vector2(px, py); panel.size = Vector2(344, 176)
+        panel.add_theme_stylebox_override("panel", style(accent, 12))
+        root_layer.add_child(panel)
+
+        # Class name
+        var nl := Label.new()
+        nl.text = c.to_upper()
+        nl.position = Vector2(14, 10); nl.size = Vector2(314, 32)
+        nl.add_theme_font_size_override("font_size", 22)
+        nl.add_theme_color_override("font_color", accent.lightened(0.30))
+        nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        panel.add_child(nl)
+
+        # One-line keyword teaser
+        var teasers := {
+            "Hope":     "Healing · Recovery · Draw",
+            "Courage":  "Rush · Charge · Direct Damage",
+            "Serenity": "Protector · Exhaust · Board Control",
+            "Purpose":  "Progress · PP Ramp · Late Game"
+        }
+        var tl := Label.new()
+        tl.text = str(teasers.get(c, ""))
+        tl.position = Vector2(14, 48); tl.size = Vector2(314, 22)
+        tl.add_theme_font_size_override("font_size", 13)
+        tl.add_theme_color_override("font_color", GOLD_COLOR)
+        tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        panel.add_child(tl)
+
+        # Cards-owned count (class cards + neutral, already in collection)
+        var owned_cnt := 0
+        for cd in cards:
+            var cc2: String = str(cd.get("class", ""))
+            if cc2 == c or cc2 == "Neutral" or cc2 == "Universal":
+                if int(collection_owned.get(str(cd.get("id", "")), 0)) > 0:
+                    owned_cnt += 1
+        var oc_lbl := Label.new()
+        oc_lbl.text = "%d owned cards available" % owned_cnt
+        oc_lbl.position = Vector2(14, 76); oc_lbl.size = Vector2(314, 22)
+        oc_lbl.add_theme_font_size_override("font_size", 12)
+        oc_lbl.add_theme_color_override("font_color", Color(0.62, 0.62, 0.74))
+        oc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        panel.add_child(oc_lbl)
+
+        # BUILD button — runs algorithm and goes straight to preview
+        var cc3 := c  # closure-safe copy
+        button("BUILD %s DECK" % c.to_upper(), Vector2(14, 108), Vector2(314, 46),
+            func():
+                var res := _auto_build_deck(cc3)
+                show_auto_build_preview(cc3, res["deck"], res["fallback"], from_onboarding, -1),
+            panel)
+
+    # Recommend a Class — opens descriptions page
+    var rec_btn := Button.new()
+    rec_btn.text = "✦  RECOMMEND A CLASS  ✦"
+    rec_btn.position = Vector2(30, 520); rec_btn.size = Vector2(660, 50)
+    rec_btn.add_theme_font_size_override("font_size", 16)
+    rec_btn.add_theme_stylebox_override("normal", style(Color(0.24, 0.20, 0.40), 10))
+    rec_btn.add_theme_stylebox_override("hover",  style(Color(0.34, 0.28, 0.56), 10))
+    rec_btn.pressed.connect(func(): _show_auto_build_recommend(from_onboarding))
+    root_layer.add_child(rec_btn)
+
+    # Cancel — return to where we came from
+    button("← BACK", Vector2(30, 650), Vector2(160, 44),
+        func():
+            if from_onboarding:
+                show_starter_deck_choice()
+            else:
+                show_deck_builder())
+
+
+## "Recommend a Class" descriptions page.
+## Shows a one-paragraph playstyle description for each class.
+## Clicking any panel immediately runs the algorithm and opens the preview.
+func _show_auto_build_recommend(from_onboarding: bool) -> void:
+    clear_screen(); add_background(0.72)
+    ensure_home_music()
+    header("WHICH CLASS IS RIGHT FOR YOU?",
+        "Read each style — click the one that sounds like you to build that deck now")
+
+    for idx in range(CLASSES.size()):
+        var c: String = CLASSES[idx]
+        var accent := class_color(c)
+        var col := idx % 2
+        var row := idx / 2
+        var px := 30 + col * 498
+        var py := 112 + row * 220
+
+        var panel := Panel.new()
+        panel.position = Vector2(px, py); panel.size = Vector2(472, 204)
+        panel.add_theme_stylebox_override("panel", style(accent, 14))
+        root_layer.add_child(panel)
+
+        # Class name
+        var nl := Label.new()
+        nl.text = c.to_upper()
+        nl.position = Vector2(16, 10); nl.size = Vector2(440, 32)
+        nl.add_theme_font_size_override("font_size", 20)
+        nl.add_theme_color_override("font_color", accent.lightened(0.30))
+        nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        panel.add_child(nl)
+
+        # Description paragraph
+        var dl := Label.new()
+        dl.text = str(AUTO_BUILD_CLASS_BLURBS.get(c, ""))
+        dl.position = Vector2(16, 48); dl.size = Vector2(440, 130)
+        dl.add_theme_font_size_override("font_size", 12)
+        dl.add_theme_color_override("font_color", Color(0.88, 0.88, 0.95))
+        dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        dl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        panel.add_child(dl)
+
+        # "Build This Deck" label at bottom of panel
+        var hint := Label.new()
+        hint.text = "▶ Click to build this deck"
+        hint.position = Vector2(16, 180); hint.size = Vector2(440, 18)
+        hint.add_theme_font_size_override("font_size", 11)
+        hint.add_theme_color_override("font_color", GOLD_COLOR.darkened(0.10))
+        hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        panel.add_child(hint)
+
+        # Invisible full-panel click target
+        var cc4 := c
+        var click_btn := Button.new()
+        click_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        click_btn.flat = true
+        var esb := StyleBoxEmpty.new()
+        click_btn.add_theme_stylebox_override("normal", esb)
+        click_btn.add_theme_stylebox_override("hover",  esb)
+        click_btn.pressed.connect(func():
+            var res := _auto_build_deck(cc4)
+            show_auto_build_preview(cc4, res["deck"], res["fallback"], from_onboarding, -1))
+        panel.add_child(click_btn)
+
+    button("← BACK", Vector2(30, 650), Vector2(160, 44),
+        func(): show_auto_build_class_select(from_onboarding))
+
+
+## Preview the auto-built deck.  Shows the cost curve, the full card list, and
+## three action buttons: Accept (save to a new slot), Regenerate (re-run the
+## algorithm with a fresh random seed), and Cancel (go back to class select).
+func show_auto_build_preview(c: String, deck: Array, is_fallback: bool,
+        from_onboarding: bool, _prev_seed: int) -> void:
+    clear_screen(); add_background(0.72)
+    ensure_home_music()
+
+    var accent := class_color(c)
+
+    # ── Top header bar ───────────────────────────────────────────────────────
+    var hp := Panel.new()
+    hp.position = Vector2(0, 0); hp.size = Vector2(1280, 82)
+    var hs := StyleBoxFlat.new()
+    hs.bg_color = Color(0.018, 0.022, 0.040, 1.0)
+    hs.set_border_width_all(0); hs.border_width_bottom = 2
+    hs.border_color = accent.darkened(0.35)
+    hp.add_theme_stylebox_override("panel", hs)
+    root_layer.add_child(hp)
+
+    var title_lbl := Label.new()
+    title_lbl.text = "%s AUTO-BUILD — PREVIEW" % c.to_upper()
+    title_lbl.position = Vector2(24, 8); title_lbl.size = Vector2(700, 36)
+    title_lbl.add_theme_font_size_override("font_size", 24)
+    title_lbl.add_theme_color_override("font_color", accent.lightened(0.25))
+    hp.add_child(title_lbl)
+
+    var built_from := "Built from your owned cards" if not is_fallback else "STARTER RECIPE (not enough owned cards)"
+    var sub_lbl := Label.new()
+    sub_lbl.text = "%d / 40 cards  •  %s" % [deck.size(), built_from]
+    sub_lbl.position = Vector2(24, 50); sub_lbl.size = Vector2(900, 26)
+    sub_lbl.add_theme_font_size_override("font_size", 14)
+    sub_lbl.add_theme_color_override("font_color", Color(1.0, 0.72, 0.30) if is_fallback else Color(0.62, 0.62, 0.74))
+    hp.add_child(sub_lbl)
+
+    # Fallback notice strip
+    var content_y := 82
+    if is_fallback:
+        var nb := Panel.new()
+        nb.position = Vector2(0, 82); nb.size = Vector2(1280, 46)
+        var ns := StyleBoxFlat.new(); ns.bg_color = Color(0.28, 0.18, 0.06, 0.90)
+        nb.add_theme_stylebox_override("panel", ns)
+        root_layer.add_child(nb)
+        var nl2 := Label.new()
+        nl2.text = "⚠  You don't own enough cards for a fully personalised deck yet — showing the %s starter recipe. Accept to apply it, or choose a different class." % c
+        nl2.position = Vector2(16, 8); nl2.size = Vector2(1248, 30)
+        nl2.add_theme_font_size_override("font_size", 13)
+        nl2.add_theme_color_override("font_color", Color(1.0, 0.82, 0.42))
+        nl2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        nb.add_child(nl2)
+        content_y = 130
+
+    # ── Left panel: cost curve + card list ───────────────────────────────────
+    var left_h := 700 - content_y
+    var left_panel := Panel.new()
+    left_panel.position = Vector2(12, content_y); left_panel.size = Vector2(878, left_h)
+    left_panel.add_theme_stylebox_override("panel", style(Color(0.025, 0.035, 0.060), 12))
+    root_layer.add_child(left_panel)
+
+    # Mana curve header
+    var cl := Label.new(); cl.text = "MANA CURVE"
+    cl.position = Vector2(16, 10); cl.size = Vector2(200, 22)
+    cl.add_theme_font_size_override("font_size", 13)
+    cl.add_theme_color_override("font_color", GOLD_COLOR)
+    left_panel.add_child(cl)
+
+    # Mana curve bars (inline — avoids needing a VBox parent)
+    var buckets := [0, 0, 0, 0, 0, 0, 0, 0]
+    for id in deck:
+        var cdd := card_by_id(str(id))
+        if cdd.is_empty(): continue
+        buckets[mini(int(cdd.get("cost", 0)), 7)] += 1
+    var max_b := 1
+    for b in buckets:
+        if b > max_b: max_b = b
+    for i in range(8):
+        var cx := 16 + i * 36
+        var bar_h := 38
+        var fill_h := int(float(buckets[i]) / float(max_b) * bar_h) if max_b > 0 else 0
+        var bg := Panel.new()
+        bg.position = Vector2(cx, 34); bg.size = Vector2(28, bar_h)
+        var bgs := StyleBoxFlat.new(); bgs.bg_color = Color(0.08, 0.10, 0.18)
+        bgs.set_corner_radius_all(3); bg.add_theme_stylebox_override("panel", bgs)
+        left_panel.add_child(bg)
+        if fill_h > 0:
+            var fill := Panel.new()
+            fill.position = Vector2(0, bar_h - fill_h); fill.size = Vector2(28, fill_h)
+            var fs := StyleBoxFlat.new()
+            fs.bg_color = Color(0.35, 0.50, 0.92, 0.88).lerp(GOLD_COLOR, float(i) / 7.0)
+            fs.set_corner_radius_all(3); fill.add_theme_stylebox_override("panel", fs)
+            bg.add_child(fill)
+        var cnt_l := Label.new()
+        cnt_l.text = str(buckets[i]) if buckets[i] > 0 else ""
+        cnt_l.position = Vector2(cx, 74); cnt_l.size = Vector2(28, 18)
+        cnt_l.add_theme_font_size_override("font_size", 10)
+        cnt_l.add_theme_color_override("font_color", Color(0.68, 0.68, 0.82))
+        cnt_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        left_panel.add_child(cnt_l)
+        var lbl_c := Label.new()
+        lbl_c.text = str(i) if i < 7 else "7+"
+        lbl_c.position = Vector2(cx, 94); lbl_c.size = Vector2(28, 16)
+        lbl_c.add_theme_font_size_override("font_size", 10)
+        lbl_c.add_theme_color_override("font_color", Color(0.44, 0.44, 0.54))
+        lbl_c.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        left_panel.add_child(lbl_c)
+
+    # Card list (grouped by id, sorted by cost)
+    var counts: Dictionary = {}
+    for id in deck:
+        counts[str(id)] = int(counts.get(str(id), 0)) + 1
+    var ordered_ids: Array = counts.keys()
+    ordered_ids.sort_custom(func(a: String, b: String) -> bool:
+        return int(card_by_id(a).get("cost", 0)) < int(card_by_id(b).get("cost", 0))
+    )
+
+    var list_scroll := ScrollContainer.new()
+    list_scroll.position = Vector2(12, 118); list_scroll.size = Vector2(854, left_h - 128)
+    left_panel.add_child(list_scroll)
+    var list_vb := VBoxContainer.new()
+    list_vb.add_theme_constant_override("separation", 2)
+    list_vb.size_flags_horizontal = Control.SIZE_FILL
+    list_scroll.add_child(list_vb)
+
+    for id in ordered_ids:
+        var cdd := card_by_id(str(id))
+        if cdd.is_empty(): continue
+        var row := Panel.new()
+        row.custom_minimum_size = Vector2(0, 30)
+        row.size_flags_horizontal = Control.SIZE_FILL
+        row.add_theme_stylebox_override("panel", style(Color(0.06, 0.08, 0.14), 4))
+        list_vb.add_child(row)
+
+        var cost_l := Label.new()
+        cost_l.text = str(int(cdd.get("cost", 0)))
+        cost_l.position = Vector2(6, 4); cost_l.size = Vector2(22, 22)
+        cost_l.add_theme_font_size_override("font_size", 12)
+        cost_l.add_theme_color_override("font_color", Color(0.50, 0.72, 1.0))
+        cost_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        cost_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        row.add_child(cost_l)
+
+        var name_l := Label.new()
+        name_l.text = str(cdd.get("name", id))
+        name_l.position = Vector2(34, 4); name_l.size = Vector2(520, 22)
+        name_l.add_theme_font_size_override("font_size", 13)
+        name_l.add_theme_color_override("font_color", Color(0.90, 0.90, 1.0))
+        name_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        row.add_child(name_l)
+
+        # Rarity colour (replicate rarity_color inline — no dedicated helper exists)
+        var rar := str(cdd.get("rarity", "Bronze"))
+        var rar_clr := Color(0.75, 0.58, 0.38)   # Bronze default
+        match rar:
+            "Silver":              rar_clr = Color(0.78, 0.78, 0.82)
+            "Gold":                rar_clr = Color(0.95, 0.78, 0.34)
+            "Epic":                rar_clr = Color(0.72, 0.42, 0.92)
+            "Legendary":           rar_clr = Color(1.0,  0.62, 0.18)
+            "Platinum", "Signature Platinum": rar_clr = Color(0.72, 0.92, 1.0)
+        var rar_l := Label.new()
+        rar_l.text = rar
+        rar_l.position = Vector2(560, 4); rar_l.size = Vector2(160, 22)
+        rar_l.add_theme_font_size_override("font_size", 11)
+        rar_l.add_theme_color_override("font_color", rar_clr)
+        rar_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        row.add_child(rar_l)
+
+        var cnt_l2 := Label.new()
+        cnt_l2.text = "×%d" % int(counts[str(id)])
+        cnt_l2.position = Vector2(724, 4); cnt_l2.size = Vector2(56, 22)
+        cnt_l2.add_theme_font_size_override("font_size", 13)
+        cnt_l2.add_theme_color_override("font_color", GOLD_COLOR)
+        cnt_l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+        cnt_l2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        row.add_child(cnt_l2)
+
+    # ── Right panel: actions ──────────────────────────────────────────────────
+    var right_panel := Panel.new()
+    right_panel.position = Vector2(904, content_y); right_panel.size = Vector2(364, left_h)
+    right_panel.add_theme_stylebox_override("panel", style(Color(0.022, 0.030, 0.052), 12))
+    root_layer.add_child(right_panel)
+
+    centered_label("DECK PREVIEW", Vector2(12, 14), Vector2(340, 30), 18, right_panel).add_theme_color_override("font_color", GOLD_COLOR)
+    centered_label("%s  •  %d cards" % [c, deck.size()], Vector2(12, 48), Vector2(340, 24), 14, right_panel).add_theme_color_override("font_color", accent.lightened(0.22))
+
+    var btn_y := 84
+    if is_fallback:
+        var fb_lbl := Label.new()
+        fb_lbl.text = "Using starter recipe\n(not enough owned cards to fill 40 slots)"
+        fb_lbl.position = Vector2(12, btn_y); fb_lbl.size = Vector2(340, 52)
+        fb_lbl.add_theme_font_size_override("font_size", 12)
+        fb_lbl.add_theme_color_override("font_color", Color(1.0, 0.72, 0.30))
+        fb_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        right_panel.add_child(fb_lbl)
+        btn_y += 60
+
+    # Validate the deck inline so the player can see it passes before accepting.
+    # Temporarily swap saved_deck / selected_deck_class to reuse the function.
+    var orig_deck := saved_deck.duplicate()
+    var orig_class := selected_deck_class
+    saved_deck = deck.duplicate()
+    selected_deck_class = c
+    var val_text := deck_validation_text()
+    saved_deck = orig_deck
+    selected_deck_class = orig_class
+    var is_valid := val_text.begins_with("DECK VALID")
+    var val_lbl := Label.new()
+    val_lbl.text = ("✓  " if is_valid else "⚠  ") + val_text
+    val_lbl.position = Vector2(12, btn_y); val_lbl.size = Vector2(340, 48)
+    val_lbl.add_theme_font_size_override("font_size", 12)
+    val_lbl.add_theme_color_override("font_color", Color(0.40, 1.0, 0.55) if is_valid else Color(1.0, 0.55, 0.40))
+    val_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    right_panel.add_child(val_lbl)
+    btn_y += 56
+
+    # Accept
+    var accept_btn := Button.new()
+    accept_btn.text = "✓  ACCEPT DECK"
+    accept_btn.position = Vector2(12, btn_y); accept_btn.size = Vector2(340, 54)
+    accept_btn.add_theme_font_size_override("font_size", 17)
+    accept_btn.add_theme_stylebox_override("normal", style(Color(0.16, 0.50, 0.24), 10))
+    accept_btn.add_theme_stylebox_override("hover",  style(Color(0.22, 0.64, 0.30), 10))
+    right_panel.add_child(accept_btn)
+    accept_btn.pressed.connect(func(): _accept_auto_built_deck(c, deck, is_fallback, from_onboarding))
+
+    # Regenerate (disabled for fallback — the starter recipe is deterministic)
+    var regen_btn := Button.new()
+    regen_btn.text = "↺  REGENERATE"
+    regen_btn.position = Vector2(12, btn_y + 64); regen_btn.size = Vector2(340, 54)
+    regen_btn.add_theme_font_size_override("font_size", 17)
+    regen_btn.add_theme_stylebox_override("normal", style(Color(0.20, 0.32, 0.54), 10))
+    regen_btn.add_theme_stylebox_override("hover",  style(Color(0.28, 0.42, 0.68), 10))
+    regen_btn.disabled = is_fallback
+    right_panel.add_child(regen_btn)
+    regen_btn.pressed.connect(func():
+        var r := _auto_build_deck(c)
+        show_auto_build_preview(c, r["deck"], r["fallback"], from_onboarding, -1))
+
+    # Cancel
+    var cancel_btn := button("✗  CANCEL", Vector2(12, btn_y + 128), Vector2(340, 54),
+        func(): show_auto_build_class_select(from_onboarding), right_panel)
+    cancel_btn.add_theme_font_size_override("font_size", 17)
+
+
+## Save the auto-built deck and navigate to the appropriate next screen.
+##
+## from_onboarding = true  → finish the first-login sequence and go to home.
+## from_onboarding = false → append a new deck slot and open it in the builder.
+##
+## Existing deck slots are NEVER modified — the auto-built deck always creates
+## a new named slot, so there is nothing to overwrite.
+func _accept_auto_built_deck(c: String, deck: Array, is_fallback: bool, from_onboarding: bool) -> void:
+    selected_class      = c
+    selected_deck_class = c
+
+    if is_fallback:
+        # Use the canonical helper: it handles collection grants + saved_decks sync.
+        build_starter_deck(c)
+    else:
+        saved_deck = deck.duplicate()
+        saved_decks[c] = saved_deck.duplicate()
+
+    # ── Generate a unique slot name ──────────────────────────────────────────
+    var base_name := "%s – Auto" % c
+    var slot_name := base_name
+    var suffix := 2
+    for existing in deck_slots:
+        if str(existing.get("name", "")) == slot_name:
+            slot_name = "%s %d" % [base_name, suffix]
+            suffix += 1
+
+    var slot_dict := {"name": slot_name, "class": c, "cards": saved_deck.duplicate()}
+
+    if from_onboarding:
+        # First-login path: insert at slot 0 so it shows up first.
+        deck_slots.insert(0, slot_dict)
+        last_battle_deck_idx = 0
+        starter_deck_selected = true
+        save_profile()
+        show_home()
+        return
+
+    # Deck builder path — check there is a free slot before creating one.
+    if deck_slots.size() >= MAX_DECK_SLOTS:
+        # Show an error overlay on top of the current preview without rebuilding
+        # the full screen (which would cost another _auto_build_deck call).
+        var err := Panel.new()
+        err.position = Vector2(280, 220); err.size = Vector2(720, 172)
+        err.z_index = 500
+        err.add_theme_stylebox_override("panel", style(Color(0.28, 0.08, 0.08), 14))
+        root_layer.add_child(err)
+        centered_label("DECK SLOTS FULL", Vector2(20, 18), Vector2(680, 36), 22, err).add_theme_color_override("font_color", Color(1.0, 0.55, 0.50))
+        var msg_lbl := Label.new()
+        msg_lbl.text = "You have %d/%d deck slots. Delete an existing deck first, then come back to Auto-Build." % [deck_slots.size(), MAX_DECK_SLOTS]
+        msg_lbl.position = Vector2(40, 68); msg_lbl.size = Vector2(640, 60)
+        msg_lbl.add_theme_font_size_override("font_size", 15)
+        msg_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        err.add_child(msg_lbl)
+        button("OK", Vector2(280, 120), Vector2(160, 42), func(): err.queue_free(), err)
+        return
+
+    deck_slots.append(slot_dict)
+    editing_deck_slot_idx = deck_slots.size() - 1
+    save_profile()
+    _open_slot_in_deck_builder(editing_deck_slot_idx)
