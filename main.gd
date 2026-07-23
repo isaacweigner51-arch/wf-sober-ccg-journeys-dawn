@@ -202,6 +202,13 @@ var online_waiting_for_initial := false
 var online_match_started := false
 var online_applying_state := false
 var online_mulligan_complete := false
+## ── Online sync watchdog ──────────────────────────────────────────────────
+var _online_status_label: Label = null     # lightweight HUD label (top-centre)
+var _sync_wait_elapsed: float = 0.0        # seconds spent waiting for battle_begin
+var _sync_failure_shown: bool = false       # prevent duplicate failure overlays
+var _online_last_applied_seq: int = 0      # stale-snapshot guard (incoming _sync_seq)
+var _online_send_seq: int = 0              # outgoing snapshot counter
+const _SYNC_TIMEOUT_SECS: float = 30.0     # seconds before showing the recovery panel
 var training_mode := false
 var training_class := "Hope"
 var training_panel: Panel
@@ -281,11 +288,13 @@ func _ready() -> void:
     if not NetworkManager.disconnected_from_service.is_connected(_on_online_disconnected):
         NetworkManager.disconnected_from_service.connect(_on_online_disconnected)
     if online_mode:
+        _build_online_status_hud()
         if online_role == "host":
             start_online_host_match()
         else:
             online_waiting_for_initial = true
             safe_set_text(status_label,"Connected — waiting for the host to deal the match...")
+            _update_online_status("Waiting for host…")
             refresh_ui()
     elif hotseat_mode:
         selected_class = hotseat_p1_class
@@ -389,6 +398,16 @@ func load_battle_setup() -> void:
         player_sleeve_id = str(_scfg.get_value("cosmetics", "equipped_sleeve", ""))
 
 func _process(delta: float) -> void:
+    # ── Online sync watchdog (runs regardless of player_turn_active) ────────
+    # After both players confirm mulligan we wait for the host to emit
+    # battle_begin.  If it never arrives (e.g. because battle_begin_sent was
+    # stale from a previous match, or the insert failed), we show a recovery
+    # panel instead of freezing silently forever.
+    if online_mode and online_mulligan_complete and not online_match_started and not _sync_failure_shown:
+        _sync_wait_elapsed += delta
+        if _sync_wait_elapsed >= _SYNC_TIMEOUT_SECS:
+            _sync_failure_shown = true
+            _show_sync_failure_panel("The match could not start.\n\nBoth players confirmed their opening hands, but the turn-start signal was not received within %d seconds.\n\nThis is usually caused by a brief network hiccup — return to the lobby and try again.\nYour progress and cards are safe." % int(_SYNC_TIMEOUT_SECS))
     if not player_turn_active or game_over or is_instance_valid(class_overlay) or overlay.visible:
         return
     if busy:
@@ -3557,6 +3576,7 @@ func make_hp_label(pos: Vector2, accent: Color = Color(1.0, 0.66, 0.56)) -> Labe
 
 
 func start_online_host_match() -> void:
+    print("ONLINE start_online_host_match: role=%s class=%s enemy=%s seed=%d" % [online_role, selected_class, enemy_class, online_seed])
     seed(online_seed)
     game_over=false; busy=false; selected_attacker=-1; selected_evolution_cost=0
     player_evolutions_used=[false,false,false,false]; enemy_evolutions_used=[false,false,false,false]
@@ -3565,15 +3585,20 @@ func start_online_host_match() -> void:
     player_momentum=0; enemy_momentum=0; momentum_used_this_turn=false
     player_hand.clear(); enemy_hand.clear(); player_board.clear(); enemy_board.clear(); player_relapse.clear(); enemy_relapse.clear()
     phoenix_pending_player = false; phoenix_pending_enemy = false; phoenix_tier_player = 1; phoenix_tier_enemy = 1
+    # Reset per-match seq counters so stale-state guards start from zero
+    _online_send_seq = 0; _online_last_applied_seq = 0
     player_deck = prepare_balanced_draw_order(build_deck_for_mode(selected_class, player_deck_mode))
     enemy_deck = prepare_balanced_draw_order(build_deck_for_mode(enemy_class, enemy_deck_mode))
     for i in range(4):
         draw_card(player_deck,player_hand); draw_card(enemy_deck,enemy_hand)
     player_goes_first=true
     update_leaders(); refresh_ui(); set_battle_music("battle_early_v2")
+    _update_online_status("Dealing opening hands…")
     await get_tree().create_timer(1.0).timeout
-    NetworkManager.send_game({"event":"initial_state","state":serialize_online_state()})
+    print("ONLINE start_online_host_match: sending initial_state (hand=%d enemy_hand=%d)" % [player_hand.size(), enemy_hand.size()])
+    await NetworkManager.send_game({"event":"initial_state","state":serialize_online_state()})
     safe_set_text(status_label,"Opening hand — both players choose a Second Chance.")
+    _update_online_status("Mulligan phase")
     show_second_chance()
 
 func serialize_online_state() -> Dictionary:
@@ -3591,6 +3616,16 @@ func serialize_online_state() -> Dictionary:
     }
 
 func apply_online_state(remote: Dictionary) -> void:
+    # Stale-snapshot guard: if this snapshot carries a _sync_seq lower than the
+    # last one we applied, it arrived out-of-order (e.g. a late-delivered "state"
+    # from two turns ago) and must be dropped to avoid rolling back game state.
+    var incoming_seq := int(remote.get("_sync_seq", 0))
+    if incoming_seq > 0 and incoming_seq < _online_last_applied_seq:
+        print("ONLINE apply_online_state: SKIP stale seq=%d (last_applied=%d)" % [incoming_seq, _online_last_applied_seq])
+        return
+    if incoming_seq > 0:
+        _online_last_applied_seq = incoming_seq
+    print("ONLINE apply_online_state: seq=%d turn_owner=%s player_turn_active=%s" % [incoming_seq, str(remote.get("turn_owner","")), str(player_turn_active)])
     online_applying_state=true
     player_health=int(remote.get("enemy_health",STARTING_HEALTH)); enemy_health=int(remote.get("player_health",STARTING_HEALTH))
     player_mana=int(remote.get("enemy_mana",0)); enemy_mana=int(remote.get("player_mana",0))
@@ -3613,43 +3648,156 @@ func apply_online_state(remote: Dictionary) -> void:
 
 func send_online_snapshot(event_name: String="state") -> void:
     if online_mode and online_match_started and not online_applying_state:
-        await NetworkManager.send_game({"event":event_name,"state":serialize_online_state()})
+        _online_send_seq += 1
+        var state := serialize_online_state()
+        state["_sync_seq"] = _online_send_seq
+        print("ONLINE send_online_snapshot: event=%s seq=%d turn_owner=%s" % [event_name, _online_send_seq, str(state.get("turn_owner","?"))])
+        await NetworkManager.send_game({"event":event_name,"state":state})
 
 func _on_online_game_message(payload: Dictionary) -> void:
     if not online_mode: return
     var event_name:=str(payload.get("event",""))
+    print("ONLINE _on_online_game_message: event=%s role=%s match_started=%s" % [event_name, online_role, str(online_match_started)])
     match event_name:
         "initial_state":
             if online_role=="join":
+                print("ONLINE initial_state: applying — hand_size=%d" % (payload.get("state",{}) as Dictionary).get("enemy_hand",[]).size())
+                # Reset seq counters for the new match before applying
+                _online_send_seq = 0; _online_last_applied_seq = 0
                 apply_online_state(payload.get("state",{})); online_waiting_for_initial=false
+                _update_online_status("Mulligan phase")
                 safe_set_text(status_label,"Opening hand — choose your Second Chance."); show_second_chance()
+        "mulligan_sync":
+            # Targeted post-mulligan sync: update ONLY the zones the opponent
+            # owns (their hand and deck after their Second Chance swaps).
+            # apply_online_state must NOT be used here — it would overwrite
+            # our own player_hand / player_deck with the sender's stale copy.
+            var new_eh: Array = payload.get("enemy_hand", []) if payload.get("enemy_hand", []) is Array else []
+            var new_ed: Array = payload.get("enemy_deck", []) if payload.get("enemy_deck", []) is Array else []
+            if not new_eh.is_empty():
+                enemy_hand = new_eh.duplicate(true)
+                enemy_deck = new_ed.duplicate(true)
+                print("ONLINE mulligan_sync: enemy_hand=%d enemy_deck=%d — opponent's Second Chance applied" % [enemy_hand.size(), enemy_deck.size()])
+                refresh_ui()
+            else:
+                print("ONLINE mulligan_sync: empty payload — skipping")
         "snapshot":
+            print("ONLINE snapshot: applying state update")
             apply_online_state(payload.get("state",{}))
         "battle_begin":
+            print("ONLINE battle_begin: first_role=%s our_role=%s" % [str(payload.get("first_role","host")), online_role])
             online_match_started=true
+            _sync_wait_elapsed = 0.0  # disarm the watchdog
             var first_role:=str(payload.get("first_role","host"))
             if online_role==first_role:
+                _update_online_status("Your turn")
                 safe_set_text(status_label,"You take the first turn."); start_player_turn()
             else:
-                player_turn_active=false; busy=true; safe_set_text(status_label,"Opponent takes the first turn."); refresh_ui()
+                player_turn_active=false; busy=true
+                _update_online_status("Opponent's turn")
+                safe_set_text(status_label,"Opponent takes the first turn."); refresh_ui()
         "state":
-            if not player_turn_active: apply_online_state(payload.get("state",{}))
+            if not player_turn_active:
+                print("ONLINE state: applying mid-turn opponent snapshot")
+                apply_online_state(payload.get("state",{}))
         "end_turn":
+            print("ONLINE end_turn: applying — will start_player_turn=%s" % str(not player_turn_active))
             apply_online_state(payload.get("state",{}))
             if player_turn_active:
                 busy=false
+                _update_online_status("Your turn")
                 start_player_turn()
             else:
+                _update_online_status("Opponent's turn")
                 safe_set_text(status_label,"Opponent's turn...")
                 refresh_ui()
         "game_over":
+            print("ONLINE game_over: applying final state")
             apply_online_state(payload.get("state",{}))
         "opponent_left":
-            player_turn_active=false; busy=true; safe_set_text(status_label,"Your opponent disconnected.")
+            print("ONLINE opponent_left")
+            player_turn_active=false; busy=true
+            _update_online_status("Disconnected")
+            safe_set_text(status_label,"Your opponent disconnected.")
 
 func _on_online_disconnected(reason: String) -> void:
     if online_mode:
-        player_turn_active=false; busy=true; safe_set_text(status_label,"Online match disconnected: %s" % reason)
+        print("ONLINE disconnected: %s" % reason)
+        player_turn_active=false; busy=true
+        _update_online_status("Disconnected")
+        safe_set_text(status_label,"Online match disconnected: %s" % reason)
+
+## ── Online sync HUD & recovery helpers ───────────────────────────────────
+
+func _build_online_status_hud() -> void:
+    ## Thin status strip along the very top of the screen showing live sync
+    ## state.  Non-interactive — mouse clicks pass through it.
+    if is_instance_valid(_online_status_label):
+        return
+    _online_status_label = Label.new()
+    _online_status_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+    _online_status_label.offset_bottom = 22
+    _online_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _online_status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    _online_status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _online_status_label.z_index = 500
+    var font_size := 11
+    _online_status_label.add_theme_font_size_override("font_size", font_size)
+    _online_status_label.add_theme_color_override("font_color", Color(0.85, 0.95, 1.0, 0.80))
+    _online_status_label.add_theme_color_override("font_shadow_color", Color(0,0,0,0.9))
+    _online_status_label.add_theme_constant_override("shadow_offset_x", 1)
+    _online_status_label.add_theme_constant_override("shadow_offset_y", 1)
+    var sb := StyleBoxFlat.new()
+    sb.bg_color = Color(0.04, 0.06, 0.12, 0.72)
+    sb.set_border_width_all(0)
+    _online_status_label.add_theme_stylebox_override("normal", sb)
+    safe_add_child(self, _online_status_label)
+    _update_online_status("Connecting…")
+
+func _update_online_status(msg: String) -> void:
+    if is_instance_valid(_online_status_label):
+        _online_status_label.text = "  ◈  %s" % msg
+
+func _show_sync_failure_panel(reason: String) -> void:
+    ## Full-screen blocker shown when battle_begin never arrives within the
+    ## watchdog timeout.  Lets the player return to the lobby cleanly.
+    if not is_inside_tree(): return
+    var layer := ColorRect.new()
+    layer.color = Color(0.0, 0.0, 0.0, 0.88)
+    layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    layer.mouse_filter = Control.MOUSE_FILTER_STOP
+    layer.z_index = 4096
+    if not safe_add_child(self, layer): return
+
+    var title := Label.new()
+    title.text = "CONNECTION ISSUE"
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.position = Vector2(0, 160); title.size = Vector2(720, 56)
+    title.add_theme_font_size_override("font_size", 28)
+    title.add_theme_color_override("font_color", Color(1.0, 0.40, 0.40))
+    layer.add_child(title)
+
+    var body := Label.new()
+    body.text = reason
+    body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    body.position = Vector2(80, 230); body.size = Vector2(560, 200)
+    body.add_theme_font_size_override("font_size", 15)
+    body.add_theme_color_override("font_color", Color(0.85, 0.88, 0.95))
+    layer.add_child(body)
+
+    var btn := Button.new()
+    btn.text = "Return to Lobby"
+    btn.position = Vector2(235, 450); btn.size = Vector2(250, 56)
+    btn.add_theme_font_size_override("font_size", 18)
+    btn.pressed.connect(func(): _return_to_lobby_from_online())
+    layer.add_child(btn)
+    print("ONLINE _show_sync_failure_panel: displayed to user")
+
+func _return_to_lobby_from_online() -> void:
+    print("ONLINE _return_to_lobby_from_online: disconnecting and returning to main.tscn")
+    NetworkManager.disconnect_service()
+    get_tree().change_scene_to_file("res://main.tscn")
 
 func training_resource_name(class_name_value: String) -> String:
     match class_name_value:
@@ -4687,7 +4835,11 @@ func confirm_second_chance() -> void:
     refresh_ui()
     if online_mode:
         online_mulligan_complete=true
-        NetworkManager.send_mulligan_done(serialize_online_state())
+        _sync_wait_elapsed = 0.0      # start the battle_begin watchdog now
+        _sync_failure_shown = false
+        print("ONLINE confirm_second_chance: sending mulligan_done — watchdog started (%ds timeout)" % int(_SYNC_TIMEOUT_SECS))
+        _update_online_status("Waiting for opponent…")
+        await NetworkManager.send_mulligan_done(serialize_online_state())
         busy=true; player_turn_active=false
         safe_set_text(status_label,"Second Chance locked in. Waiting for your opponent...")
         return

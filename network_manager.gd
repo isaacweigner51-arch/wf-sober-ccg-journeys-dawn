@@ -44,6 +44,9 @@ var request_busy := false
 var match_start_sent := false
 var battle_begin_sent := false
 var last_lobby_signature := ""
+## Monotonically-incrementing counter attached to every send_game payload so
+## the receiver can detect and discard out-of-order / duplicate snapshots.
+var _sync_seq: int = 0
 
 func _ready() -> void:
     set_process(true)
@@ -494,6 +497,13 @@ func create_room(chosen_class: String, chosen_deck_mode: String = "custom") -> v
     room_code = str(rows[0].get("room_code", ""))
     role = "host"
     last_action_id = 0
+    # Reset per-match state so a host who plays a second match doesn't inherit
+    # battle_begin_sent=true from the previous one (which would permanently
+    # prevent _host_check_mulligans from sending battle_begin and freeze the match).
+    match_start_sent = false
+    battle_begin_sent = false
+    _sync_seq = 0
+    print("NET create_room: room_id=%s room_code=%s flags_reset=true" % [room_id, room_code])
     await _save_class_to_room()
     room_created.emit(room_code)
 
@@ -511,6 +521,12 @@ func join_room(code: String, chosen_class: String, chosen_deck_mode: String = "c
     room_code = clean_code
     role = "join"
     last_action_id = 0
+    # Same reset as create_room: a player who joins a second room shouldn't
+    # carry over match_start_sent / battle_begin_sent from a previous game.
+    match_start_sent = false
+    battle_begin_sent = false
+    _sync_seq = 0
+    print("NET join_room: room_id=%s room_code=%s flags_reset=true" % [room_id, room_code])
     await _save_class_to_room()
     room_joined.emit(room_code)
 
@@ -544,10 +560,18 @@ func send_game(payload: Dictionary) -> void:
     if not connected or room_id.is_empty():
         network_error.emit("Not connected to a Supabase room.")
         return
+    _sync_seq += 1
+    payload["_sync_seq"] = _sync_seq
+    print("NET send_game: seq=%d event=%s room=%s" % [_sync_seq, str(payload.get("event","")), room_id.substr(0,8)])
     await _insert_action("game", payload)
 
 func send_mulligan_done(state: Dictionary) -> void:
-    _insert_action("mulligan_done", {"state":state})
+    # Awaited so the DB row is guaranteed to exist before _host_check_mulligans
+    # counts actors on the next poll.  Without await the insert is fire-and-
+    # forget and could be skipped if request_busy clears between coroutine
+    # frames, causing the host to never see actors.size() >= 2.
+    print("NET send_mulligan_done: room=%s actor=%s" % [room_id.substr(0,8), user_id.substr(0,8)])
+    await _insert_action_await("mulligan_done", {"state":state})
 
 func _insert_action(action_type: String, payload: Dictionary) -> void:
     if room_id.is_empty():
@@ -619,14 +643,35 @@ func _insert_action_await(action_type: String, payload: Dictionary) -> void:
 func _handle_action(action: Dictionary) -> void:
     var action_type := str(action.get("action_type",""))
     var payload: Dictionary = action.get("payload", {}) if action.get("payload", {}) is Dictionary else {}
+    print("NET _handle_action: type=%s id=%s actor=%s" % [action_type, str(action.get("id","")), str(action.get("actor_id","")).substr(0,8)])
     match action_type:
         "match_start":
             _emit_match_start(payload)
         "game":
             game_message.emit(payload)
         "mulligan_done":
-            game_message.emit({"event":"snapshot","state":payload.get("state",{})})
+            # We must NOT run a full apply_online_state here: the sender's
+            # serialised state contains their copy of OUR hand (the original
+            # pre-mulligan deal) and would silently undo our own Second Chance
+            # swaps.  Instead emit a targeted mulligan_sync event that carries
+            # only the zones the sender actually owns (their player_hand /
+            # player_deck post-mulligan).  main.gd applies those to our local
+            # enemy_hand / enemy_deck without touching our own cards.
+            var ms: Dictionary = payload.get("state", {}) if payload.get("state", {}) is Dictionary else {}
+            if not ms.is_empty():
+                print("NET _handle_action: mulligan_done — emitting mulligan_sync enemy_hand=%d enemy_deck=%d" % [
+                    (ms.get("player_hand", []) as Array).size(),
+                    (ms.get("player_deck", []) as Array).size()
+                ])
+                game_message.emit({
+                    "event": "mulligan_sync",
+                    "enemy_hand": ms.get("player_hand", []),
+                    "enemy_deck": ms.get("player_deck", [])
+                })
+            else:
+                print("NET _handle_action: mulligan_done — empty state, skipping mulligan_sync")
         "battle_begin":
+            print("NET _handle_action: battle_begin first_role=%s" % str(payload.get("first_role","host")))
             game_message.emit({"event":"battle_begin","first_role":str(payload.get("first_role","host"))})
 
 func _emit_match_start(payload: Dictionary) -> void:
@@ -642,15 +687,20 @@ func _emit_match_start(payload: Dictionary) -> void:
 
 func _host_check_mulligans() -> void:
     if battle_begin_sent or room_id.is_empty():
+        print("NET _host_check_mulligans: SKIP battle_begin_sent=%s room_empty=%s" % [str(battle_begin_sent), str(room_id.is_empty())])
         return
     var result := await _request(HTTPClient.METHOD_GET, "/rest/v1/match_actions?room_id=eq.%s&action_type=eq.mulligan_done&select=actor_id" % room_id)
     if not result.ok or not (result.data is Array):
+        print("NET _host_check_mulligans: DB query failed ok=%s" % str(result.ok))
         return
     var actors := {}
     for row in result.data:
         if row is Dictionary:
             actors[str(row.get("actor_id",""))] = true
+    print("NET _host_check_mulligans: found %d distinct actors — need 2 (room=%s)" % [actors.size(), room_id.substr(0,8)])
     if actors.size() >= 2:
+        print("NET _host_check_mulligans: BOTH READY → inserting battle_begin (first_role=host)")
         battle_begin_sent = true
         await _insert_action_await("battle_begin", {"first_role":"host"})
+        print("NET _host_check_mulligans: battle_begin inserted — emitting locally for host")
         game_message.emit({"event":"battle_begin","first_role":"host"})

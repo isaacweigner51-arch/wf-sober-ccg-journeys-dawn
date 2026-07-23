@@ -10,7 +10,9 @@ signal game_message(payload: Dictionary)
 signal network_error(message: String)
 signal account_authenticated(success: bool, message: String)
 signal account_role_loaded(role: String, profile: Dictionary)
-signal cloud_save_loaded(data: Dictionary)
+# fetch_ok is false when the HTTP request itself failed (network error, RLS
+# denial, etc.) so the caller can distinguish "no cloud save" from "fetch failed".
+signal cloud_save_loaded(data: Dictionary, fetch_ok: bool)
 
 const SUPABASE_URL := "https://zlsbznebcmprfxngyogg.supabase.co"
 const SUPABASE_KEY := "sb_publishable_U8LP7Qgg-2nZIfeb7CTp3g_YLQaOXAx"
@@ -26,6 +28,13 @@ var access_token := ""
 var refresh_token := ""
 var account_role := "player"
 var account_profile: Dictionary = {}
+# Set to true only when the player_profiles GET succeeds (HTTP 2xx, row found).
+# False means the network failed — callers must NOT upload over unknown cloud state.
+var cloud_fetch_succeeded := false
+# Vials (dust) granted via the Supabase recovery_vials column; applied after login.
+var fetched_recovery_vials: int = 0
+# Packs granted via the Supabase pending_packs column; applied after login, cleared once.
+var fetched_pending_packs: int = 0
 const SESSION_PATH := "user://supabase_session.json"
 var player_class := "Hope"
 var player_deck_mode := "custom"
@@ -35,6 +44,9 @@ var request_busy := false
 var match_start_sent := false
 var battle_begin_sent := false
 var last_lobby_signature := ""
+## Monotonically-incrementing counter attached to every send_game payload so
+## the receiver can detect and discard out-of-order / duplicate snapshots.
+var _sync_seq: int = 0
 
 func _ready() -> void:
     set_process(true)
@@ -157,24 +169,28 @@ func validate_saved_session() -> void:
 func _load_account_profile() -> void:
     account_role = "player"
     account_profile = {}
+    cloud_fetch_succeeded = false
+    fetched_recovery_vials = 0
+    fetched_pending_packs = 0
     if user_id.is_empty() or access_token.is_empty():
-        push_warning("CLOUD: no user_id/token — skipping profile load")
+        push_warning("CLOUD FETCH ── no user_id/token — skipping profile load")
         account_role_loaded.emit(account_role, account_profile)
-        cloud_save_loaded.emit({})
+        cloud_save_loaded.emit({}, false)
         return
 
     # ── 1. Fetch existing profile row ─────────────────────────────────────────
-    print("CLOUD FETCH ── GET player_profiles for user_id=%s" % user_id)
-    var path := "/rest/v1/player_profiles?select=user_id,display_name,app_role,recovery_vials,save_data&user_id=eq.%s&limit=1" % user_id.uri_encode()
+    print("CLOUD FETCH ── START  user_id=%s" % user_id)
+    var path := "/rest/v1/player_profiles?select=user_id,display_name,app_role,recovery_vials,pending_packs,save_data&user_id=eq.%s&limit=1" % user_id.uri_encode()
     var result := await _request(HTTPClient.METHOD_GET, path, null, true)
     print("CLOUD FETCH ── HTTP %d  ok=%s  data_type=%d  body_len=%d" % [
-        result.status, result.ok, typeof(result.data), result.text.length()])
-    # Print enough of the raw body to see save_data type (but not the whole 4 KB).
+        result.status, str(result.ok), typeof(result.data), result.text.length()])
     if not result.text.is_empty():
         print("CLOUD FETCH ── body (first 600): %s" % result.text.left(600))
 
+    var row_loaded := false
     if not result.ok:
-        push_error("CLOUD FETCH ── GET player_profiles failed (HTTP %d): %s" % [result.status, result.text])
+        push_error("CLOUD FETCH ── GET player_profiles FAILED (HTTP %d): %s" % [result.status, result.text])
+        # fetch_ok stays false — caller must not upload over unknown cloud state
     elif result.data is Array:
         if result.data.is_empty():
             # ── 2. No row yet — UPSERT a new profile (idempotent) ────────────
@@ -183,15 +199,20 @@ func _load_account_profile() -> void:
                 {"user_id": user_id, "display_name": "", "app_role": "player", "recovery_vials": 0},
                 true, "resolution=merge-duplicates,return=minimal")
             if not ins.ok:
-                push_error("CLOUD FETCH ── INSERT player_profiles failed (HTTP %d): %s — check RLS policies" % [ins.status, ins.text])
+                push_error("CLOUD FETCH ── INSERT player_profiles FAILED (HTTP %d): %s" % [ins.status, ins.text])
             else:
                 print("CLOUD FETCH ── profile row created OK")
+                cloud_fetch_succeeded = true  # New row, no data — safe to upload first sync
         elif result.data[0] is Dictionary:
             account_profile = Dictionary(result.data[0])
             account_role = str(account_profile.get("app_role", "player")).to_lower()
+            fetched_recovery_vials = int(account_profile.get("recovery_vials", 0))
+            fetched_pending_packs  = int(account_profile.get("pending_packs",  0))
             var raw_sd: Variant = account_profile.get("save_data")
-            print("CLOUD FETCH ── profile row loaded  role=%s  save_data type=%d  has_key=%s" % [
-                account_role, typeof(raw_sd), account_profile.has("save_data")])
+            print("CLOUD FETCH ── row loaded  role=%s  recovery_vials=%d  pending_packs=%d  save_data type=%d  has_key=%s" % [
+                account_role, fetched_recovery_vials, fetched_pending_packs, typeof(raw_sd), str(account_profile.has("save_data"))])
+            row_loaded = true
+            cloud_fetch_succeeded = true
         else:
             push_error("CLOUD FETCH ── result.data[0] is not a Dictionary (type=%d)" % typeof(result.data[0]))
     else:
@@ -203,31 +224,32 @@ func _load_account_profile() -> void:
         get_node("/root/AccessManager").apply_authenticated_role(account_role, access_token, user_id)
 
     # ── 3. Extract save_data — handle Dictionary, JSON-String, and null ────────
-    # PostgREST returns JSONB columns as parsed objects. If the column type is
-    # TEXT or if there is a double-encode issue, it arrives as a String instead.
-    # We accept both forms here so neither silently loses the player's progress.
     var cloud_data: Dictionary = {}
-    var raw_save: Variant = account_profile.get("save_data")
-    if raw_save is Dictionary:
-        cloud_data = raw_save
-        print("CLOUD FETCH ── save_data loaded (Dictionary, %d sections)" % cloud_data.size())
-    elif raw_save is String and not (raw_save as String).is_empty():
-        var parsed: Variant = JSON.parse_string(raw_save)
-        if parsed is Dictionary:
-            cloud_data = parsed
-            print("CLOUD FETCH ── save_data decoded from JSON String (%d sections)" % cloud_data.size())
+    if row_loaded:
+        var raw_save: Variant = account_profile.get("save_data")
+        if raw_save is Dictionary:
+            cloud_data = raw_save
+            print("CLOUD FETCH ── save_data is Dictionary (%d sections)" % cloud_data.size())
+        elif raw_save is String and not (raw_save as String).is_empty():
+            var parsed: Variant = JSON.parse_string(raw_save)
+            if parsed is Dictionary:
+                cloud_data = parsed
+                print("CLOUD FETCH ── save_data decoded from JSON String (%d sections)" % cloud_data.size())
+            else:
+                push_error("CLOUD FETCH ── save_data is String but not valid JSON — raw (first 200): %s" % (raw_save as String).left(200))
+                cloud_fetch_succeeded = false  # Treat corrupt save_data as fetch failure
+        elif raw_save != null:
+            push_error("CLOUD FETCH ── save_data unexpected type=%d — treating as fetch failure" % typeof(raw_save))
+            cloud_fetch_succeeded = false
         else:
-            push_error("CLOUD FETCH ── save_data is String but not valid JSON (first 120): %s" % (raw_save as String).left(120))
-    elif raw_save != null:
-        push_error("CLOUD FETCH ── save_data has unexpected type=%d value=%s" % [typeof(raw_save), str(raw_save).left(120)])
-    else:
-        print("CLOUD FETCH ── save_data is null/missing — no cloud save to apply")
+            print("CLOUD FETCH ── save_data is null — player has no cloud save yet")
 
     if cloud_data.is_empty():
-        print("CLOUD FETCH ── emitting EMPTY cloud data (local save will be uploaded as first sync)")
+        print("CLOUD FETCH ── emitting EMPTY data  fetch_ok=%s" % str(cloud_fetch_succeeded))
     else:
-        print("CLOUD FETCH ── emitting cloud data (%d sections) — will merge into local save" % cloud_data.size())
-    cloud_save_loaded.emit(cloud_data)
+        print("CLOUD FETCH ── emitting cloud data (%d sections)  fetch_ok=%s  recovery_vials=%d" % [
+            cloud_data.size(), str(cloud_fetch_succeeded), fetched_recovery_vials])
+    cloud_save_loaded.emit(cloud_data, cloud_fetch_succeeded)
 
 func upload_save_data(data: Dictionary) -> void:
     if user_id.is_empty() or access_token.is_empty():
@@ -257,6 +279,49 @@ func clear_saved_session() -> void:
 func sign_out_account() -> void:
     clear_saved_session()
     account_authenticated.emit(false, "Signed out.")
+
+## Zero out the recovery_vials column after the client has applied the grant.
+## Called deferred so it does not block the login frame.
+func clear_recovery_vials() -> void:
+    if user_id.is_empty() or access_token.is_empty():
+        return
+    print("CLOUD ── clearing recovery_vials for user_id=%s" % user_id)
+    var result := await _request(HTTPClient.METHOD_PATCH,
+        "/rest/v1/player_profiles?user_id=eq.%s" % user_id.uri_encode(),
+        {"recovery_vials": 0}, true, "return=minimal")
+    if not result.ok:
+        push_warning("CLOUD ── clear_recovery_vials PATCH failed (HTTP %d): %s" % [result.status, result.text])
+    else:
+        print("CLOUD ── recovery_vials cleared OK")
+
+## Save a player-chosen display name to the player_profiles row.
+func update_display_name(new_name: String) -> bool:
+    if user_id.is_empty() or access_token.is_empty():
+        return false
+    print("CLOUD ── updating display_name for user_id=%s  name='%s'" % [user_id, new_name])
+    var result := await _request(HTTPClient.METHOD_PATCH,
+        "/rest/v1/player_profiles?user_id=eq.%s" % user_id.uri_encode(),
+        {"display_name": new_name}, true, "return=minimal")
+    if result.ok:
+        account_profile["display_name"] = new_name
+        print("CLOUD ── display_name updated OK")
+    else:
+        push_warning("CLOUD ── update_display_name PATCH failed (HTTP %d): %s" % [result.status, result.text])
+    return result.ok
+
+## Zero out the pending_packs column after the client has applied the grant.
+## Called deferred so it does not block the login frame.
+func clear_pending_packs() -> void:
+    if user_id.is_empty() or access_token.is_empty():
+        return
+    print("CLOUD ── clearing pending_packs for user_id=%s" % user_id)
+    var result := await _request(HTTPClient.METHOD_PATCH,
+        "/rest/v1/player_profiles?user_id=eq.%s" % user_id.uri_encode(),
+        {"pending_packs": 0}, true, "return=minimal")
+    if not result.ok:
+        push_warning("CLOUD ── clear_pending_packs PATCH failed (HTTP %d): %s" % [result.status, result.text])
+    else:
+        print("CLOUD ── pending_packs cleared OK")
 
 func _save_session() -> void:
     var file := FileAccess.open(SESSION_PATH, FileAccess.WRITE)
@@ -381,8 +446,10 @@ func _request(method: int, path: String, body: Variant = null, authenticated := 
     print("HTTPRequest completed: godot_result=", godot_result, " (", godot_result_name, ")  http_status=", status, "  body_len=", text.length())
     if godot_result != 0:
         print("HTTPRequest NON-SUCCESS: ", godot_result_name, " — body: ", text.left(300))
-        if status == 0:
-            account_authenticated.emit(false, "Network error: %s" % godot_result_name)
+        # Do NOT emit account_authenticated here — _request() is called for profile
+        # fetches, uploads, polls, and other non-auth operations. Emitting an auth
+        # failure signal from those would interfere with the login flow and cause
+        # double-signal bugs (auth success emitted after a spurious failure).
 
     var parsed: Variant = null
     if not text.is_empty():
@@ -430,6 +497,13 @@ func create_room(chosen_class: String, chosen_deck_mode: String = "custom") -> v
     room_code = str(rows[0].get("room_code", ""))
     role = "host"
     last_action_id = 0
+    # Reset per-match state so a host who plays a second match doesn't inherit
+    # battle_begin_sent=true from the previous one (which would permanently
+    # prevent _host_check_mulligans from sending battle_begin and freeze the match).
+    match_start_sent = false
+    battle_begin_sent = false
+    _sync_seq = 0
+    print("NET create_room: room_id=%s room_code=%s flags_reset=true" % [room_id, room_code])
     await _save_class_to_room()
     room_created.emit(room_code)
 
@@ -447,6 +521,12 @@ func join_room(code: String, chosen_class: String, chosen_deck_mode: String = "c
     room_code = clean_code
     role = "join"
     last_action_id = 0
+    # Same reset as create_room: a player who joins a second room shouldn't
+    # carry over match_start_sent / battle_begin_sent from a previous game.
+    match_start_sent = false
+    battle_begin_sent = false
+    _sync_seq = 0
+    print("NET join_room: room_id=%s room_code=%s flags_reset=true" % [room_id, room_code])
     await _save_class_to_room()
     room_joined.emit(room_code)
 
@@ -480,10 +560,18 @@ func send_game(payload: Dictionary) -> void:
     if not connected or room_id.is_empty():
         network_error.emit("Not connected to a Supabase room.")
         return
+    _sync_seq += 1
+    payload["_sync_seq"] = _sync_seq
+    print("NET send_game: seq=%d event=%s room=%s" % [_sync_seq, str(payload.get("event","")), room_id.substr(0,8)])
     await _insert_action("game", payload)
 
 func send_mulligan_done(state: Dictionary) -> void:
-    _insert_action("mulligan_done", {"state":state})
+    # Awaited so the DB row is guaranteed to exist before _host_check_mulligans
+    # counts actors on the next poll.  Without await the insert is fire-and-
+    # forget and could be skipped if request_busy clears between coroutine
+    # frames, causing the host to never see actors.size() >= 2.
+    print("NET send_mulligan_done: room=%s actor=%s" % [room_id.substr(0,8), user_id.substr(0,8)])
+    await _insert_action_await("mulligan_done", {"state":state})
 
 func _insert_action(action_type: String, payload: Dictionary) -> void:
     if room_id.is_empty():
@@ -555,14 +643,35 @@ func _insert_action_await(action_type: String, payload: Dictionary) -> void:
 func _handle_action(action: Dictionary) -> void:
     var action_type := str(action.get("action_type",""))
     var payload: Dictionary = action.get("payload", {}) if action.get("payload", {}) is Dictionary else {}
+    print("NET _handle_action: type=%s id=%s actor=%s" % [action_type, str(action.get("id","")), str(action.get("actor_id","")).substr(0,8)])
     match action_type:
         "match_start":
             _emit_match_start(payload)
         "game":
             game_message.emit(payload)
         "mulligan_done":
-            game_message.emit({"event":"snapshot","state":payload.get("state",{})})
+            # We must NOT run a full apply_online_state here: the sender's
+            # serialised state contains their copy of OUR hand (the original
+            # pre-mulligan deal) and would silently undo our own Second Chance
+            # swaps.  Instead emit a targeted mulligan_sync event that carries
+            # only the zones the sender actually owns (their player_hand /
+            # player_deck post-mulligan).  main.gd applies those to our local
+            # enemy_hand / enemy_deck without touching our own cards.
+            var ms: Dictionary = payload.get("state", {}) if payload.get("state", {}) is Dictionary else {}
+            if not ms.is_empty():
+                print("NET _handle_action: mulligan_done — emitting mulligan_sync enemy_hand=%d enemy_deck=%d" % [
+                    (ms.get("player_hand", []) as Array).size(),
+                    (ms.get("player_deck", []) as Array).size()
+                ])
+                game_message.emit({
+                    "event": "mulligan_sync",
+                    "enemy_hand": ms.get("player_hand", []),
+                    "enemy_deck": ms.get("player_deck", [])
+                })
+            else:
+                print("NET _handle_action: mulligan_done — empty state, skipping mulligan_sync")
         "battle_begin":
+            print("NET _handle_action: battle_begin first_role=%s" % str(payload.get("first_role","host")))
             game_message.emit({"event":"battle_begin","first_role":str(payload.get("first_role","host"))})
 
 func _emit_match_start(payload: Dictionary) -> void:
@@ -578,15 +687,20 @@ func _emit_match_start(payload: Dictionary) -> void:
 
 func _host_check_mulligans() -> void:
     if battle_begin_sent or room_id.is_empty():
+        print("NET _host_check_mulligans: SKIP battle_begin_sent=%s room_empty=%s" % [str(battle_begin_sent), str(room_id.is_empty())])
         return
     var result := await _request(HTTPClient.METHOD_GET, "/rest/v1/match_actions?room_id=eq.%s&action_type=eq.mulligan_done&select=actor_id" % room_id)
     if not result.ok or not (result.data is Array):
+        print("NET _host_check_mulligans: DB query failed ok=%s" % str(result.ok))
         return
     var actors := {}
     for row in result.data:
         if row is Dictionary:
             actors[str(row.get("actor_id",""))] = true
+    print("NET _host_check_mulligans: found %d distinct actors — need 2 (room=%s)" % [actors.size(), room_id.substr(0,8)])
     if actors.size() >= 2:
+        print("NET _host_check_mulligans: BOTH READY → inserting battle_begin (first_role=host)")
         battle_begin_sent = true
         await _insert_action_await("battle_begin", {"first_role":"host"})
+        print("NET _host_check_mulligans: battle_begin inserted — emitting locally for host")
         game_message.emit({"event":"battle_begin","first_role":"host"})
