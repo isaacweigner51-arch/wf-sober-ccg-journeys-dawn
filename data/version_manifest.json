@@ -14,6 +14,7 @@
       "category": "What's New in 0.9.7",
       "items": [
         "Card costs, attack, health, and all game-value labels now display as clean integers — no more '1.0', '2.0', etc.",
+        "Academy Lesson 1 completion now saves correctly — completing a battle lesson advances your progress, saves to the cloud, and returns you to the Academy lesson screen instead of the home screen.",
         "Evolution animations completely rebuilt — all four tiers now use real radial glow orbs instead of colored rectangles, and all ring shockwaves are true circles rather than expanding squares.",
         "Standard evolution: blinding white flash at peak, three circular shockwave rings fan outward, title smashes in at scale.",
         "Epic evolution: purple glow blob swells behind the card, four circular rings, spinning beam crown, art medallion slides in from the right.",

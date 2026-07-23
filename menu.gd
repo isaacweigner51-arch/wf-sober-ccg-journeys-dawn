@@ -816,9 +816,30 @@ func _ready() -> void:
         _tut_cfg.save("user://battle_setup.cfg")
         cards = load_cards()
         load_profile()
-        # Graduated players replaying a lesson land on the overview, not
-        # the next lesson — that would loop them through the whole Academy.
-        show_home()
+        # ── Academy lesson-completion fast path ─────────────────────────────
+        # BUG FIX: the original code called show_home() unconditionally, which
+        # discarded the "lesson just finished" signal and never advanced the
+        # Academy step, never saved that progress to Supabase, and never
+        # returned the player to the Academy lesson-select screen.
+        #
+        # Correct behaviour:
+        #  • Graduated players (academy_complete = true) replaying a lesson
+        #    should NOT re-advance; send them home as before.
+        #  • First-time completers must call complete_academy_lesson_once()
+        #    which: increments academy_step, calls save_profile() (local +
+        #    queued cloud upload), then navigates to show_academy_lesson() or
+        #    show_academy_graduation(). That function is already idempotent
+        #    (academy_transition_in_progress guard) and fully logged.
+        print("ACADEMY RETURN: user=%s step=%d academy_complete=%s" % [
+            NetworkManager.user_id, academy_step, str(academy_complete)])
+        if academy_complete:
+            # Graduated player replaying — go home, not back into the sequence.
+            print("ACADEMY RETURN: already complete — returning home")
+            show_home()
+        else:
+            # First-time completion: advance step, save, navigate to academy.
+            print("ACADEMY RETURN: advancing step=%d via complete_academy_lesson_once" % academy_step)
+            complete_academy_lesson_once(academy_step)
         return
     # Fast-path back to Home after a normal battle — skip login since the
     # player is already authenticated. Flag written by _return_to_main_menu()
