@@ -766,6 +766,10 @@ var academy_step := 0
 var academy_reward_claimed := false
 var academy_action_stage := 0
 var academy_transition_in_progress := false
+## -1 = normal progression.  >= 0 = the real academy_step that was saved
+## before a REPLAY button temporarily overwrote academy_step for display.
+## complete_academy_lesson_once() reads this to decide whether to advance.
+var _academy_replay_step: int = -1
 var academy_feedback: Label
 var academy_feedback_chip: Panel
 var access_status: Label
@@ -830,30 +834,31 @@ func _ready() -> void:
     if _tut_cfg.load("user://battle_setup.cfg") == OK \
             and str(_tut_cfg.get_value("battle","mode","")) == "tutorial" \
             and bool(_tut_cfg.get_value("tutorial","lesson_complete",false)):
+        var _saved_step: int = int(_tut_cfg.get_value("tutorial","saved_step",-1))
         _tut_cfg.set_value("tutorial","lesson_complete",false)
         _tut_cfg.save("user://battle_setup.cfg")
         cards = load_cards()
         load_profile()
         # ── Academy lesson-completion fast path ─────────────────────────────
-        # BUG FIX: the original code called show_home() unconditionally, which
-        # discarded the "lesson just finished" signal and never advanced the
-        # Academy step, never saved that progress to Supabase, and never
-        # returned the player to the Academy lesson-select screen.
-        #
-        # Correct behaviour:
-        #  • Graduated players (academy_complete = true) replaying a lesson
-        #    should NOT re-advance; send them home as before.
-        #  • First-time completers must call complete_academy_lesson_once()
-        #    which: increments academy_step, calls save_profile() (local +
-        #    queued cloud upload), then navigates to show_academy_lesson() or
-        #    show_academy_graduation(). That function is already idempotent
-        #    (academy_transition_in_progress guard) and fully logged.
-        print("ACADEMY RETURN: user=%s step=%d academy_complete=%s" % [
-            NetworkManager.user_id, academy_step, str(academy_complete)])
-        if academy_complete:
-            # Graduated player replaying — go home, not back into the sequence.
-            print("ACADEMY RETURN: already complete — returning home")
-            show_home()
+        # Three cases on return from a battle lesson:
+        #  1. Replay (saved_step >= 0): restore the real step and return to the
+        #     Academy menu — do NOT advance progress.
+        #  2. Already graduated (academy_complete = true): return to the Academy
+        #     menu so the player can see their progress.
+        #  3. First-time completion: call complete_academy_lesson_once() which
+        #     advances academy_step, saves, and navigates to show_recovery_academy().
+        print("ACADEMY RETURN: user=%s step=%d academy_complete=%s saved_step=%d" % [
+            NetworkManager.user_id, academy_step, str(academy_complete), _saved_step])
+        if _saved_step >= 0:
+            # Replay path: restore the real step; don't advance progress.
+            print("ACADEMY RETURN: replay mode — restoring step=%d, returning to academy menu" % _saved_step)
+            academy_step = _saved_step
+            _academy_replay_step = -1
+            show_recovery_academy()
+        elif academy_complete:
+            # Graduated player finishing a free-play — return to academy menu.
+            print("ACADEMY RETURN: already complete — returning to academy menu")
+            show_recovery_academy()
         else:
             # First-time completion: advance step, save, navigate to academy.
             print("ACADEMY RETURN: advancing step=%d via complete_academy_lesson_once" % academy_step)
@@ -2737,6 +2742,7 @@ func replay_how_to_play() -> void:
     show_recovery_academy()
 
 func show_recovery_academy() -> void:
+    _academy_replay_step = -1   # safety: clear any leftover replay state on every entry
     clear_screen(); add_background(0.64)
     header("RECOVERY ACADEMY", "Eleven lessons — from your first card to your full strategy")
     if academy_complete:
@@ -2841,7 +2847,11 @@ func show_recovery_academy() -> void:
         # Action button
         var btn_text := "REPLAY" if lesson_done else ("START" if lesson_available else "🔒 LOCKED")
         var i_capture := i
+        var lesson_done_capture := lesson_done
         var btn := button(btn_text, Vector2(panel_w - 118.0, panel_h - 42.0), Vector2(106, 34), func():
+            # Mark replay mode BEFORE changing academy_step so complete_academy_lesson_once
+            # can detect it and not advance real progress.
+            _academy_replay_step = i_capture if lesson_done_capture else -1
             academy_step = i_capture
             academy_action_stage = 0
             show_academy_lesson()
@@ -2968,6 +2978,9 @@ func launch_tutorial_battle(tutorial_lesson: int) -> void:
     cfg.set_value("tutorial", "lesson", tutorial_lesson)
     cfg.set_value("tutorial", "player_class", player_class)
     cfg.set_value("tutorial", "lesson_complete", false)
+    # saved_step: the real academy_step to restore on return.
+    # -1 = first-time play (advance progress); >= 0 = replay (don't advance).
+    cfg.set_value("tutorial", "saved_step", _academy_replay_step)
     cfg.save("user://battle_setup.cfg")
     get_tree().change_scene_to_file("res://battle.tscn")
 
@@ -3288,6 +3301,14 @@ func complete_academy_lesson_once(completed_step: int) -> void:
     if academy_transition_in_progress:
         print("ACADEMY: duplicate completion ignored [step=%d]" % completed_step)
         return
+    # Replay-mode guard: the player finished a replayed lesson — restore the real
+    # step and return to the Academy menu without advancing real progress.
+    if _academy_replay_step >= 0:
+        print("ACADEMY: replay completion — restoring step=%d (was replaying %d)" % [_academy_replay_step, completed_step])
+        academy_step = _academy_replay_step
+        _academy_replay_step = -1
+        show_recovery_academy()
+        return
     if completed_step != academy_step:
         print("ACADEMY: completion rejected — step mismatch (completed=%d academy_step=%d)" % [completed_step, academy_step])
         return
@@ -3304,14 +3325,15 @@ func complete_academy_lesson_once(completed_step: int) -> void:
     if is_instance_valid(root_layer):
         root_layer.modulate.a = 1.0
 
+    # Clear the guard BEFORE navigation so any re-entrant calls are not blocked.
+    academy_transition_in_progress = false
+
     if academy_step >= ACADEMY_LESSON_COUNT:
         print("ACADEMY: graduation loaded")
         show_academy_graduation()
     else:
-        print("ACADEMY: next lesson loaded [step=%d]" % academy_step)
-        show_academy_lesson()
-
-    academy_transition_in_progress = false
+        print("ACADEMY: returning to academy menu [next_step=%d]" % academy_step)
+        show_recovery_academy()
 
 func build_zone_lesson(board: Control) -> void:
     var why := {

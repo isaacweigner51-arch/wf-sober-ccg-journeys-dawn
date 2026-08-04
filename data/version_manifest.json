@@ -20,6 +20,8 @@
         "Multiplayer match freeze fixed — rematches and second matches no longer silently block the turn-start signal. Both players' Second Chance (mulligan) choices are now preserved correctly after synchronisation.",
         "Multiplayer: a 30-second watchdog now shows a 'Return to Lobby' panel if the match fails to start, instead of leaving both players stuck on a frozen battlefield.",
         "Multiplayer: a live connection-status strip appears at the top of the battlefield screen showing the current sync state (Mulligan phase, Your turn, Opponent's turn, etc.).",
+        "Recovery Academy replay fixed — pressing REPLAY on a completed lesson no longer corrupts your progress. Replaying a battle lesson now returns you to the Academy menu with your real step intact, and never advances or overwrites your save.",
+        "Academy progression now always returns to the lesson-select screen after completing a lesson — first-time completions advance your step and land on the Academy menu; replays do the same without touching progress.",
         "Evolution animations completely rebuilt — all four tiers now use real radial glow orbs instead of colored rectangles, and all ring shockwaves are true circles rather than expanding squares.",
         "Standard evolution: blinding white flash at peak, three circular shockwave rings fan outward, title smashes in at scale.",
         "Epic evolution: purple glow blob swells behind the card, four circular rings, spinning beam crown, art medallion slides in from the right.",
