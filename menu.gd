@@ -2930,15 +2930,12 @@ func show_tutorial_class_picker(tutorial_lesson: int) -> void:
         art_shell.clip_contents = true
         art_shell.add_theme_stylebox_override("panel", style(col.darkened(0.55), 10))
         card.add_child(art_shell)
-        var art := TextureRect.new()
-        art.texture = load("res://assets/leaders/%s.png" % c.to_lower()) as Texture2D
+        var art := _LeaderView.new()
         art.position = Vector2(4, 4)
         art.size = Vector2(204, 228)
-        art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-        art.clip_contents = true
         art.mouse_filter = Control.MOUSE_FILTER_IGNORE
         art_shell.add_child(art)
+        art.setup(c, Vector2(204, 228))
 
         # Class name
         var name_lbl := centered_label(c.to_upper(), Vector2(0, 252), Vector2(228, 32), 18, card)
