@@ -2931,7 +2931,7 @@ func show_tutorial_class_picker(tutorial_lesson: int) -> void:
         art_shell.add_theme_stylebox_override("panel", style(col.darkened(0.55), 10))
         card.add_child(art_shell)
         var art := TextureRect.new()
-        art.texture = class_leader_texture(c)
+        art.texture = load("res://assets/leaders/%s.png" % c.to_lower()) as Texture2D
         art.position = Vector2(4, 4)
         art.size = Vector2(204, 228)
         art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
