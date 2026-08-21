@@ -2888,8 +2888,8 @@ func academy_feedback_text(text_value: String, positive := true) -> void:
         academy_feedback.text = text_value
         academy_feedback.add_theme_color_override("font_color", Color(0.55, 1.0, 0.70) if positive else Color(1.0, 0.55, 0.55))
 
-func class_leader_texture(class_name: String) -> Texture2D:
-    match class_name:
+func class_leader_texture(leader_class: String) -> Texture2D:
+    match leader_class:
         "Serenity":
             return load("res://assets/leaders/serenity.png") as Texture2D
         "Courage":
