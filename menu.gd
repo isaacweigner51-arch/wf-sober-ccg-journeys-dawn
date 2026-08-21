@@ -1871,7 +1871,7 @@ func show_home() -> void:
         # overlay on top for click handling. Using Panel keeps clip_contents
         # rectangular so portrait art doesn't bleed past the border edges.
         var card_panel := Panel.new()
-        card_panel.position = Vector2(12 + i * 249, 24)
+        card_panel.position = Vector2(12 + i * 249, 8)
         card_panel.size = Vector2(224, 88)
         card_panel.clip_contents = true
         var card_bg := StyleBoxFlat.new()
