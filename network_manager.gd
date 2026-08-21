@@ -395,8 +395,8 @@ func _headers(authenticated := true, prefer := "") -> PackedStringArray:
 func _request(method: int, path: String, body: Variant = null, authenticated := true, prefer := "") -> Dictionary:
     request_busy = true
     var http_request := HTTPRequest.new()
-http_request.timeout = 10.0
-add_child(http_request)
+    http_request.timeout = 10.0
+    add_child(http_request)
     var payload := "" if body == null else JSON.stringify(body)
     var full_url: String = SUPABASE_URL + path
 
