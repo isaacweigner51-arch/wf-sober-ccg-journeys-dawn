@@ -2888,20 +2888,6 @@ func academy_feedback_text(text_value: String, positive := true) -> void:
         academy_feedback.text = text_value
         academy_feedback.add_theme_color_override("font_color", Color(0.55, 1.0, 0.70) if positive else Color(1.0, 0.55, 0.55))
 
-func class_leader_texture(leader_class: String) -> Texture2D:
-    match leader_class:
-        "Serenity":
-            return load("res://assets/leaders/serenity.png") as Texture2D
-        "Courage":
-            return load("res://assets/leaders/courage.png") as Texture2D
-        "Purpose":
-            return load("res://assets/leaders/purpose.png") as Texture2D
-        "Hope":
-            return load("res://assets/leaders/hope.png") as Texture2D
-        _:
-            return null
-
-
 func show_tutorial_class_picker(tutorial_lesson: int) -> void:
     # Scrim behind the picker
     var scrim := ColorRect.new()
