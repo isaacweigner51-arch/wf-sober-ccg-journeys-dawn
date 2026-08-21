@@ -1847,7 +1847,10 @@ func show_home() -> void:
     var main := Panel.new()
     main.position = Vector2(248, 88)
     main.size = Vector2(1016, 616)
-    main.add_theme_stylebox_override("panel", style(Color(0.06, 0.09, 0.17), 16))
+    var main_style := StyleBoxFlat.new()
+    main_style.bg_color = Color(0.035, 0.055, 0.10, 0.96)
+    main_style.set_corner_radius_all(16)
+    main.add_theme_stylebox_override("panel", main_style)
     root_layer.add_child(main)
 
     # Leader portrait selector cards — shows each class's actual face so
@@ -1863,7 +1866,7 @@ func show_home() -> void:
         # rectangular so portrait art doesn't bleed past the border edges.
         var card_panel := Panel.new()
         card_panel.position = Vector2(12 + i * 249, 12)
-        card_panel.size = Vector2(236, 76)
+        card_panel.size = Vector2(236, 88)
         card_panel.clip_contents = true
         var card_bg := StyleBoxFlat.new()
         card_bg.bg_color = cc.darkened(0.55) if is_active else Color(0.02, 0.03, 0.07)
@@ -1938,12 +1941,12 @@ func show_home() -> void:
     glow_top.position = Vector2(5, 5); glow_top.size = Vector2(538, 2)
     glow_top.mouse_filter = Control.MOUSE_FILTER_IGNORE; showcase.add_child(glow_top)
     var glow_left := ColorRect.new(); glow_left.color = Color(class_color(active_class), 0.35)
-    glow_left.position = Vector2(5, 5); glow_left.size = Vector2(2, 484)
+    glow_left.position = Vector2(5, 5); glow_left.size = Vector2(2, 458)
     glow_left.mouse_filter = Control.MOUSE_FILTER_IGNORE; showcase.add_child(glow_left)
 
     var art_frame := Panel.new()
     art_frame.position = Vector2(6, 6)
-    art_frame.size = Vector2(536, 482)
+    art_frame.size = Vector2(536, 432)
     art_frame.clip_contents = true
     art_frame.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
     showcase.add_child(art_frame)
@@ -2022,9 +2025,9 @@ func show_home() -> void:
         skin_toggle.add_theme_font_size_override("font_size", ui_font_size(11))
 
     # PREVIEW / DECKS buttons now sit at the bottom of the showcase panel (below portrait)
-    var preview_button := button("PREVIEW", Vector2(40, 460), Vector2(216, 26), show_deck_preview, showcase)
+    var preview_button := button("PREVIEW", Vector2(40, 438), Vector2(216, 24), show_deck_preview, showcase)
     preview_button.add_theme_font_size_override("font_size", ui_font_size(13))
-    var decks_button := button("DECKS", Vector2(292, 460), Vector2(216, 26), show_deck_builder, showcase)
+    var decks_button := button("DECKS", Vector2(292, 438), Vector2(216, 24), show_deck_builder, showcase)
     decks_button.add_theme_font_size_override("font_size", ui_font_size(13))
 
     # Right-side actions — matches new taller showcase height
