@@ -2898,8 +2898,9 @@ func show_tutorial_class_picker(tutorial_lesson: int) -> void:
     root_layer.add_child(scrim)
 
     var dialog := Panel.new()
-    dialog.position = Vector2(140, 120)
     dialog.size = Vector2(1000, 480)
+    dialog.set_anchors_preset(Control.PRESET_CENTER)
+    dialog.position = -dialog.size / 2.0
     dialog.z_index = 901
     dialog.add_theme_stylebox_override("panel", style(GOLD_COLOR, 20))
     scrim.add_child(dialog)
