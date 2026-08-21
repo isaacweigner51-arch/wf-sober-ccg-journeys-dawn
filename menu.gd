@@ -1877,10 +1877,10 @@ func show_home() -> void:
         var card_bg := StyleBoxFlat.new()
         card_bg.bg_color = cc.darkened(0.55) if is_active else Color(0.02, 0.03, 0.07)
         card_bg.border_color = cc
-        card_bg.set_border_width_all(4 if is_active else 1)
+        card_bg.set_border_width_all(4 if is_active else 2)
         card_bg.set_corner_radius_all(0)
-        card_bg.shadow_color = Color(cc, 0.50 if is_active else 0.0)
-        card_bg.shadow_size  = 12 if is_active else 0
+        card_bg.shadow_color = Color(cc, 0.50 if is_active else 0.18)
+        card_bg.shadow_size  = 12 if is_active else 5
         card_panel.add_theme_stylebox_override("panel", card_bg)
         main.add_child(card_panel)
 
