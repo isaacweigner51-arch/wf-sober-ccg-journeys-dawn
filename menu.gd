@@ -1752,7 +1752,13 @@ func show_home() -> void:
         show_starter_deck_choice()
         return
     clear_screen()
-    add_background(0.58)
+    var home_bg := ColorRect.new()
+    home_bg.position = Vector2.ZERO
+    home_bg.size = Vector2(1280, 720)
+    home_bg.color = Color(0.015, 0.02, 0.055, 1.0)
+    home_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    root_layer.add_child(home_bg)
+    root_layer.move_child(home_bg, 0)
     ensure_home_music()
 
     var active_class := selected_class if selected_class != "" else "Hope"
