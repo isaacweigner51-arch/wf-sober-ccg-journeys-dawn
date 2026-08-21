@@ -3647,7 +3647,7 @@ func apply_online_state(remote: Dictionary) -> void:
     update_leaders(); refresh_ui(); online_applying_state=false
 
 func send_online_snapshot(event_name: String="state") -> void:
-    if online_mode and online_match_started and not online_applying_state:
+    if online_mode and not online_applying_state:
         _online_send_seq += 1
         var state := serialize_online_state()
         state["_sync_seq"] = _online_send_seq
