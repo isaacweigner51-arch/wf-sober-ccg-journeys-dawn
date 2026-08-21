@@ -1960,7 +1960,7 @@ func show_home() -> void:
     var art := TextureRect.new()
     art.texture = current_leader_texture(active_class)
     var _focal_x := float(LEADER_FOCAL_PX.get(active_class.to_lower(), 0))
-    art.position = Vector2(_focal_x, 0.0)
+    art.position = Vector2(_focal_x, 18.0)
     art.size = Vector2(art_frame.size.x + absf(_focal_x), art_frame.size.y)
     art.custom_minimum_size = Vector2.ZERO
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -1972,8 +1972,8 @@ func show_home() -> void:
     # Portrait breathing animation
     var art_tween := create_tween().set_loops()
     art_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-    art_tween.tween_property(art, "position:y", -8.0, 3.0)
-    art_tween.tween_property(art, "position:y",  0.0, 3.0)
+    art_tween.tween_property(art, "position:y", 10.0, 3.0)
+    art_tween.tween_property(art, "position:y",  18.0, 3.0)
 
     # Bottom scrim — only covers the nameplate zone (bottom 28%) so the
     # portrait stays visible. Opacity kept at 0.48: dark enough to make text
