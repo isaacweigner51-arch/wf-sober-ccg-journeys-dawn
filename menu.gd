@@ -2913,7 +2913,7 @@ func show_tutorial_class_picker(tutorial_lesson: int) -> void:
         var col := class_color(c)
 
         var card := Panel.new()
-        card.position = Vector2(20 + i * 242, 90)
+        card.position = Vector2(20 + i * 242, 78)
         card.size = Vector2(228, 400)
         card.clip_contents = false
         var card_sb := StyleBoxFlat.new()
