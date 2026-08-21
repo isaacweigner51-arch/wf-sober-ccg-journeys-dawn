@@ -1871,13 +1871,13 @@ func show_home() -> void:
         # overlay on top for click handling. Using Panel keeps clip_contents
         # rectangular so portrait art doesn't bleed past the border edges.
         var card_panel := Panel.new()
-        card_panel.position = Vector2(12 + i * 249, 12)
-        card_panel.size = Vector2(236, 88)
+        card_panel.position = Vector2(12 + i * 249, 24)
+        card_panel.size = Vector2(224, 88)
         card_panel.clip_contents = true
         var card_bg := StyleBoxFlat.new()
         card_bg.bg_color = cc.darkened(0.55) if is_active else Color(0.02, 0.03, 0.07)
         card_bg.border_color = cc
-        card_bg.set_border_width_all(4 if is_active else 2)
+        card_bg.set_border_width_all(5 if is_active else 3)
         card_bg.set_corner_radius_all(0)
         card_bg.shadow_color = Color(cc, 0.50 if is_active else 0.18)
         card_bg.shadow_size  = 12 if is_active else 5
@@ -1890,31 +1890,31 @@ func show_home() -> void:
         thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
         thumb.position = Vector2(0, 0)
-        thumb.size = Vector2(236, 66)
+        thumb.size = Vector2(224, 66)
         thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card_panel.add_child(thumb)
 
         # Bottom nameplate strip
         var nameplate := ColorRect.new()
         nameplate.color = cc.darkened(0.42) if is_active else Color(0.04, 0.06, 0.12, 0.96)
-        nameplate.position = Vector2(0, 66); nameplate.size = Vector2(236, 22)
+        nameplate.position = Vector2(0, 66); nameplate.size = Vector2(224, 22)
         nameplate.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card_panel.add_child(nameplate)
 
-        var name_lbl := centered_label(c.to_upper(), Vector2(0, 66), Vector2(236, 22), 13, card_panel)
+        var name_lbl := centered_label(c.to_upper(), Vector2(0, 66), Vector2(224, 22), 13, card_panel)
         name_lbl.add_theme_color_override("font_color", cc.lightened(0.3) if is_active else Color(0.88, 0.90, 0.98))
         name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
         # Active indicator line along the top
         if is_active:
             var ind := ColorRect.new(); ind.color = cc
-            ind.position = Vector2.ZERO; ind.size = Vector2(236, 4)
+            ind.position = Vector2.ZERO; ind.size = Vector2(224, 4)
             ind.mouse_filter = Control.MOUSE_FILTER_IGNORE
             card_panel.add_child(ind)
 
         # Transparent full-card Button on top for input — styled invisible
         var card := Button.new()
-        card.position = Vector2.ZERO; card.size = Vector2(236, 88)
+        card.position = Vector2.ZERO; card.size = Vector2(224, 88)
         var invisible := StyleBoxEmpty.new()
         card.add_theme_stylebox_override("normal",  invisible)
         card.add_theme_stylebox_override("hover",   invisible)
