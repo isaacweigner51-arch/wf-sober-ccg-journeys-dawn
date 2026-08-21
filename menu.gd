@@ -1851,7 +1851,7 @@ func show_home() -> void:
 
     # Main content panel.
     var main := Panel.new()
-    main.position = Vector2(248, 88)
+    main.position = Vector2(248, 104)
     main.size = Vector2(1016, 616)
     var main_style := StyleBoxFlat.new()
     main_style.bg_color = Color(0.035, 0.055, 0.10, 0.96)
