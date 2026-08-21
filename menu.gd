@@ -1862,8 +1862,8 @@ func show_home() -> void:
         # overlay on top for click handling. Using Panel keeps clip_contents
         # rectangular so portrait art doesn't bleed past the border edges.
         var card_panel := Panel.new()
-        card_panel.position = Vector2(12 + i * 249, 10)
-        card_panel.size = Vector2(236, 88)
+        card_panel.position = Vector2(12 + i * 249, 12)
+        card_panel.size = Vector2(236, 76)
         card_panel.clip_contents = true
         var card_bg := StyleBoxFlat.new()
         card_bg.bg_color = cc.darkened(0.55) if is_active else Color(0.02, 0.03, 0.07)
@@ -1920,8 +1920,8 @@ func show_home() -> void:
 
     # Hero showcase — full portrait fill with dramatic glow border.
     var showcase := Panel.new()
-    showcase.position = Vector2(24, 108)
-    showcase.size = Vector2(548, 494)
+    showcase.position = Vector2(24, 100)
+    showcase.size = Vector2(548, 470)
     var showcase_style := StyleBoxFlat.new()
     showcase_style.bg_color = Color(0.008, 0.012, 0.025)
     showcase_style.border_color = class_color(active_class)
@@ -2029,8 +2029,8 @@ func show_home() -> void:
 
     # Right-side actions — matches new taller showcase height
     var right := Panel.new()
-    right.position = Vector2(590, 108)
-    right.size = Vector2(402, 494)
+    right.position = Vector2(590, 100)
+    right.size = Vector2(402, 470)
     right.add_theme_stylebox_override("panel", style(Color(0.06, 0.09, 0.17), 14))
     main.add_child(right)
     # Class accent header bar
@@ -2055,7 +2055,7 @@ func show_home() -> void:
     var reflection := label("Progress begins with one honest choice. Keep moving forward.", Vector2(20, 196), Vector2(362, 72), 14, right)
     reflection.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     reflection.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    var enter := button("ENTER BATTLE", Vector2(20, 316), Vector2(362, 72), start_battle, right)
+    var enter := button("ENTER BATTLE", Vector2(20, 292), Vector2(362, 64), start_battle, right)
     enter.add_theme_font_size_override("font_size", ui_font_size(24))
     enter.add_theme_stylebox_override("normal",  solid_style(GOLD_COLOR, 14))
     enter.add_theme_stylebox_override("hover",   solid_style(GOLD_COLOR.lightened(0.2), 14))
@@ -2068,7 +2068,7 @@ func show_home() -> void:
     btn_tween.tween_property(enter, "modulate", Color(1.15, 1.10, 0.85), 1.1)
     btn_tween.tween_property(enter, "modulate", Color(1.0,  1.0,  1.0),  1.1)
 
-    var trials_cta := button("THE TRIALS", Vector2(20, 398), Vector2(362, 50), show_trials, right)
+    var trials_cta := button("THE TRIALS", Vector2(20, 366), Vector2(362, 44), show_trials, right)
     trials_cta.add_theme_font_size_override("font_size", ui_font_size(18))
 
     centered_label(BUILD_NAME, Vector2(20, 566), Vector2(976, 28), 12, main).modulate = Color(0.72, 0.78, 0.86)
