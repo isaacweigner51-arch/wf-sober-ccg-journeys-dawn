@@ -2913,7 +2913,7 @@ func show_tutorial_class_picker(tutorial_lesson: int) -> void:
 
         var card := Panel.new()
         card.position = Vector2(20 + i * 242, 90)
-        card.size = Vector2(228, 360)
+        card.size = Vector2(228, 400)
         card.clip_contents = false
         var card_sb := StyleBoxFlat.new()
         card_sb.bg_color = Color(col.r, col.g, col.b, 0.12)
@@ -2935,7 +2935,7 @@ func show_tutorial_class_picker(tutorial_lesson: int) -> void:
         art.position = Vector2(4, 4)
         art.size = Vector2(204, 228)
         art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
         art.clip_contents = true
         art.mouse_filter = Control.MOUSE_FILTER_IGNORE
         art_shell.add_child(art)
@@ -2958,7 +2958,7 @@ func show_tutorial_class_picker(tutorial_lesson: int) -> void:
         sel_sb_h.border_color = col.lightened(0.3); sel_sb_h.set_border_width_all(2); sel_sb_h.set_corner_radius_all(10)
         var sel_btn := Button.new()
         sel_btn.text = "PLAY AS %s" % c.to_upper()
-        sel_btn.position = Vector2(14, 340)
+        sel_btn.position = Vector2(14, 346)
         sel_btn.size = Vector2(200, 42)
         sel_btn.add_theme_font_size_override("font_size", ui_font_size(13))
         sel_btn.add_theme_stylebox_override("normal", sel_sb_n)
