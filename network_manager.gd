@@ -395,7 +395,8 @@ func _headers(authenticated := true, prefer := "") -> PackedStringArray:
 func _request(method: int, path: String, body: Variant = null, authenticated := true, prefer := "") -> Dictionary:
     request_busy = true
     var http_request := HTTPRequest.new()
-    add_child(http_request)
+http_request.timeout = 10.0
+add_child(http_request)
     var payload := "" if body == null else JSON.stringify(body)
     var full_url: String = SUPABASE_URL + path
 
@@ -412,7 +413,7 @@ func _request(method: int, path: String, body: Variant = null, authenticated := 
         http_request.queue_free()
         request_busy = false
         var err_msg := "HTTP request failed to start: %s (code %d)" % [error_string(request_error), request_error]
-        account_authenticated.emit(false, err_msg)
+        network_error.emit(err_msg)
         return {"ok": false, "status": 0, "error": err_msg}
 
     var completed: Array = await http_request.request_completed
