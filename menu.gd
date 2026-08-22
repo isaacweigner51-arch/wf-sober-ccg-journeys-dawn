@@ -2116,6 +2116,17 @@ func show_home() -> void:
     # Class accent header bar
     var accent_bar_r := ColorRect.new(); accent_bar_r.position = Vector2(0, 0); accent_bar_r.size = Vector2(402, 4); accent_bar_r.color = class_color(active_class); right.add_child(accent_bar_r)
 
+    var challenge_header := ColorRect.new()
+    challenge_header.position = Vector2(12, 8)
+    challenge_header.size = Vector2(378, 44)
+
+    var challenge_header_color := class_color(active_class).darkened(0.55)
+    challenge_header_color.a = 0.50
+    challenge_header.color = challenge_header_color
+
+    challenge_header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    right.add_child(challenge_header)
+
     label("RECOVERY CHALLENGE", Vector2(20, 18), Vector2(362, 32), 20, right).add_theme_color_override("font_color", GOLD_COLOR)
     var challenge_progress := int(recovery_challenge_progress.get(active_class, 0))
     var wins_remaining := 3 - challenge_progress
