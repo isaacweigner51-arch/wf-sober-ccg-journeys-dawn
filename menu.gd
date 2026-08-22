@@ -1009,37 +1009,51 @@ func show_launch_screen() -> void:
     field_focus.content_margin_left = 16; field_focus.content_margin_right = 10
 
     # Email
-    label("EMAIL", Vector2(80, 228), Vector2(200, 20), 11, right).add_theme_color_override("font_color", Color(0.58, 0.68, 0.86))
+    label("EMAIL", Vector2(80, 228), Vector2(200, 20), 14, right).add_theme_color_override("font_color", Color(0.58, 0.68, 0.86))
     launch_email = LineEdit.new()
-    launch_email.position = Vector2(80, 250); launch_email.size = Vector2(497, 52)
+    launch_email.position = Vector2(80, 246); launch_email.size = Vector2(497, 64)
     launch_email.placeholder_text = "your@email.com"
     launch_email.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_EMAIL_ADDRESS
-    launch_email.add_theme_font_size_override("font_size", 18)
+    launch_email.add_theme_font_size_override("font_size", 22)
     launch_email.add_theme_stylebox_override("normal", field_norm)
     launch_email.add_theme_stylebox_override("focus",  field_focus)
     right.add_child(launch_email)
 
+    launch_email.focus_entered.connect(func():
+    right.position = Vector2(623, -150)
+)
+    launch_email.focus_exited.connect(func():
+    right.position = Vector2(623, 0)
+)
+
     # Password
-    label("PASSWORD", Vector2(80, 316), Vector2(200, 20), 11, right).add_theme_color_override("font_color", Color(0.58, 0.68, 0.86))
+    label("PASSWORD", Vector2(80, 316), Vector2(200, 20), 14, right).add_theme_color_override("font_color", Color(0.58, 0.68, 0.86))
     launch_password = LineEdit.new()
-    launch_password.position = Vector2(80, 338); launch_password.size = Vector2(497, 52)
+    launch_password.position = Vector2(80, 334); launch_password.size = Vector2(497, 64)
     launch_password.placeholder_text = "••••••••"
     launch_password.secret = true
-    launch_password.add_theme_font_size_override("font_size", 18)
+    launch_password.add_theme_font_size_override("font_size", 22)
     launch_password.add_theme_stylebox_override("normal", field_norm)
     launch_password.add_theme_stylebox_override("focus",  field_focus)
     right.add_child(launch_password)
 
+    launch_password.focus_entered.connect(func():
+    right.position = Vector2(623, -150)
+)
+    launch_password.focus_exited.connect(func():
+    right.position = Vector2(623, 0)
+)
+
     # Primary SIGN IN
     var si_style := solid_style(GOLD_COLOR, 12)
     var si_hover  := solid_style(GOLD_COLOR.lightened(0.18), 12)
-    var sign_in := button("SIGN IN", Vector2(80, 414), Vector2(497, 58), func():
+    var sign_in := button("SIGN IN", Vector2(80, 414), Vector2(497, 64), func():
         _cloud_safe_to_upload = false
         launch_status.text = "Signing in..."
         launch_status.add_theme_color_override("font_color", Color(0.94, 0.95, 1.0))
         NetworkManager.sign_in_with_email(launch_email.text, launch_password.text)
     , right)
-    sign_in.add_theme_font_size_override("font_size", ui_font_size(21))
+    sign_in.add_theme_font_size_override("font_size", ui_font_size(24))
     sign_in.add_theme_stylebox_override("normal",  si_style)
     sign_in.add_theme_stylebox_override("hover",   si_hover)
     sign_in.add_theme_stylebox_override("pressed", si_style)
@@ -1047,12 +1061,12 @@ func show_launch_screen() -> void:
     sign_in.add_theme_color_override("font_hover_color", Color(0.06, 0.04, 0.01))
 
     # Secondary row
-    button("CREATE ACCOUNT", Vector2(80, 486), Vector2(238, 50), func():
+    button("CREATE ACCOUNT", Vector2(80, 486), Vector2(238, 58), func():
         launch_status.text = "Creating account..."
         launch_status.add_theme_color_override("font_color", Color(0.94, 0.95, 1.0))
         NetworkManager.create_account_with_email(launch_email.text, launch_password.text)
     , right)
-    button("CONTINUE AS GUEST", Vector2(339, 486), Vector2(238, 50), func():
+    button("CONTINUE AS GUEST", Vector2(339, 486), Vector2(238, 58), func():
         launch_status.text = "Starting guest session..."
         NetworkManager.continue_as_guest()
     , right)
