@@ -2116,28 +2116,30 @@ func show_home() -> void:
     # Class accent header bar
     var accent_bar_r := ColorRect.new(); accent_bar_r.position = Vector2(0, 0); accent_bar_r.size = Vector2(402, 4); accent_bar_r.color = class_color(active_class); right.add_child(accent_bar_r)
 
-    var challenge_header := ColorRect.new()
-    challenge_header.position = Vector2(12, 8)
-    challenge_header.size = Vector2(378, 44)
+    var challenge_panel := Panel.new()
+    challenge_panel.position = Vector2(12, 8)
+    challenge_panel.size = Vector2(378, 138)
 
-    var challenge_header_color := class_color(active_class).darkened(0.55)
-    challenge_header_color.a = 0.50
-    challenge_header.color = challenge_header_color
+    var challenge_style := StyleBoxFlat.new()
+    challenge_style.bg_color = Color(0.035, 0.05, 0.10, 0.88)
+    challenge_style.border_color = Color(0.12, 0.35, 0.60, 0.85)
+    challenge_style.set_border_width_all(2)
+    challenge_style.set_corner_radius_all(12)
 
-    challenge_header.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    right.add_child(challenge_header)
+    challenge_panel.add_theme_stylebox_override("panel", challenge_style)
+    right.add_child(challenge_panel)
 
-    label("RECOVERY CHALLENGE", Vector2(20, 18), Vector2(362, 32), 20, right).add_theme_color_override("font_color", GOLD_COLOR)
+    label("RECOVERY CHALLENGE", Vector2(16, 10), Vector2(346, 32), 20, challenge_panel).add_theme_color_override("font_color", GOLD_COLOR)
     var challenge_progress := int(recovery_challenge_progress.get(active_class, 0))
     var wins_remaining := 3 - challenge_progress
-    var challenge_line := label("Win %d more match%s with %s to complete this week's challenge." % [wins_remaining, "es" if wins_remaining != 1 else "", active_class], Vector2(20, 54), Vector2(362, 36), 14, right)
+    var challenge_line := label("Win %d more match%s with %s to complete this week's challenge." % [wins_remaining, "es" if wins_remaining != 1 else "", active_class], Vector2(20, 54), Vector2(362, 36), 14, challenge_panel)
     challenge_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    var progress_bg := ColorRect.new(); progress_bg.position = Vector2(20, 98); progress_bg.size = Vector2(362, 14); progress_bg.color = Color(0.05,0.06,0.09); right.add_child(progress_bg)
+    var progress_bg := ColorRect.new(); progress_bg.position = Vector2(20, 98); progress_bg.size = Vector2(362, 14); progress_bg.color = Color(0.05,0.06,0.09); challenge_panel.add_child(progress_bg)
     var progress := ColorRect.new(); progress.position = Vector2(20, 98); progress.size = Vector2(362.0 * (float(challenge_progress) / 3.0), 14); progress.color = class_color(active_class); right.add_child(progress)
     # Progress pip markers
     for pip in range(1, 3):
         var pip_mark := ColorRect.new(); pip_mark.position = Vector2(20 + 362.0 * pip / 3.0 - 1, 96); pip_mark.size = Vector2(2, 18); pip_mark.color = Color(0.08, 0.11, 0.20); right.add_child(pip_mark)
-    label("%d / 3 wins" % challenge_progress, Vector2(20, 118), Vector2(362, 22), 12, right).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    label("%d / 3 wins" % challenge_progress, Vector2(20, 118), Vector2(362, 22), 12, challenge_panel).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
     # Thin separator
     var sep := ColorRect.new(); sep.position = Vector2(16, 150); sep.size = Vector2(370, 1); sep.color = Color(class_color(active_class), 0.25); right.add_child(sep)
