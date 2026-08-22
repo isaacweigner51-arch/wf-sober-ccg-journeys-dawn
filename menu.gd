@@ -1780,8 +1780,61 @@ func show_home() -> void:
     var _subtitle := "Journey's Dawn  •  " + active_class + " Leader" + ("  •  " + _dn if _dn != "" else "")
     label(_subtitle, Vector2(70, 35), Vector2(560, 21), 13, top)
     print("SHOW_HOME ── DISPLAYED : gold=%d  vials=%d  packs=%d" % [gold_balance, dust_balance, pack_inventory])
-    var wallet := label("GOLD %d     VIALS %d     PACKS %d" % [gold_balance, dust_balance, pack_inventory], Vector2(750, 17), Vector2(375, 30), 16, top)
-    wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    var gold_box := Panel.new()
+gold_box.position = Vector2(750, 10)
+gold_box.size = Vector2(115, 44)
+
+var gold_style := StyleBoxFlat.new()
+gold_style.bg_color = Color(0.025, 0.035, 0.07, 0.90)
+gold_style.border_color = GOLD_COLOR
+gold_style.set_border_width_all(2)
+gold_style.set_corner_radius_all(10)
+gold_style.shadow_color = Color(GOLD_COLOR.r, GOLD_COLOR.g, GOLD_COLOR.b, 0.22)
+gold_style.shadow_size = 8
+
+gold_box.add_theme_stylebox_override("panel", gold_style)
+top.add_child(gold_box)
+
+var gold_label := centered_label("GOLD %d" % gold_balance, Vector2(0, 8), Vector2(115, 28), 15, gold_box)
+gold_label.add_theme_color_override("font_color", Color.WHITE)
+
+
+var vials_box := Panel.new()
+vials_box.position = Vector2(870, 10)
+vials_box.size = Vector2(115, 44)
+
+var vials_style := StyleBoxFlat.new()
+vials_style.bg_color = Color(0.025, 0.035, 0.07, 0.90)
+vials_style.border_color = GOLD_COLOR
+vials_style.set_border_width_all(2)
+vials_style.set_corner_radius_all(10)
+vials_style.shadow_color = Color(GOLD_COLOR.r, GOLD_COLOR.g, GOLD_COLOR.b, 0.22)
+vials_style.shadow_size = 8
+
+vials_box.add_theme_stylebox_override("panel", vials_style)
+top.add_child(vials_box)
+
+var vials_label := centered_label("VIALS %d" % dust_balance, Vector2(0, 8), Vector2(115, 28), 15, vials_box)
+vials_label.add_theme_color_override("font_color", Color.WHITE)
+
+
+var packs_box := Panel.new()
+packs_box.position = Vector2(990, 10)
+packs_box.size = Vector2(115, 44)
+
+var packs_style := StyleBoxFlat.new()
+packs_style.bg_color = Color(0.025, 0.035, 0.07, 0.90)
+packs_style.border_color = GOLD_COLOR
+packs_style.set_border_width_all(2)
+packs_style.set_corner_radius_all(10)
+packs_style.shadow_color = Color(GOLD_COLOR.r, GOLD_COLOR.g, GOLD_COLOR.b, 0.22)
+packs_style.shadow_size = 8
+
+packs_box.add_theme_stylebox_override("panel", packs_style)
+top.add_child(packs_box)
+
+var packs_label := centered_label("PACKS %d" % pack_inventory, Vector2(0, 8), Vector2(115, 28), 15, packs_box)
+packs_label.add_theme_color_override("font_color", Color.WHITE)
     button("SUPPORT", Vector2(390, 10), Vector2(110, 44), show_contact_support, top)
     button("ACCOUNT", Vector2(510, 10), Vector2(110, 44), show_account_panel, top)
     button("UPDATES", Vector2(630, 10), Vector2(110, 44), show_whats_new, top)
