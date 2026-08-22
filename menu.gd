@@ -1752,11 +1752,14 @@ func show_home() -> void:
         show_starter_deck_choice()
         return
     clear_screen()
-    var home_bg := ColorRect.new()
+    var home_bg := TextureRect.new()
+    home_bg.texture = load("res://assets/cards/full/jd-060.jpg")
     home_bg.position = Vector2.ZERO
     home_bg.size = Vector2(1280, 720)
-    home_bg.color = Color(0.015, 0.02, 0.055, 1.0)
+    home_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    home_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     home_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    home_bg.modulate = Color(0.42, 0.42, 0.42, 1.0)
     root_layer.add_child(home_bg)
     root_layer.move_child(home_bg, 0)
     ensure_home_music()
