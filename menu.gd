@@ -1957,7 +1957,7 @@ func show_home() -> void:
         portrait_border.size = Vector2(224, 66)
 
         var portrait_border_style := StyleBoxFlat.new()
-        portrait_border_style.bg_color = Color(0, 0, 0, 0)
+        portrait_border_style.bg_color = cc.darkened(0.65)
         portrait_border_style.border_color = GOLD_COLOR
         portrait_border_style.set_border_width_all(3)
 
