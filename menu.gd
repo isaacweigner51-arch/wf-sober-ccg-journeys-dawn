@@ -1886,6 +1886,19 @@ func show_home() -> void:
         thumb.size = Vector2(224, 66)
         thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card_panel.add_child(thumb)
+ 
+        var portrait_border := Panel.new()
+        portrait_border.position = Vector2(0, 0)
+        portrait_border.size = Vector2(224, 66)
+
+        var portrait_border_style := StyleBoxFlat.new()
+        portrait_border_style.bg_color = Color(0, 0, 0, 0)
+        portrait_border_style.border_color = GOLD_COLOR
+        portrait_border_style.set_border_width_all(3)
+
+        portrait_border.add_theme_stylebox_override("panel", portrait_border_style)
+        portrait_border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        card_panel.add_child(portrait_border)
 
         # Bottom nameplate strip
         var nameplate := ColorRect.new()
