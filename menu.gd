@@ -1020,10 +1020,10 @@ func show_launch_screen() -> void:
     right.add_child(launch_email)
 
     launch_email.focus_entered.connect(func():
-    right.position = Vector2(623, -150)
+        right.position = Vector2(623, -150)
 )
     launch_email.focus_exited.connect(func():
-    right.position = Vector2(623, 0)
+        right.position = Vector2(623, 0)
 )
 
     # Password
@@ -1038,10 +1038,10 @@ func show_launch_screen() -> void:
     right.add_child(launch_password)
 
     launch_password.focus_entered.connect(func():
-    right.position = Vector2(623, -150)
+        right.position = Vector2(623, -150)
 )
     launch_password.focus_exited.connect(func():
-    right.position = Vector2(623, 0)
+        right.position = Vector2(623, 0)
 )
 
     # Primary SIGN IN
