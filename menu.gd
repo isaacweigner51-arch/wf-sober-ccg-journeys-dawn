@@ -2139,7 +2139,7 @@ func show_home() -> void:
     # Progress pip markers
     for pip in range(1, 3):
         var pip_mark := ColorRect.new(); pip_mark.position = Vector2(20 + 362.0 * pip / 3.0 - 1, 96); pip_mark.size = Vector2(2, 18); pip_mark.color = Color(0.08, 0.11, 0.20); right.add_child(pip_mark)
-    label("%d / 3 wins" % challenge_progress, Vector2(20, 118), Vector2(362, 22), 12, challenge_panel).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    label("%d / 3 wins" % challenge_progress, Vector2(20, 118), Vector2(346, 22), 12, challenge_panel).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
     # Thin separator
     var sep := ColorRect.new(); sep.position = Vector2(16, 150); sep.size = Vector2(370, 1); sep.color = Color(class_color(active_class), 0.25); right.add_child(sep)
