@@ -1770,14 +1770,7 @@ func show_home() -> void:
     top.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.13), 12))
     root_layer.add_child(top)
 
-    var avatar := TextureRect.new()
-    avatar.texture = current_leader_texture(active_class)
-    avatar.position = Vector2(10, 8)
-    avatar.size = Vector2(48, 48)
-    avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    avatar.clip_contents = true
-    top.add_child(avatar)
+    
     label("WALKING FREE CCG", Vector2(70, 8), Vector2(330, 28), 21, top).add_theme_color_override("font_color", GOLD_COLOR)
     # Subtitle: always shows class, appends gamer ID when set so player knows who's signed in.
     var _dn := str(NetworkManager.account_profile.get("display_name", "")).strip_edges()
@@ -1876,7 +1869,7 @@ func show_home() -> void:
         card_panel.clip_contents = true
         var card_bg := StyleBoxFlat.new()
         card_bg.bg_color = cc.darkened(0.55) if is_active else Color(0.02, 0.03, 0.07)
-        card_bg.border_color = cc
+        card_bg.border_color = GOLD_COLOR
         card_bg.set_border_width_all(5 if is_active else 3)
         card_bg.set_corner_radius_all(0)
         card_bg.shadow_color = Color(cc, 0.50 if is_active else 0.18)
