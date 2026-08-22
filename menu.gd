@@ -1943,6 +1943,12 @@ func show_home() -> void:
         main.add_child(card_panel)
 
         # Portrait thumbnail fills top 66px of the card
+        var portrait_bg := ColorRect.new()
+        portrait_bg.position = Vector2(0, 0)
+        portrait_bg.size = Vector2(224, 66)
+        portrait_bg.color = cc.darkened(0.65)
+        portrait_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        card_panel.add_child(portrait_bg)
         var thumb := TextureRect.new()
         thumb.texture = current_leader_texture(c)
         thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -1957,7 +1963,7 @@ func show_home() -> void:
         portrait_border.size = Vector2(224, 66)
 
         var portrait_border_style := StyleBoxFlat.new()
-        portrait_border_style.bg_color = cc.darkened(0.65)
+        portrait_border_style.bg_color = Color(0,0,0,0)
         portrait_border_style.border_color = GOLD_COLOR
         portrait_border_style.set_border_width_all(3)
 
