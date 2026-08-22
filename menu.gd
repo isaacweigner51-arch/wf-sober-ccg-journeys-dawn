@@ -1911,6 +1911,8 @@ func show_home() -> void:
     main.size = Vector2(1016, 616)
     var main_style := StyleBoxFlat.new()
     main_style.bg_color = Color(0.035, 0.055, 0.10, 0.88)
+    main_style.border_color = Color(0.12, 0.35, 0.60, 0.85)
+    main_style.set_border_width_all(2)
     main_style.set_corner_radius_all(16)
     main.add_theme_stylebox_override("panel", main_style)
     root_layer.add_child(main)
