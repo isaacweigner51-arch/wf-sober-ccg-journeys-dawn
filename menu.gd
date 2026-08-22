@@ -2165,9 +2165,9 @@ func show_home() -> void:
     Vector2(346, 28),
     16,
     reflection_panel
-).add_theme_color_override("font_color", GOLD_COLOR)
+    ).add_theme_color_override("font_color", GOLD_COLOR)
 
-var daily_reflections := [
+    var daily_reflections := [
     "Progress begins with one honest choice. Keep moving forward.",
     "Recovery is built one decision at a time. Choose the next right thing.",
     "You don't have to win the whole battle today. Just keep moving.",
