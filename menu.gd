@@ -1770,7 +1770,7 @@ func show_home() -> void:
     var top := Panel.new()
     top.position = Vector2(16, 12)
     top.size = Vector2(1248, 64)
-    top.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.13), 12))
+    top.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.13, 0.88), 12))
     root_layer.add_child(top)
 
     
@@ -1791,7 +1791,7 @@ func show_home() -> void:
     var nav := Panel.new()
     nav.position = Vector2(16, 88)
     nav.size = Vector2(218, 616)
-    nav.add_theme_stylebox_override("panel", style(Color(0.05, 0.07, 0.14), 14))
+    nav.add_theme_stylebox_override("panel", style(Color(0.05, 0.07, 0.14, 0.88), 14))
     root_layer.add_child(nav)
     var brand := centered_label("JOURNEY'S\nDAWN", Vector2(14, 20), Vector2(190, 72), 27, nav)
     brand.add_theme_color_override("font_color", GOLD_COLOR)
@@ -1850,7 +1850,7 @@ func show_home() -> void:
     main.position = Vector2(248, 104)
     main.size = Vector2(1016, 616)
     var main_style := StyleBoxFlat.new()
-    main_style.bg_color = Color(0.035, 0.055, 0.10, 0.96)
+    main_style.bg_color = Color(0.035, 0.055, 0.10, 0.88)
     main_style.set_corner_radius_all(16)
     main.add_theme_stylebox_override("panel", main_style)
     root_layer.add_child(main)
@@ -2049,7 +2049,7 @@ func show_home() -> void:
     var right := Panel.new()
     right.position = Vector2(590, 100)
     right.size = Vector2(402, 470)
-    right.add_theme_stylebox_override("panel", style(Color(0.06, 0.09, 0.17), 14))
+    right.add_theme_stylebox_override("panel", style(Color(0.06, 0.09, 0.17, 0.88), 14))
     main.add_child(right)
     # Class accent header bar
     var accent_bar_r := ColorRect.new(); accent_bar_r.position = Vector2(0, 0); accent_bar_r.size = Vector2(402, 4); accent_bar_r.color = class_color(active_class); right.add_child(accent_bar_r)
