@@ -9949,24 +9949,24 @@ func _accept_auto_built_deck(c: String, deck: Array, is_fallback: bool, from_onb
     _open_slot_in_deck_builder(editing_deck_slot_idx)
 
 func show_whats_new() -> void:
-	clear_screen()
+    clear_screen()
 
-	var panel := Panel.new()
-	panel.position = Vector2(210, 90)
-	panel.size = Vector2(860, 540)
+    var panel := Panel.new()
+    panel.position = Vector2(210, 90)
+    panel.size = Vector2(860, 540)
 
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.04, 0.06, 0.13, 0.94)
-	panel_style.border_color = GOLD_COLOR
-	panel_style.set_border_width_all(3)
-	panel_style.set_corner_radius_all(18)
+    var panel_style := StyleBoxFlat.new()
+    panel_style.bg_color = Color(0.04, 0.06, 0.13, 0.94)
+    panel_style.border_color = GOLD_COLOR
+    panel_style.set_border_width_all(3)
+    panel_style.set_corner_radius_all(18)
 
-	panel.add_theme_stylebox_override("panel", panel_style)
-	root_layer.add_child(panel)
+    panel.add_theme_stylebox_override("panel", panel_style)
+    root_layer.add_child(panel)
 
-	centered_label("WHAT'S NEW", Vector2(20, 18), Vector2(820, 42), 28, panel).add_theme_color_override("font_color", GOLD_COLOR)
+    centered_label("WHAT'S NEW", Vector2(20, 18), Vector2(820, 42), 28, panel).add_theme_color_override("font_color", GOLD_COLOR)
 
-	var updates_text := """
+    var updates_text := """
 v0.9.4 — HOME UI OVERHAUL
 
 • Added Walking Free artwork to the Home screen background
@@ -9979,12 +9979,12 @@ v0.9.4 — HOME UI OVERHAUL
 More updates coming soon.
 """
 
-	var updates := Label.new()
-	updates.text = updates_text
-	updates.position = Vector2(45, 85)
-	updates.size = Vector2(770, 360)
-	updates.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	updates.add_theme_font_size_override("font_size", 18)
-	panel.add_child(updates)
+    var updates := Label.new()
+    updates.text = updates_text
+    updates.position = Vector2(45, 85)
+    updates.size = Vector2(770, 360)
+    updates.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    updates.add_theme_font_size_override("font_size", 18)
+    panel.add_child(updates)
 
-	button("BACK", Vector2(330, 465), Vector2(200, 48), show_home, panel)
+    button("BACK", Vector2(330, 465), Vector2(200, 48), show_home, panel)
