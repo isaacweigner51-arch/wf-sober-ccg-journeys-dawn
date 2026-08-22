@@ -1770,7 +1770,10 @@ func show_home() -> void:
     var top := Panel.new()
     top.position = Vector2(16, 12)
     top.size = Vector2(1248, 64)
-    top.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.13, 0.88), 12))
+    var top_style := style(Color(0.04, 0.06, 0.13, 0.88), 12)
+    top_style.border_color = Color(0.12, 0.35, 0.60, 0.85)
+    top_style.set_border_width_all(2)
+    top.add_theme_stylebox_override("panel", top_style)
     root_layer.add_child(top)
 
     
