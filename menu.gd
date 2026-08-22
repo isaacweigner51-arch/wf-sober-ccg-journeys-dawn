@@ -1947,7 +1947,7 @@ func show_home() -> void:
         thumb.texture = current_leader_texture(c)
         thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-        thumb.position = Vector2(0, 0)
+        thumb.position = Vector2(0, 6 if c in ["Purpose", "Serenity", "Courage"] else 0)
         thumb.size = Vector2(224, 66)
         thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card_panel.add_child(thumb)
