@@ -24,7 +24,7 @@ func _load_profile_cfg_for_partial_write() -> ConfigFile:
         return null
     return cfg
 const APP_VERSION := "0.5.7"
-const BUILD_NAME := "v0.9.3 • BATTLE PREP OVERHAUL"
+const BUILD_NAME := ""
 const CLASSES := ["Hope", "Courage", "Serenity", "Purpose"]
 const RARITIES := ["Bronze", "Silver", "Gold", "Epic", "Legendary", "Signature Platinum"]
 # Total interactive Academy tutorial lessons. Kept as one const instead of a
@@ -1784,9 +1784,10 @@ func show_home() -> void:
     wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     button("SUPPORT", Vector2(500, 10), Vector2(110, 44), show_contact_support, top)
     button("ACCOUNT", Vector2(622, 10), Vector2(110, 44), show_account_panel, top)
+    button("UPDATES", Vector2(744, 10), Vector2(110, 44), show_whats_new, top)
     button("SETTINGS", Vector2(1140, 10), Vector2(96, 44), show_test_tools if AccessManager.role_at_least(AccessManager.ROLE_TESTER) else show_launch_screen, top)
 
-    maybe_show_whats_new()
+    # maybe_show_whats_new()
 
     var nav := Panel.new()
     nav.position = Vector2(16, 88)
@@ -9946,3 +9947,44 @@ func _accept_auto_built_deck(c: String, deck: Array, is_fallback: bool, from_onb
     editing_deck_slot_idx = deck_slots.size() - 1
     save_profile()
     _open_slot_in_deck_builder(editing_deck_slot_idx)
+
+func show_whats_new() -> void:
+	clear_screen()
+
+	var panel := Panel.new()
+	panel.position = Vector2(210, 90)
+	panel.size = Vector2(860, 540)
+
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.04, 0.06, 0.13, 0.94)
+	panel_style.border_color = GOLD_COLOR
+	panel_style.set_border_width_all(3)
+	panel_style.set_corner_radius_all(18)
+
+	panel.add_theme_stylebox_override("panel", panel_style)
+	root_layer.add_child(panel)
+
+	centered_label("WHAT'S NEW", Vector2(20, 18), Vector2(820, 42), 28, panel).add_theme_color_override("font_color", GOLD_COLOR)
+
+	var updates_text := """
+v0.9.4 — HOME UI OVERHAUL
+
+• Added Walking Free artwork to the Home screen background
+• Added gold borders around leader portraits
+• Improved Home screen spacing and layout
+• Added translucent UI panels
+• Removed old build label from the Home screen
+• Improved Recovery Academy deck screen
+
+More updates coming soon.
+"""
+
+	var updates := Label.new()
+	updates.text = updates_text
+	updates.position = Vector2(45, 85)
+	updates.size = Vector2(770, 360)
+	updates.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	updates.add_theme_font_size_override("font_size", 18)
+	panel.add_child(updates)
+
+	button("BACK", Vector2(330, 465), Vector2(200, 48), show_home, panel)
