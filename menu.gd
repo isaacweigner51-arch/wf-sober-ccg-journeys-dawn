@@ -2184,7 +2184,6 @@ var daily_reflections := [
     "The person you're becoming is built by the choices you make today.",
     "One day at a time isn't a limitation. It's how lasting change is built."
 ]
-
     var today := Time.get_date_dict_from_system()
     var day_seed := int(today["year"]) * 372 + int(today["month"]) * 31 + int(today["day"])
     var reflection_index := day_seed % daily_reflections.size()
