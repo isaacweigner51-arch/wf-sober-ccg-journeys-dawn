@@ -1967,7 +1967,7 @@ func show_home() -> void:
 
         # Bottom nameplate strip
         var nameplate := ColorRect.new()
-        nameplate.color = cc.darkened(0.42) if is_active else Color(0.04, 0.06, 0.12, 0.96)
+        nameplate.color = cc.darkened(0.50)
         nameplate.position = Vector2(0, 66); nameplate.size = Vector2(224, 22)
         nameplate.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card_panel.add_child(nameplate)
