@@ -2159,7 +2159,7 @@ func show_home() -> void:
     reflection_panel.add_theme_stylebox_override("panel", reflection_style)
     right.add_child(reflection_panel)
 
-label(
+    label(
     "DAILY REFLECTION",
     Vector2(16, 10),
     Vector2(346, 28),
