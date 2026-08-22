@@ -1946,8 +1946,8 @@ func show_home() -> void:
         var thumb := TextureRect.new()
         thumb.texture = current_leader_texture(c)
         thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-        thumb.position = Vector2(0, 6 if c in ["Purpose", "Serenity", "Courage"] else 0)
+        thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        thumb.position = Vector2(0, 0)
         thumb.size = Vector2(224, 66)
         thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
         card_panel.add_child(thumb)
@@ -2144,8 +2144,58 @@ func show_home() -> void:
     # Thin separator
     var sep := ColorRect.new(); sep.position = Vector2(16, 150); sep.size = Vector2(370, 1); sep.color = Color(class_color(active_class), 0.25); right.add_child(sep)
 
-    label("DAILY REFLECTION", Vector2(20, 162), Vector2(362, 28), 16, right).add_theme_color_override("font_color", GOLD_COLOR)
-    var reflection := label("Progress begins with one honest choice. Keep moving forward.", Vector2(20, 196), Vector2(362, 72), 14, right)
+    # Daily Reflection card
+    var reflection_panel := Panel.new()
+    reflection_panel.position = Vector2(12, 154)
+    reflection_panel.size = Vector2(378, 112)
+
+    var reflection_style := StyleBoxFlat.new()
+    reflection_style.bg_color = Color(0.035, 0.05, 0.10, 0.80)
+    reflection_style.border_color = class_color(active_class)
+    reflection_style.border_color.a = 0.55
+    reflection_style.set_border_width_all(2)
+    reflection_style.set_corner_radius_all(12)
+
+    reflection_panel.add_theme_stylebox_override("panel", reflection_style)
+    right.add_child(reflection_panel)
+
+label(
+    "DAILY REFLECTION",
+    Vector2(16, 10),
+    Vector2(346, 28),
+    16,
+    reflection_panel
+).add_theme_color_override("font_color", GOLD_COLOR)
+
+var daily_reflections := [
+    "Progress begins with one honest choice. Keep moving forward.",
+    "Recovery is built one decision at a time. Choose the next right thing.",
+    "You don't have to win the whole battle today. Just keep moving.",
+    "Growth begins when you stop running from what needs to change.",
+    "Small victories become a new way of life when you repeat them.",
+    "Your past explains where you've been. It does not decide where you go.",
+    "Strength isn't never struggling. It's choosing recovery anyway.",
+    "Another sober day is another chance to build the life you want.",
+    "Keep showing up. Consistency can take you places motivation cannot.",
+    "You've already survived the days you thought you couldn't.",
+    "Recovery isn't about perfection. It's about progress with purpose.",
+    "Protect the progress you've fought hard to earn.",
+    "Sometimes courage is simply deciding not to go backward.",
+    "The person you're becoming is built by the choices you make today.",
+    "One day at a time isn't a limitation. It's how lasting change is built."
+]
+
+    var today := Time.get_date_dict_from_system()
+    var day_seed := int(today["year"]) * 372 + int(today["month"]) * 31 + int(today["day"])
+    var reflection_index := day_seed % daily_reflections.size()
+
+    var reflection := label(
+    daily_reflections[reflection_index],
+    Vector2(16, 42),
+    Vector2(346, 58),
+    14,
+    reflection_panel
+)
     reflection.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     reflection.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     var enter := button("ENTER BATTLE", Vector2(20, 292), Vector2(362, 64), start_battle, right)
