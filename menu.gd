@@ -1784,7 +1784,7 @@ func show_home() -> void:
     wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     button("SUPPORT", Vector2(500, 10), Vector2(110, 44), show_contact_support, top)
     button("ACCOUNT", Vector2(622, 10), Vector2(110, 44), show_account_panel, top)
-    button("UPDATES", Vector2(744, 10), Vector2(110, 44), show_whats_new, top)
+    button("UPDATES", Vector2(620, 10), Vector2(110, 44), show_whats_new, top)
     button("SETTINGS", Vector2(1140, 10), Vector2(96, 44), show_test_tools if AccessManager.role_at_least(AccessManager.ROLE_TESTER) else show_launch_screen, top)
 
     # maybe_show_whats_new()
