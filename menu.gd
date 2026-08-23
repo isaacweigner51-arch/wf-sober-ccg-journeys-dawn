@@ -4482,8 +4482,8 @@ func show_match_deck_selection() -> void:
 
     # Battle stage: cinematic MY LEADER vs OPPONENT display
     var stage := Panel.new()
-    stage.position = Vector2(270, 0)
-    stage.size = Vector2(998, 608)
+    stage.position = Vector2(282, 0)
+    stage.size = Vector2(986, 608)
     stage.clip_contents = true
     stage.add_theme_stylebox_override("panel", style(Color(0.04, 0.06, 0.10), 0))
     shell.add_child(stage)
