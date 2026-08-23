@@ -4801,12 +4801,12 @@ func _bp_build_deck_list(parent: Panel) -> void:
         var dev_tab := Button.new()
         dev_tab.text = "DEV"
         dev_tab.custom_minimum_size = Vector2(96, 32)
-    dev_tab.pressed.connect(func():
-        battle_select_mode = "meta"
-        last_battle_deck_idx = -1
-        show_match_deck_selection()
+        dev_tab.pressed.connect(func():
+            battle_select_mode = "meta"
+            last_battle_deck_idx = -1
+            show_match_deck_selection()
     )
-    tabs.add_child(dev_tab)
+        tabs.add_child(dev_tab)
 
     var scroll := ScrollContainer.new()
     scroll.position = Vector2(4, 78)
