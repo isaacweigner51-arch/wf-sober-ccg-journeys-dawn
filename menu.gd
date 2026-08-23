@@ -4783,8 +4783,8 @@ func _bp_build_deck_list(parent: Panel) -> void:
     my_tab.custom_minimum_size = Vector2(96, 32)
         my_tab.pressed.connect(func():
         battle_select_mode = "custom"
-    show_match_deck_selection()
-)
+        show_match_deck_selection()
+    )
     tabs.add_child(my_tab)
 
     var pre_tab := Button.new()
@@ -4794,7 +4794,7 @@ func _bp_build_deck_list(parent: Panel) -> void:
     battle_select_mode = "prebuilt"
     last_battle_deck_idx = -1
     show_match_deck_selection()
-)
+    )
     tabs.add_child(pre_tab)
 
 if AccessManager.role_at_least(AccessManager.ROLE_OWNER):
