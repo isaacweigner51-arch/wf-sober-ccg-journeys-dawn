@@ -4475,15 +4475,15 @@ func show_match_deck_selection() -> void:
     # Left panel: all deck categories (MY DECKS / STARTER / OWNER)
     var left_p := Panel.new()
     left_p.position = Vector2(0, 0)
-    left_p.size = Vector2(268, 608)
+    left_p.size = Vector2(320, 608)
     left_p.add_theme_stylebox_override("panel", style(Color(0.05, 0.08, 0.14), 0))
     shell.add_child(left_p)
     _bp_build_deck_list(left_p)
 
 # Battle stage: cinematic MY LEADER vs OPPONENT display
     var stage := Panel.new()
-    stage.position = Vector2(282, 0)
-    stage.size = Vector2(998, 608)
+    stage.position = Vector2(326, 0)
+    stage.size = Vector2(942, 608)
     stage.clip_contents = true
 
     var stage_style := StyleBoxFlat.new()
