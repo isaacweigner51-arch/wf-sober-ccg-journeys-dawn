@@ -1747,7 +1747,7 @@ func label(text_value: String, pos: Vector2, size_value: Vector2, font_size := 1
     return l
 
 func header(title: String, subtitle: String) -> void:
-    var p := Panel.new(); p.position=Vector2(22,16); p.size=Vector2(1236,70); p.add_theme_stylebox_override("panel",style()); root_layer.add_child(p)
+    var p := Panel.new(); p.position=Vector2(22,16); p.size=Vector2(1236,76); p.add_theme_stylebox_override("panel",style()); root_layer.add_child(p)
     var t := label(title,Vector2(24,8),Vector2(760,38),30,p); t.add_theme_color_override("font_color",GOLD_COLOR)
     label(subtitle,Vector2(26,48),Vector2(900,25),15,p)
     button("HOME",Vector2(1080,17),Vector2(125,48),show_home,p)
@@ -4772,9 +4772,44 @@ func _bp_build_deck_list(parent: Panel) -> void:
     deck_panel_style.set_corner_radius_all(12)
     parent.add_theme_stylebox_override("panel", deck_panel_style)
     centered_label("SELECT DECK", Vector2(8, 10), Vector2(300, 26), 15, parent).add_theme_color_override("font_color", GOLD_COLOR)
+    var tabs := HBoxContainer.new()
+    tabs.position = Vector2(8, 40)
+    tabs.size = Vector2(304, 34)
+    tabs.add_theme_constant_override("separation", 4)
+    parent.add_child(tabs)
+
+    var my_tab := Button.new()
+    my_tab.text = "MY DECKS"
+    my_tab.custom_minimum_size = Vector2(96, 32)
+    my_tab.pressed.connect(func():
+    battle_select_mode = "custom"
+    show_match_deck_selection()
+)
+    tabs.add_child(my_tab)
+
+    var pre_tab := Button.new()
+    pre_tab.text = "PREBUILT"
+    pre_tab.custom_minimum_size = Vector2(96, 32)
+    pre_tab.pressed.connect(func():
+    battle_select_mode = "prebuilt"
+    last_battle_deck_idx = -1
+    show_match_deck_selection()
+)
+    tabs.add_child(pre_tab)
+
+    if AccessManager.role_at_least(AccessManager.ROLE_OWNER):
+    var dev_tab := Button.new()
+    dev_tab.text = "DEV"
+    dev_tab.custom_minimum_size = Vector2(96, 32)
+    dev_tab.pressed.connect(func():
+        battle_select_mode = "meta"
+        last_battle_deck_idx = -1
+        show_match_deck_selection()
+    )
+    tabs.add_child(dev_tab)
 
     var scroll := ScrollContainer.new()
-    scroll.position = Vector2(4, 42)
+    scroll.position = Vector2(4, 78)
     scroll.size = Vector2(308, 592)
     scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
