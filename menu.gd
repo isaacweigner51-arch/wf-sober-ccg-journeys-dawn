@@ -4791,9 +4791,9 @@ func _bp_build_deck_list(parent: Panel) -> void:
     pre_tab.text = "PREBUILT"
     pre_tab.custom_minimum_size = Vector2(96, 32)
     pre_tab.pressed.connect(func():
-    battle_select_mode = "prebuilt"
-    last_battle_deck_idx = -1
-    show_match_deck_selection()
+        battle_select_mode = "prebuilt"
+        last_battle_deck_idx = -1
+        show_match_deck_selection()
     )
     tabs.add_child(pre_tab)
 
