@@ -4480,16 +4480,24 @@ func show_match_deck_selection() -> void:
     shell.add_child(left_p)
     _bp_build_deck_list(left_p)
 
-    # Battle stage: cinematic MY LEADER vs OPPONENT display
+# Battle stage: cinematic MY LEADER vs OPPONENT display
     var stage := Panel.new()
     stage.position = Vector2(282, 0)
     stage.size = Vector2(986, 608)
     stage.clip_contents = true
+
     var stage_style := StyleBoxFlat.new()
     stage_style.bg_color = Color(0.04, 0.06, 0.10)
     stage_style.border_color = Color(0.12, 0.55, 1.0, 0.95)
-    stage_style.set_border_width_all(2)
-    stage_style.set_corner_radius_all(12)
+    stage_style.border_width_left = 2
+    stage_style.border_width_top = 2
+    stage_style.border_width_right = 2
+    stage_style.border_width_bottom = 2
+    stage_style.corner_radius_top_left = 12
+    stage_style.corner_radius_top_right = 12
+    stage_style.corner_radius_bottom_left = 12
+    stage_style.corner_radius_bottom_right = 12
+
     stage.add_theme_stylebox_override("panel", stage_style)
     shell.add_child(stage)
     _bp_build_battle_stage(stage)
