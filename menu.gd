@@ -4739,6 +4739,12 @@ func _bp_select_mode(mode: String, cls: String) -> void:
     show_match_deck_selection()
 
 func _bp_build_deck_list(parent: Panel) -> void:
+    var deck_panel_style := StyleBoxFlat.new()
+    deck_panel_style.bg_color = Color(0.035, 0.05, 0.10, 0.92)
+    deck_panel_style.border_color = Color(0.12, 0.55, 1.0, 0.95)
+    deck_panel_style.set_border_width_all(2)
+    deck_panel_style.set_corner_radius_all(12)
+    parent.add_theme_stylebox_override("panel", deck_panel_style)
     centered_label("SELECT DECK", Vector2(8, 10), Vector2(300, 26), 15, parent).add_theme_color_override("font_color", GOLD_COLOR)
 
     var scroll := ScrollContainer.new()
