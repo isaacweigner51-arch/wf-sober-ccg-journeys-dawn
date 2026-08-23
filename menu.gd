@@ -1747,7 +1747,7 @@ func label(text_value: String, pos: Vector2, size_value: Vector2, font_size := 1
     return l
 
 func header(title: String, subtitle: String) -> void:
-    var p := Panel.new(); p.position=Vector2(22,16); p.size=Vector2(1236,84); p.add_theme_stylebox_override("panel",style()); root_layer.add_child(p)
+    var p := Panel.new(); p.position=Vector2(22,16); p.size=Vector2(1236,70); p.add_theme_stylebox_override("panel",style()); root_layer.add_child(p)
     var t := label(title,Vector2(24,8),Vector2(760,38),30,p); t.add_theme_color_override("font_color",GOLD_COLOR)
     label(subtitle,Vector2(26,48),Vector2(900,25),15,p)
     button("HOME",Vector2(1080,17),Vector2(125,48),show_home,p)
