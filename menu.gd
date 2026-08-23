@@ -4928,7 +4928,7 @@ func _bp_build_battle_stage(stage: Panel) -> void:
     # The stage is 998 px wide; the VS strip is centered, so both leader zones
     # must be exactly (998 - 100) / 2 = 449 px wide.
     var bg_my := ColorRect.new()
-    bg_opp.color = Color(0.04, 0.06, 0.10, 1.0)
+    bg_my.color = Color(0.04, 0.06, 0.10, 1.0)
     bg_my.position = Vector2.ZERO; bg_my.size = Vector2(449, 608)
     bg_my.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_my)
