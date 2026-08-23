@@ -4759,13 +4759,13 @@ func _bp_build_deck_list(parent: Panel) -> void:
 
         var is_fb_sel: bool = (battle_select_mode == "final_boss")
         var fb := Panel.new()
-        fb.custom_minimum_size = Vector2(292, 44)
+        fb.custom_minimum_size = Vector2(292, 54)
         fb.add_theme_stylebox_override("panel", style(
             Color(0.52, 0.08, 0.08) if is_fb_sel else Color(0.12, 0.05, 0.05), 8))
         vbox.add_child(fb)
 
-        label("The Sponsor — Final Boss", Vector2(11, 6), Vector2(270, 18), 13, fb)
-        var fb_sub := label("ALL CLASSES  •  DEVELOPER ONLY", Vector2(11, 25), Vector2(270, 13), 9, fb)
+        label("The Sponsor — Final Boss", Vector2(11, 7), Vector2(270, 20), 15, fb)
+        var fb_sub := label("ALL CLASSES  •  DEVELOPER ONLY", Vector2(11, 31), Vector2(270, 14), 10, fb)
         fb_sub.add_theme_color_override("font_color", Color(1.0, 0.72, 0.20))
 
         _bp_sel_ring(fb, is_fb_sel)
@@ -4778,18 +4778,18 @@ func _bp_build_deck_list(parent: Panel) -> void:
         for cls in CLASSES:
             var is_meta_sel: bool = (battle_select_mode == "meta" and battle_select_class == cls)
             var mb := Panel.new()
-            mb.custom_minimum_size = Vector2(292, 44)
+            mb.custom_minimum_size = Vector2(292, 54)
             mb.add_theme_stylebox_override("panel", style(
                 class_color(cls).darkened(0.35) if is_meta_sel else Color(0.12, 0.09, 0.04), 8))
             vbox.add_child(mb)
 
             var mbbar := ColorRect.new()
             mbbar.color = class_color(cls); mbbar.position = Vector2(0, 0)
-            mbbar.size = Vector2(4, 44); mbbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            mbbar.size = Vector2(4, 54); mbbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
             mb.add_child(mbbar)
 
-            label(cls + " — Dev Meta", Vector2(11, 6), Vector2(210, 18), 12, mb)
-            var m_sub := label("DEVELOPER ONLY", Vector2(11, 25), Vector2(210, 13), 9, mb)
+            label(cls + " — Dev Meta", Vector2(11, 7), Vector2(210, 20), 14, mb)
+            var m_sub := label("DEVELOPER ONLY", Vector2(11, 31), Vector2(210, 14), 10, mb)
             m_sub.add_theme_color_override("font_color", Color(1.0, 0.72, 0.20))
 
             _bp_sel_ring(mb, is_meta_sel)
@@ -4832,12 +4832,12 @@ func _bp_build_deck_list(parent: Panel) -> void:
             cbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
             entry.add_child(cbar)
 
-            label(slot_name, Vector2(11, 7), Vector2(200, 20), 13, entry)
-            var cls_lbl := label(slot_class.to_upper(), Vector2(11, 27), Vector2(130, 16), 10, entry)
+            label(slot_name, Vector2(11, 7), Vector2(200, 22), 15, entry)
+            var cls_lbl := label(slot_class.to_upper(), Vector2(11, 31), Vector2(130, 16), 11, entry)
             cls_lbl.add_theme_color_override("font_color", class_color(slot_class).lightened(0.38))
 
             var cc_col := Color(0.38, 0.78, 0.50) if slot_cards.size() == 40 else Color(0.85, 0.65, 0.30)
-            centered_label("%d/40" % slot_cards.size(), Vector2(178, 6), Vector2(56, 18), 12, entry).add_theme_color_override("font_color", cc_col)
+            centered_label("%d/40" % slot_cards.size(), Vector2(178, 7), Vector2(56, 20), 13, entry).add_theme_color_override("font_color", cc_col)
             var badge_col := Color(0.28, 0.72, 0.42) if valid else Color(0.82, 0.32, 0.32)
             centered_label("\u2713 VALID" if valid else "\u2717 INVALID", Vector2(178, 25), Vector2(106, 16), 10, entry).add_theme_color_override("font_color", badge_col)
             if not valid:
@@ -4854,8 +4854,8 @@ func _bp_build_deck_list(parent: Panel) -> void:
     if deck_slots.size() < MAX_DECK_SLOTS:
         var nb := Button.new()
         nb.text = "+  CREATE NEW DECK"
-        nb.custom_minimum_size = Vector2(292, 34)
-        nb.add_theme_font_size_override("font_size", ui_font_size(11))
+        nb.custom_minimum_size = Vector2(292, 42)
+        nb.add_theme_font_size_override("font_size", ui_font_size(13))
         nb.add_theme_stylebox_override("normal", style(Color(0.11, 0.18, 0.30), 8))
         nb.pressed.connect(_bp_open_deck_builder_new)
         vbox.add_child(nb)
@@ -4866,30 +4866,30 @@ func _bp_build_deck_list(parent: Panel) -> void:
     for cls in CLASSES:
         var is_pb_sel: bool = (last_battle_deck_idx == -1 and battle_select_class == cls and battle_select_mode == "prebuilt")
         var pb := Panel.new()
-        pb.custom_minimum_size = Vector2(292, 48)
+        pb.custom_minimum_size = Vector2(292, 56)
         pb.add_theme_stylebox_override("panel", style(
             class_color(cls).darkened(0.50) if is_pb_sel else Color(0.07, 0.11, 0.19), 8))
         vbox.add_child(pb)
 
         var pbbar := ColorRect.new()
         pbbar.color = class_color(cls); pbbar.position = Vector2(0, 0)
-        pbbar.size = Vector2(4, 48); pbbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        pbbar.size = Vector2(4, 56); pbbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
         pb.add_child(pbbar)
 
-        label(cls + " Starter", Vector2(11, 8), Vector2(185, 18), 13, pb)
-        var sub_lbl := label("40 cards  \u2713  PREBUILT", Vector2(11, 28), Vector2(185, 14), 9, pb)
+        label(cls + " Starter", Vector2(11, 8), Vector2(185, 20), 15, pb)
+        var sub_lbl := label("40 cards  \u2713  PREBUILT", Vector2(11, 32), Vector2(185, 16, 10, pb)
         sub_lbl.add_theme_color_override("font_color", Color(0.42, 0.78, 0.50))
 
         _bp_sel_ring(pb, is_pb_sel)
 
         # Left side: tap to select prebuilt
-        var pbtap := _bp_tap(Vector2(230, 48), pb)
+        var pbtap := _bp_tap(Vector2(230, 56), pb)
         var ccls: String = str(cls)
         pbtap.pressed.connect(func(): _bp_select_prebuilt(ccls))
 
         # Right side: COPY → creates a new custom slot
         if deck_slots.size() < MAX_DECK_SLOTS:
-            var cpb := _bp_tap(Vector2(52, 48), pb)
+            var cpb := _bp_tap(Vector2(52, 56), pb)
             cpb.position = Vector2(236, 0)
             var ccls2: String = str(cls)
             cpb.pressed.connect(func(): _bp_copy_prebuilt(ccls2))
@@ -5154,7 +5154,7 @@ func _bp_build_opp_zone(parent: Control, opp_class: String, opp_col: Color) -> v
 
     # ── Below portrait: choose opponent ──────────────────────────────────────
     var by := PY + PH + 8
-    centered_label("CHOOSE OPPONENT", Vector2(PX, by), Vector2(PW, 18), 11, parent).add_theme_color_override("font_color", Color(0.60, 0.72, 0.96))
+    centered_label("CHOOSE OPPONENT", Vector2(PX, by), Vector2(PW, 22), 14, parent).add_theme_color_override("font_color", Color(0.60, 0.72, 0.96))
     by += 24
 
     # 2x2 class selector grid
@@ -5163,21 +5163,21 @@ func _bp_build_opp_zone(parent: Control, opp_class: String, opp_col: Color) -> v
         var cls: String = str(CLASSES[i])
         var col := i % 2; var row := i / 2
         var bx := PX + col * (btn_w + 8)
-        var btn_y := by + row * 40
+        var btn_y := by + row * 48
         var ob := Panel.new()
-        ob.position = Vector2(bx, btn_y); ob.size = Vector2(btn_w, 34)
+        ob.position = Vector2(bx, btn_y); ob.size = Vector2(btn_w, 42)
         var is_osel: bool = (cls == opp_class)
         ob.add_theme_stylebox_override("panel", style(
             class_color(cls).darkened(0.22) if is_osel else Color(0.06, 0.09, 0.16), 8))
         parent.add_child(ob)
         _bp_sel_ring(ob, is_osel)
-        centered_label(cls.to_upper(), Vector2(4, 0), Vector2(btn_w - 8, 34), 12, ob).add_theme_color_override(
+        centered_label(cls.to_upper(), Vector2(4, 0), Vector2(btn_w - 8, 42), 15, ob).add_theme_color_override(
             "font_color", class_color(cls).lightened(0.30) if is_osel else Color.WHITE)
         var otap := _bp_tap(ob.size, ob)
         var c_opp: String = cls
         otap.pressed.connect(func(): battle_opponent_class = c_opp; show_match_deck_selection())
 
-    by += 82
+    by += 98
     # Opponent deck info + preview button
     var opp_s := _battle_preview_stats(opp_class, "prebuilt")
     var oi := label("Prebuilt Deck  \u2022  40 cards  \u2022  AVG %.1f" % float(opp_s.get("average", 0.0)),
