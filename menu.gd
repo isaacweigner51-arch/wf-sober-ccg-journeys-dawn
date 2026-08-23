@@ -4828,8 +4828,12 @@ func _bp_build_deck_list(parent: Panel) -> void:
 
             var entry := Panel.new()
             entry.custom_minimum_size = Vector2(292, 66)
-            entry.add_theme_stylebox_override("panel", style(
-                class_color(slot_class).darkened(0.48) if is_sel else Color(0.07, 0.11, 0.19), 9))
+            var entry_style := StyleBoxFlat.new()
+            entry_style.bg_color = class_color(slot_class).darkened(0.48) if is_sel else Color(0.07, 0.11, 0.19)
+            entry_style.border_color = class_color(slot_class)
+            entry_style.set_border_width_all(2)
+            entry_style.set_corner_radius_all(9)
+            entry.add_theme_stylebox_override("panel", entry_style)
             vbox.add_child(entry)
 
             var cbar := ColorRect.new()
@@ -4873,8 +4877,12 @@ func _bp_build_deck_list(parent: Panel) -> void:
         var is_pb_sel: bool = (last_battle_deck_idx == -1 and battle_select_class == cls and battle_select_mode == "prebuilt")
         var pb := Panel.new()
         pb.custom_minimum_size = Vector2(292, 56)
-        pb.add_theme_stylebox_override("panel", style(
-            class_color(cls).darkened(0.50) if is_pb_sel else Color(0.07, 0.11, 0.19), 8))
+        var pb_style := StyleBoxFlat.new()
+        pb_style.bg_color = class_color(cls).darkened(0.50) if is_pb_sel else Color(0.07, 0.11, 0.19)
+        pb_style.border_color = class_color(cls)
+        pb_style.set_border_width_all(2)
+        pb_style.set_corner_radius_all(8)
+        pb.add_theme_stylebox_override("panel", pb_style)
         vbox.add_child(pb)
 
         var pbbar := ColorRect.new()
