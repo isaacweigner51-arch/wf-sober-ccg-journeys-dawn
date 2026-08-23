@@ -4501,7 +4501,20 @@ func show_match_deck_selection() -> void:
     stage.add_theme_stylebox_override("panel", stage_style)
     shell.add_child(stage)
     _bp_build_battle_stage(stage)
+    var stage_outline := Panel.new()
+    stage_outline.position = stage.position
+    stage_outline.size = stage.size
+    stage_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    stage_outline.z_index = 100
 
+    var outline_style := StyleBoxFlat.new()
+    outline_style.bg_color = Color.TRANSPARENT
+    outline_style.border_color = Color(0.12, 0.55, 1.0, 1.0)
+    outline_style.set_border_width_all(3)
+    outline_style.set_corner_radius_all(12)
+
+    stage_outline.add_theme_stylebox_override("panel", outline_style)
+    shell.add_child(stage_outline)
 
 func _bp_get_selected_ids() -> Array:
     if last_battle_deck_idx >= 0 and last_battle_deck_idx < deck_slots.size():
@@ -4976,7 +4989,7 @@ func _bp_build_battle_stage(stage: Panel) -> void:
         begin_b.disabled = true
 
     var prac_b := button("PRACTICE MODE  \u2022  Long timer  \u2022  No ranked rewards",
-        Vector2(0, 546), Vector2(998, 50), func(): _bp_start_battle(true), stage)
+        Vector2(0, 546), Vector2(998, 62), func(): _bp_start_battle(true), stage)
     prac_b.add_theme_font_size_override("font_size", ui_font_size(13))
     prac_b.add_theme_stylebox_override("normal", style(Color(0.12, 0.26, 0.16), 0))
     if not is_valid: prac_b.disabled = true
