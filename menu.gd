@@ -4798,10 +4798,10 @@ func _bp_build_deck_list(parent: Panel) -> void:
     tabs.add_child(pre_tab)
 
     if AccessManager.role_at_least(AccessManager.ROLE_OWNER):
-    var dev_tab := Button.new()
-    dev_tab.text = "DEV"
-    dev_tab.custom_minimum_size = Vector2(96, 32)
-    dev_tab.pressed.connect(func():
+        var dev_tab := Button.new()
+        dev_tab.text = "DEV"
+        dev_tab.custom_minimum_size = Vector2(96, 32)
+        dev_tab.pressed.connect(func():
         battle_select_mode = "meta"
         last_battle_deck_idx = -1
         show_match_deck_selection()
