@@ -4797,7 +4797,7 @@ func _bp_build_deck_list(parent: Panel) -> void:
     )
     tabs.add_child(pre_tab)
 
-if AccessManager.role_at_least(AccessManager.ROLE_OWNER):
+    if AccessManager.role_at_least(AccessManager.ROLE_OWNER):
     var dev_tab := Button.new()
     dev_tab.text = "DEV"
     dev_tab.custom_minimum_size = Vector2(96, 32)
