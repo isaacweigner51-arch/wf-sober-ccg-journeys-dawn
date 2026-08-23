@@ -4877,7 +4877,7 @@ func _bp_build_deck_list(parent: Panel) -> void:
         pb.add_child(pbbar)
 
         label(cls + " Starter", Vector2(11, 8), Vector2(185, 20), 15, pb)
-        var sub_lbl := label("40 cards  \u2713  PREBUILT", Vector2(11, 32), Vector2(185, 16, 10, pb)
+        var sub_lbl := label("40 cards  \u2713  PREBUILT", Vector2(11, 32), Vector2(185, 16), 10, pb)
         sub_lbl.add_theme_color_override("font_color", Color(0.42, 0.78, 0.50))
 
         _bp_sel_ring(pb, is_pb_sel)
