@@ -4490,6 +4490,11 @@ func show_match_deck_selection() -> void:
     stage_style.border_color = Color(0.12, 0.55, 1.0, 0.95)
     stage_style.set_border_width_all(2)
     stage_style.set_corner_radius_all(12)
+    var stage_style := StyleBoxFlat.new()
+    stage_style.bg_color = Color(0.04, 0.06, 0.10)
+    stage_style.border_color = Color(0.12, 0.55, 1.0, 0.95)
+    stage_style.set_border_width_all(2)
+    stage_style.set_corner_radius_all(12)
     stage.add_theme_stylebox_override("panel", stage_style)
     shell.add_child(stage)
     _bp_build_battle_stage(stage)
@@ -4928,7 +4933,7 @@ func _bp_build_battle_stage(stage: Panel) -> void:
     # The stage is 998 px wide; the VS strip is centered, so both leader zones
     # must be exactly (998 - 100) / 2 = 449 px wide.
     var bg_my := ColorRect.new()
-    bg_my.color = Color(my_col.r * 0.12, my_col.g * 0.12, my_col.b * 0.18, 1.0)
+    bg_opp.color = Color(0.04, 0.06, 0.10, 1.0)
     bg_my.position = Vector2.ZERO; bg_my.size = Vector2(449, 608)
     bg_my.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_my)
@@ -4940,7 +4945,7 @@ func _bp_build_battle_stage(stage: Panel) -> void:
     stage.add_child(bg_vs)
 
     var bg_opp := ColorRect.new()
-    bg_opp.color = Color(opp_col.r * 0.12, opp_col.g * 0.12, opp_col.b * 0.18, 1.0)
+    bg_opp.color = Color(0.04, 0.06, 0.10, 1.0)
     bg_opp.position = Vector2(549, 0); bg_opp.size = Vector2(449, 608)
     bg_opp.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.add_child(bg_opp)
