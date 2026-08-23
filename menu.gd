@@ -4781,7 +4781,7 @@ func _bp_build_deck_list(parent: Panel) -> void:
     var my_tab := Button.new()
     my_tab.text = "MY DECKS"
     my_tab.custom_minimum_size = Vector2(96, 32)
-        my_tab.pressed.connect(func():
+    my_tab.pressed.connect(func():
         battle_select_mode = "custom"
         show_match_deck_selection()
     )
