@@ -3643,10 +3643,10 @@ func apply_online_state(remote: Dictionary) -> void:
     enemy_evolutions_used = []
 
     for value in remote_player_evos:
-    player_evolutions_used.append(bool(value))
+        player_evolutions_used.append(bool(value))
 
     for value in remote_enemy_evos:
-    enemy_evolutions_used.append(bool(value))
+        enemy_evolutions_used.append(bool(value))
     selected_class=str(remote.get("enemy_class",selected_class)); enemy_class=str(remote.get("selected_class",enemy_class))
     game_over=bool(remote.get("game_over",false))
     var owner_role := str(remote.get("turn_owner", ""))
