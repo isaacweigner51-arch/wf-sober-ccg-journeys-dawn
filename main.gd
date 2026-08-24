@@ -3636,8 +3636,17 @@ func apply_online_state(remote: Dictionary) -> void:
     player_board=remote.get("enemy_board",[]).duplicate(true); enemy_board=remote.get("player_board",[]).duplicate(true)
     player_relapse=remote.get("enemy_relapse",[]).duplicate(true); enemy_relapse=remote.get("player_relapse",[]).duplicate(true)
     player_momentum=int(remote.get("enemy_momentum",0)); enemy_momentum=int(remote.get("player_momentum",0))
-    player_evolutions_used=remote.get("enemy_evolutions_used",[false,false,false,false]).duplicate()
-    enemy_evolutions_used=remote.get("player_evolutions_used",[false,false,false,false]).duplicate()
+    var remote_player_evos: Array = remote.get("enemy_evolutions_used", [false, false, false, false])
+    var remote_enemy_evos: Array = remote.get("player_evolutions_used", [false, false, false, false])
+
+    player_evolutions_used = []
+    enemy_evolutions_used = []
+
+    for value in remote_player_evos:
+    player_evolutions_used.append(bool(value))
+
+    for value in remote_enemy_evos:
+    enemy_evolutions_used.append(bool(value))
     selected_class=str(remote.get("enemy_class",selected_class)); enemy_class=str(remote.get("selected_class",enemy_class))
     game_over=bool(remote.get("game_over",false))
     var owner_role := str(remote.get("turn_owner", ""))
