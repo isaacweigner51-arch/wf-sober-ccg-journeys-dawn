@@ -961,12 +961,17 @@ func show_launch_screen() -> void:
         top_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE; frame.add_child(top_bar)
 
         # Thin border on inner edges (right edge for left column, bottom edge for top row)
-        var inner_v := ColorRect.new(); inner_v.color = Color(lcol, 0.6)
-        inner_v.position = Vector2(grid_w - 2, 0); inner_v.size = Vector2(2, grid_h)
-        inner_v.mouse_filter = Control.MOUSE_FILTER_IGNORE; frame.add_child(inner_v)
-        var inner_h := ColorRect.new(); inner_h.color = Color(lcol, 0.6)
-        inner_h.position = Vector2(0, grid_h - 2); inner_h.size = Vector2(grid_w, 2)
-        inner_h.mouse_filter = Control.MOUSE_FILTER_IGNORE; frame.add_child(inner_h)
+        var gold_border := StyleBoxFlat.new()
+        gold_border.bg_color = Color(0, 0, 0, 0)
+        gold_border.border_color = GOLD_COLOR
+        gold_border.set_border_width_all(4)
+
+        var border_panel := Panel.new()
+        border_panel.position = Vector2.ZERO
+        border_panel.size = Vector2(grid_w, grid_h)
+        border_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        border_panel.add_theme_stylebox_override("panel", gold_border)
+        frame.add_child(border_panel)
 
     # Vertical gold divider between mosaic and login panel
     var divider := ColorRect.new()
