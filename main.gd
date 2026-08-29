@@ -6576,9 +6576,9 @@ func _finish_match(player_won: bool) -> void:
             "Fall down. Learn something. Get back up.",
             "The next decision matters more than the last result."
     ]
-    show_game_over("YOU LOSE", defeat_messages.pick_random(), false, [])
-    pending_match_rewards = []
-    busy = false
+        show_game_over("YOU LOSE", defeat_messages.pick_random(), false, [])
+        pending_match_rewards = []
+        busy = false
 
 func _play_victory_sequence(winner: Control, loser: Control) -> void:
     # See the victory_sequence_token comment at its declaration: this token is
