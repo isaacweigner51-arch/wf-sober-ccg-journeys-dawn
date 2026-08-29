@@ -6557,9 +6557,25 @@ func _finish_match(player_won: bool) -> void:
     if is_instance_valid(training_panel):
         training_panel.queue_free()
     if player_won:
-        show_game_over("VICTORY", "You are Walking Free!", true, pending_match_rewards)
-    else:
-        show_game_over("YOU LOSE", "Every setback is a chance to begin again.", false, [])
+        var victory_messages := [
+            "Progress is built one choice at a time.",
+            "You showed up. You pushed through. Keep going.",
+            "Another step forward on the journey.",
+            "Strength grows every time you choose to continue.",
+            "Today's victory becomes tomorrow's foundation.",
+            "Keep moving forward. You're building something stronger."
+    ]
+    show_game_over("VICTORY", victory_messages.pick_random(), true, pending_match_rewards)
+else:
+    var defeat_messages := [
+        "This isn't the end. Every match teaches you something.",
+        "A setback becomes a lesson when you keep moving.",
+        "You don't lose the lesson. Learn, adjust, and try again.",
+        "Progress isn't perfect. Keep showing up.",
+        "Fall down. Learn something. Get back up.",
+        "The next decision matters more than the last result."
+    ]
+    show_game_over("YOU LOSE", defeat_messages.pick_random(), false, [])
     pending_match_rewards = []
     busy = false
 
