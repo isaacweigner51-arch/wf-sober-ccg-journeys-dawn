@@ -6566,14 +6566,15 @@ func _finish_match(player_won: bool) -> void:
             "Keep moving forward. You're building something stronger."
     ]
     show_game_over("VICTORY", victory_messages.pick_random(), true, pending_match_rewards)
-else:
-    var defeat_messages := [
-        "This isn't the end. Every match teaches you something.",
-        "A setback becomes a lesson when you keep moving.",
-        "You don't lose the lesson. Learn, adjust, and try again.",
-        "Progress isn't perfect. Keep showing up.",
-        "Fall down. Learn something. Get back up.",
-        "The next decision matters more than the last result."
+    else:
+        var defeat_messages := [
+            "Every setback is a chance to begin again.",
+            "This isn't the end. Every match teaches you something.",
+            "A setback becomes a lesson when you keep moving.",
+            "You don't lose the lesson. Learn, adjust, and try again.",
+            "Progress isn't perfect. Keep showing up.",
+            "Fall down. Learn something. Get back up.",
+            "The next decision matters more than the last result."
     ]
     show_game_over("YOU LOSE", defeat_messages.pick_random(), false, [])
     pending_match_rewards = []
