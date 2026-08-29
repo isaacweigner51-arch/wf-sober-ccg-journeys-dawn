@@ -6565,7 +6565,7 @@ func _finish_match(player_won: bool) -> void:
             "Today's victory becomes tomorrow's foundation.",
             "Keep moving forward. You're building something stronger."
     ]
-    show_game_over("VICTORY", victory_messages.pick_random(), true, pending_match_rewards)
+        show_game_over("VICTORY", victory_messages.pick_random(), true, pending_match_rewards)
     else:
         var defeat_messages := [
             "Every setback is a chance to begin again.",
