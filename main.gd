@@ -6240,7 +6240,7 @@ func animate_attack(attacker_index: int, target_index: int, player_side: bool) -
 
     # 2. Lunge: card stretches toward target at the moment of release.
     view.play_attack_lunge(attack_dir)
-    await get_tree().create_timer(0.09, true, false, true).timeout
+    await get_tree().create_timer(0.16, true, false, true).timeout
 
     # 3. Projectile launches from the card toward the target.
     var proj_type: String  = _projectile_type_for_card(attacker_card)
@@ -6256,15 +6256,33 @@ func animate_attack(attacker_index: int, target_index: int, player_side: bool) -
     var impact_dir: Vector2 = (to_center - from_center).normalized()
 
     # Rarity-calibrated directional shake: Bronze = barely perceptible, Platinum = satisfying
-    const SHAKE_INTENSITY := [0.8, 1.8, 3.5, 5.5, 8.0, 11.0]
-    const SHAKE_DURATION  := [0.15, 0.19, 0.22, 0.25, 0.27, 0.30]
+    const SHAKE_INTENSITY := [1.5, 2.8, 4.5, 6.5, 9.0, 13.0]
+    const SHAKE_DURATION := [0.16, 0.20, 0.24, 0.27, 0.30, 0.34]
+
     _screen_shake(SHAKE_INTENSITY[rtier], SHAKE_DURATION[rtier], impact_dir)
+
+    # Layered impact burst
     _spawn_impact_flash(to_center, impact_col, rtier)
-    _spawn_impact_sparks(to_center, impact_col, 7 + rtier * 3)
+    _spawn_impact_sparks(to_center, impact_col, 12 + rtier * 4)
     _spawn_impact_ring(to_center, impact_col, rtier)
 
-    # Hit stop — tiny freeze before damage resolves makes the hit feel heavier.
-    await get_tree().create_timer(0.04 + rtier * 0.005, true, false, true).timeout
+    # Second flash gives the strike a harder "contact" feeling.
+    await get_tree().create_timer(0.025, true, false, true).timeout
+    _spawn_impact_flash(to_center, Color.WHITE, rtier)
+
+    # Hit stop — briefly freezes the action so the impact has weight.
+    await get_tree().create_timer(0.065 + rtier * 0.006, true, false, true).timeout
+
+    # Target physically reacts to the hit.
+    if target_index >= 0:
+        var target_area: Control = enemy_board_area if player_side else player_board_area
+        var target_view: CardView = find_card_view_for_board_index(target_area, target_index)
+        if is_instance_valid(target_view):
+            var recoil_tween := create_tween()
+            var recoil_start := target_view.position
+            recoil_tween.tween_property(target_view, "position", recoil_start + impact_dir * 18.0, 0.055)
+            recoil_tween.tween_property(target_view, "position", recoil_start - impact_dir * 6.0, 0.045)
+            recoil_tween.tween_property(target_view, "position", recoil_start, 0.065)
 
     # 5. Combat resolves on impact.
     await resolve_combat(attacker_index, target_index, player_side)
@@ -6292,6 +6310,21 @@ func resolve_combat(attacker_index: int, target_index: int, player_side: bool) -
         play_battle_bark(player_leader if player_side else enemy_leader, selected_class if player_side else enemy_class, "attack", player_side)
         await trigger_leader_recovery_progress(player_side, "standing_ground")
         show_damage_number(int(attacker["attack"]), (enemy_leader if player_side else player_leader).global_position + Vector2(45, 18), str(attacker.get("rarity", "Bronze")))
+                # Heavy leader hit feedback.
+        var hit_leader: Control = enemy_leader if player_side else player_leader
+        var leader_start := hit_leader.position
+        var leader_hit_center := hit_leader.global_position + hit_leader.size * 0.5
+        var leader_hit_dir := Vector2.UP if player_side else Vector2.DOWN
+
+        _spawn_impact_flash(leader_hit_center, Color.WHITE, 4)
+        _spawn_impact_sparks(leader_hit_center, Color(1.0, 0.75, 0.25), 24)
+        _spawn_impact_ring(leader_hit_center, Color(1.0, 0.75, 0.25), 4)
+        _screen_shake(10.0, 0.28, leader_hit_dir)
+
+        var leader_recoil := create_tween()
+        leader_recoil.tween_property(hit_leader, "position", leader_start + leader_hit_dir * 24.0, 0.06)
+        leader_recoil.tween_property(hit_leader, "position", leader_start - leader_hit_dir * 8.0, 0.05)
+        leader_recoil.tween_property(hit_leader, "position", leader_start, 0.08)
         if player_side and training_mode:
             training_attacked_this_turn = true
     else:
@@ -6451,6 +6484,8 @@ func destroy_unit(board: Array, index: int, player_side: bool, specifically_targ
         _spawn_impact_sparks(death_center, _projectile_impact_color("punch", dead_rarity),
             8 + _rarity_tier_int(dead_rarity) * 3)
         dead_view.death_animation()
+        _spawn_impact_flash(death_center, Color.WHITE, _rarity_tier_int(dead_rarity))
+        _spawn_impact_ring(death_center, _projectile_impact_color("punch", dead_rarity), _rarity_tier_int(dead_rarity))
         await get_tree().create_timer(0.30, true, false, true).timeout
         _spawn_relapse_entry_vfx(death_center, player_side)
     training_on_follower_lost(player_side)
