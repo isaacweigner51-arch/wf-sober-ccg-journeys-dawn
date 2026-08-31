@@ -645,9 +645,9 @@ func play_attack_lunge(toward_dir: Vector2) -> void:
     var tier := _rarity_tier_val()
 
     # More aggressive stretch and distance than before
-    var sx    := 1.40 if tier >= 4 else (1.32 if tier >= 3 else 1.22)
-    var sy    := 0.68 if tier >= 4 else (0.74 if tier >= 3 else 0.82)
-    var lunge := 28.0 + tier * 5.0
+    var sx    := 1.55 if tier >= 4 else (1.45 if tier >= 3 else 1.32)
+    var sy    := 0.58 if tier >= 4 else (0.65 if tier >= 3 else 0.74)
+    var lunge := 55.0 + tier * 8.0
 
     var tw := create_tween().set_parallel(true)
     tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -657,6 +657,8 @@ func play_attack_lunge(toward_dir: Vector2) -> void:
 
     # Art slams into the strike — character is fully committed
     _art_lunge(toward_dir)
+    scale *= 1.08
+    create_tween().tween_property(self, "scale", Vector2(sx, sy), 0.08)
 
     # Explosive class-coloured flash on release
     var base_flash := _class_combat_color()
