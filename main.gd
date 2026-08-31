@@ -6245,10 +6245,10 @@ func animate_attack(attacker_index: int, target_index: int, player_side: bool) -
     # 3. Projectile launches from the card toward the target.
     var proj_type: String  = _projectile_type_for_card(attacker_card)
     var rarity: String     = str(attacker_card.get("rarity", "Bronze"))
-    var travel_time: float = _launch_projectile(from_center, to_center, proj_type, rarity)
+    # var travel_time: float = _launch_projectile(from_center, to_center, proj_type, rarity)
 
     # 4. Await projectile arrival, then apply impact.
-    await get_tree().create_timer(travel_time, true, false, true).timeout
+    await get_tree().create_timer(0.08, true, false, true).timeout
     play_sfx(attack_impact_sound(attacker_index, target_index, player_side))
 
     var rtier: int        = _rarity_tier_int(rarity)
