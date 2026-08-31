@@ -7739,7 +7739,7 @@ func _ensure_attack_drag_line() -> void:
         return
     attack_drag_line = Line2D.new()
     attack_drag_line.width = 3.5
-    attack_drag_line.default_color = Color(1.0, 0.28, 0.18, 0.80)
+    attack_drag_line.default_color = Color.WHITE
     attack_drag_line.z_index = 1000
     attack_drag_line.visible = false
     safe_add_child(self, attack_drag_line)
@@ -7756,6 +7756,19 @@ func _on_attack_drag_update(card_index: int, _context: String, global_pos: Vecto
         return
     attack_drag_attacker_idx = card_index
     _ensure_attack_drag_line()
+    var attack_rarity: String = str(player_board[card_index].get("rarity", "Bronze"))
+    attack_drag_line.default_color = Color.WHITE
+    match attack_rarity:
+        "Bronze": attack_drag_line.default_color = Color(0.80, 0.45, 0.20, 0.90)
+        "Silver": attack_drag_line.default_color = Color(0.82, 0.88, 0.95, 0.95)
+        "Gold": attack_drag_line.default_color = Color(1.0, 0.78, 0.12, 1.0)
+        "Signature Gold": attack_drag_line.default_color = Color(1.0, 0.90, 0.30, 1.0)
+        "Epic": attack_drag_line.default_color = Color(0.55, 0.30, 1.0, 1.0)
+        "Legendary": attack_drag_line.default_color = Color(1.0, 0.28, 0.85, 1.0)
+        "Platinum": attack_drag_line.default_color = Color(0.35, 0.90, 1.0, 1.0)
+        _: attack_drag_line.default_color = Color.WHITE
+
+
 
     # Start point: centre of attacker card in scene coordinates.
     var attacker_view: CardView = find_card_view_for_board_index(player_board_area, card_index)
