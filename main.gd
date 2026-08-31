@@ -5420,8 +5420,38 @@ func play_card(index: int) -> void:
     if is_instance_valid(player_board_area):
         var sp := player_board_area.global_position + player_board_area.size * 0.5
         var sc := class_accent_color(str(chosen.get("faction", selected_class)))
-        _spawn_impact_ring(sp, sc, 2)
-        _spawn_impact_sparks(sp, sc, 12)
+        var summon_color: Color = sc
+        var summon_rarity: String = str(chosen.get("rarity", "Bronze"))
+        var summon_rings: int = 2
+        var summon_sparks: int = 12
+        if summon_rarity == "Bronze":
+            summon_color = Color(0.80, 0.45, 0.20, 1.0)
+        if summon_rarity == "Silver":
+            summon_color = Color(0.82, 0.88, 0.95, 1.0)
+            summon_rings = 3
+            summon_sparks = 18
+        elif summon_rarity == "Gold":
+            summon_color = Color(1.0, 0.72, 0.12, 1.0)
+            summon_rings = 4
+            summon_sparks = 24
+        elif summon_rarity == "Signature Gold":
+            summon_color = Color(1.0, 0.90, 0.30, 1.0)
+            summon_rings = 5
+            summon_sparks = 30
+        elif summon_rarity == "Epic":
+            summon_color = Color(0.65, 0.30, 1.0, 1.0)
+            summon_rings = 6
+            summon_sparks = 36
+        elif summon_rarity == "Legendary":
+            summon_color = Color(1.0, 0.28, 0.08, 1.0)
+            summon_rings = 7
+            summon_sparks = 44
+        elif summon_rarity == "Signature Platinum":
+            summon_color = Color(.35, 0.90, 1.0, 1.0)
+            summon_rings = 8
+            summon_sparks = 54
+        _spawn_impact_ring(sp, summon_color,  summon_rings)
+        _spawn_impact_sparks(sp, summon_color, summon_sparks)
     play_battle_bark(player_leader, selected_class, "play", true)
     await get_tree().create_timer(0.34).timeout; await resolve_on_play(chosen, true)
     training_on_card_played(chosen)
