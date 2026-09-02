@@ -1,0 +1,36 @@
+[gd_scene format=3 uid="uid://djb2288765xel"]
+
+[ext_resource type="Script" uid="uid://c11ciw1af038s" path="res://card_test_lab.gd" id="1_3quk1"]
+
+[node name="CardTestLab" type="Control" unique_id=1916784332]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_3quk1")
+
+[node name="TestMenu" type="VBoxContainer" parent="." unique_id=1408527874]
+layout_mode = 0
+offset_left = 390.0
+offset_top = 250.0
+offset_right = 890.0
+offset_bottom = 470.0
+
+[node name="CardSearch" type="LineEdit" parent="TestMenu" unique_id=759507184]
+layout_mode = 2
+placeholder_text = "Search card name"
+
+[node name="CardSelector" type="OptionButton" parent="TestMenu" unique_id=868223190]
+layout_mode = 2
+
+[node name="LoadCardButton" type="Button" parent="TestMenu" unique_id=1274437375]
+layout_mode = 2
+text = "Load Card"
+
+[node name="StatusLabel" type="Label" parent="TestMenu" unique_id=2105026576]
+layout_mode = 2
+text = "Ready"
+
+[connection signal="pressed" from="TestMenu/LoadCardButton" to="." method="_on_load_card_button_pressed"]

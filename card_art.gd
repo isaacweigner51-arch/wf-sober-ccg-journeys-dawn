@@ -49,11 +49,20 @@ func _load_path(path: String) -> Texture2D:
 func resolve(cd: Dictionary) -> Texture2D:
 	# Step 1 — "id" field is already a JD-### catalog string.
 	var card_id: String = str(cd.get("id", "")).strip_edges().to_lower()
-	if card_id.begins_with("jd-"):
-		var path := "res://assets/cards/full/%s.jpg" % card_id
-		var t := _load_path(path)
-		if t != null:
-			return t
+	if card_id == "jd-196":
+		var rebuilt_texture: Texture2D = _load_path("res://assets/cards/full/jd-196.png")
+		if rebuilt_texture != null:
+			return rebuilt_texture
+
+	if card_id == "jd-072":
+		var recovery_texture: Texture2D = _load_path("res://assets/cards/full/jd-072.tres")
+		if recovery_texture != null:
+			return recovery_texture
+
+	var png_path: String = "res://assets/cards/full/%s.png" % card_id
+	var png_texture: Texture2D = _load_path(png_path)
+	if png_texture != null:
+		return png_texture
 
 	# Step 2 — name → catalog id lookup (deck/hand cards sometimes carry
 	# numeric story chapter ids instead of the catalog string).
